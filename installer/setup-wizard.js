@@ -206,6 +206,12 @@ async function main() {
     config.SCHEDULER_DB_PASSWORD = await ask('Scheduler SQL password', config.SCHEDULER_DB_PASSWORD || config.SYSPRO_DB_PASSWORD);
   }
 
+  // Never ship the .env.example placeholder as the JWT signing secret.
+  const jwt = String(config.JWT_SECRET || '');
+  if (jwt.length < 32 || /change_this/i.test(jwt)) {
+    config.JWT_SECRET = require('crypto').randomBytes(48).toString('hex');
+  }
+
   const envOutput = buildEnvFile(config);
 
   if (!skipTest) {

@@ -18,11 +18,9 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { logger } from '../../utils/logger';
 import environment from '../../config/environment';
+import { JWT_SECRET, JWT_EXPIRES_IN } from '../../config/secrets';
 
 const router = Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_secret_in_production';
-const JWT_EXPIRES_IN = '8h';
 
 // ── Conditionally mount express-ntlm ─────────────────────────────────────────
 if (environment.adDomain && environment.adDcUrl) {

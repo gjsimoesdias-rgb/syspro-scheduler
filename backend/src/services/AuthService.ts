@@ -1,10 +1,21 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { DatabaseConnection } from '../database/connection';
 import { logger } from '../utils/logger';
+import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/secrets';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_secret_in_production';
-const JWT_EXPIRES_IN = '8h';
+/** The password older builds seeded for 'superadmin'. Only used to warn if it is still in place. */
+const LEGACY_DEFAULT_ADMIN_PASSWORD = 'Admin@2026!';
+
+/**
+ * Refresh tokens are stored as a SHA-256 hash, so a leaked lic_sessions table
+ * can't be replayed. The raw token only ever exists in the browser.
+ */
+const hashToken = (token: string): string =>
+  crypto.createHash('sha256').update(token).digest('hex');
+
+const newRefreshToken = (): string => crypto.randomBytes(64).toString('hex');
 const REFRESH_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7 days ms
 
 export interface AuthUser {
@@ -90,7 +101,7 @@ export class AuthService {
     };
 
     const accessToken = this.signToken(user);
-    const refreshToken = require('crypto').randomBytes(64).toString('hex');
+    const refreshToken = newRefreshToken();
     const expiresAt = new Date(Date.now() + REFRESH_EXPIRES_IN);
 
     await this.db.queryWithParams(
@@ -99,7 +110,7 @@ export class AuthService {
     );
     await this.db.queryWithParams(
       `INSERT INTO dbo.lic_sessions (user_id, refresh_token, expires_at) VALUES (@uid, @token, @exp)`,
-      { uid: user.id, token: refreshToken, exp: expiresAt }
+      { uid: user.id, token: hashToken(refreshToken), exp: expiresAt }
     );
 
     await this.db.queryWithParams(
@@ -119,12 +130,12 @@ export class AuthService {
        JOIN   dbo.lic_users u ON u.id = s.user_id
        LEFT JOIN dbo.lic_companies c ON c.id = u.company_id
        WHERE  s.refresh_token = @token`,
-      { token: refreshToken }
+      { token: hashToken(refreshToken) }
     );
     const row = res?.recordset?.[0];
     if (!row) throw new Error('Invalid refresh token');
     if (new Date(row.expires_at) < new Date()) {
-      await this.db.queryWithParams(`DELETE FROM dbo.lic_sessions WHERE refresh_token = @token`, { token: refreshToken });
+      await this.db.queryWithParams(`DELETE FROM dbo.lic_sessions WHERE refresh_token = @token`, { token: hashToken(refreshToken) });
       throw new Error('Refresh token expired');
     }
     if (!row.is_active) throw new Error('Account is disabled');
@@ -135,12 +146,12 @@ export class AuthService {
       companyId: row.company_id, companyName: row.company_name,
     };
     const newAccess = this.signToken(user);
-    const newRefresh = require('crypto').randomBytes(64).toString('hex');
+    const newRefresh = newRefreshToken();
     const exp = new Date(Date.now() + REFRESH_EXPIRES_IN);
 
     await this.db.queryWithParams(
       `UPDATE dbo.lic_sessions SET refresh_token = @newTok, expires_at = @exp WHERE refresh_token = @oldTok`,
-      { newTok: newRefresh, exp, oldTok: refreshToken }
+      { newTok: hashToken(newRefresh), exp, oldTok: hashToken(refreshToken) }
     );
     return { accessToken: newAccess, refreshToken: newRefresh, user };
   }
@@ -148,7 +159,7 @@ export class AuthService {
   async logout(refreshToken: string): Promise<void> {
     await this.db.queryWithParams(
       `DELETE FROM dbo.lic_sessions WHERE refresh_token = @token`,
-      { token: refreshToken }
+      { token: hashToken(refreshToken) }
     );
   }
 
@@ -169,19 +180,60 @@ export class AuthService {
     };
   }
 
-  /** Seed default super admin on first run */
-  async seedDefaultAdmin(): Promise<void> {
+  /**
+   * Seed the first super admin on a brand-new scheduler DB.
+   *
+   * The password is random (or INITIAL_ADMIN_PASSWORD from .env if set) and is
+   * printed once to the server console. Returns the credentials when a user was
+   * created so a local first-run setup screen can show them; null otherwise.
+   *
+   * On an existing install it instead warns loudly if 'superadmin' still has the
+   * well-known password older builds used.
+   */
+  async seedDefaultAdmin(): Promise<{ username: string; password: string } | null> {
     const res = await this.db.query(`SELECT COUNT(*) AS cnt FROM dbo.lic_users`);
     const count = res?.recordset?.[0]?.cnt ?? 0;
-    if (count > 0) return;
 
-    const hash = await bcrypt.hash('Admin@2026!', 10);
+    if (count > 0) {
+      await this.warnIfLegacyDefaultPassword();
+      return null;
+    }
+
+    const envPassword = (process.env.INITIAL_ADMIN_PASSWORD || '').trim();
+    const password = envPassword.length >= 12
+      ? envPassword
+      : crypto.randomBytes(12).toString('base64url');
+    const hash = await bcrypt.hash(password, 10);
     await this.db.queryWithParams(
       `INSERT INTO dbo.lic_users (username, email, password_hash, role, full_name, company_id)
        VALUES ('superadmin', 'admin@scheduler.com', @hash, 'super_admin', 'Super Admin', NULL)`,
       { hash }
     );
-    logger.info('Default super admin created (username: superadmin)');
+    logger.info('Initial super admin created (username: superadmin)');
+    // Printed straight to the console (not the structured log) so it shows in the
+    // START_SCHEDULER window but is not shipped to any log file/collector.
+    // eslint-disable-next-line no-console
+    console.log(
+      `\n  ==> Initial admin login:  superadmin / ${password}\n` +
+      '      Sign in and change it now (Settings > Users). It will not be shown again.\n'
+    );
+    return { username: 'superadmin', password };
+  }
+
+  private async warnIfLegacyDefaultPassword(): Promise<void> {
+    try {
+      const r = await this.db.query(
+        `SELECT password_hash FROM dbo.lic_users WHERE username = 'superadmin' AND is_active = 1`
+      );
+      const hash = r?.recordset?.[0]?.password_hash;
+      if (hash && (await bcrypt.compare(LEGACY_DEFAULT_ADMIN_PASSWORD, hash))) {
+        logger.warn('SECURITY: user "superadmin" still has the default password. Change it now (Settings > Users).');
+        // eslint-disable-next-line no-console
+        console.warn('\n  !!  SECURITY: "superadmin" still uses the default password — change it now.\n');
+      }
+    } catch {
+      // Non-fatal: this is only a warning.
+    }
   }
 }
 
