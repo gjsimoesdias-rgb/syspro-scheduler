@@ -473,11 +473,15 @@ export const SYSPRO_QUERIES = {
                 THEN N'ISNULL(iw.QtyOnHand, 0)'
                 ELSE N'CAST(0 AS decimal(18,4))'
               END + N' AS qtyOnHand,
-            ' + CASE WHEN COL_LENGTH('InvWarehouse', 'QtyAllocWip') IS NOT NULL
+            ' + CASE WHEN COL_LENGTH('InvWarehouse', 'QtyAllocatedWip') IS NOT NULL
+                THEN N'ISNULL(iw.QtyAllocatedWip, 0)'
+                WHEN COL_LENGTH('InvWarehouse', 'QtyAllocWip') IS NOT NULL
                 THEN N'ISNULL(iw.QtyAllocWip, 0)'
                 ELSE N'CAST(0 AS decimal(18,4))'
               END + N' AS qtyAllocWip,
-            ' + CASE WHEN COL_LENGTH('InvWarehouse', 'QtyAllocSO') IS NOT NULL
+            ' + CASE WHEN COL_LENGTH('InvWarehouse', 'QtyAllocated') IS NOT NULL
+                THEN N'ISNULL(iw.QtyAllocated, 0)'
+                WHEN COL_LENGTH('InvWarehouse', 'QtyAllocSO') IS NOT NULL
                 THEN N'ISNULL(iw.QtyAllocSO, 0)'
                 ELSE N'CAST(0 AS decimal(18,4))'
               END + N' AS qtyAllocSO,
@@ -515,142 +519,29 @@ export const SYSPRO_QUERIES = {
   `,
 
   /**
-   * Material reservations for *other* open jobs.
-   * For every component, sum the still-outstanding requirement
-   * (Required − Issued, multiplied by the job's QtyToMake) across all
-   * open WipMaster jobs except @excludeJobId. The caller subtracts
-   * this from "available stock" so we don't double-count material
-   * already promised to running jobs.
-   *
-   * Defensive: WipJobAllocation isn't in every SYSPRO install, so we
-   * fall back to WipJobAllMat (which the audit confirms exists). If
-   * neither exists, we return zero rows.
+   * Outstanding material need of EVERY open job, one row per WipJobAllMat line.
+   * Source of truth for material availability (see services/materialPlan.ts).
+   * Columns confirmed on HFARMCompany1 (phase 3 diagnostic, 2026-09-30).
+   * Errors are NOT swallowed: a failed material query must not look like
+   * "no materials needed".
    */
-  getOpenJobAllocations: `
-    BEGIN TRY
-      IF OBJECT_ID('WipJobAllocation', 'U') IS NOT NULL
-        SELECT
-          a.StockCode AS componentCode,
-          SUM(
-            CASE
-              WHEN ISNULL(a.QtyReqd, 0) > ISNULL(a.QtyIssued, 0)
-                THEN ISNULL(a.QtyReqd, 0) - ISNULL(a.QtyIssued, 0)
-              ELSE 0
-            END
-          ) AS heldQty
-        FROM WipJobAllocation a
-        LEFT JOIN WipMaster wm ON wm.Job = a.Job
-        WHERE a.Job <> @excludeJobId
-          AND ISNULL(wm.Complete, 'N') <> 'Y'
-          AND ISNULL(NULLIF(a.StockCode, ''), '') <> ''
-        GROUP BY a.StockCode
-        HAVING SUM(
-          CASE
-            WHEN ISNULL(a.QtyReqd, 0) > ISNULL(a.QtyIssued, 0)
-              THEN ISNULL(a.QtyReqd, 0) - ISNULL(a.QtyIssued, 0)
-            ELSE 0
-          END
-        ) > 0;
-      ELSE IF OBJECT_ID('WipJobAllMat', 'U') IS NOT NULL
-        SELECT
-          m.StockCode AS componentCode,
-          SUM(
-            CASE
-              WHEN ISNULL(m.NetUnitQtyReqd, m.UnitQtyReqd) > 0
-                THEN ISNULL(m.NetUnitQtyReqd, m.UnitQtyReqd) * ISNULL(wm.QtyToMake, 1)
-              ELSE 0
-            END
-          ) AS heldQty
-        FROM WipJobAllMat m
-        INNER JOIN WipMaster wm ON wm.Job = m.Job
-        WHERE m.Job <> @excludeJobId
-          AND ISNULL(wm.Complete, 'N') <> 'Y'
-          AND ISNULL(NULLIF(m.StockCode, ''), '') <> ''
-        GROUP BY m.StockCode
-        HAVING SUM(
-          CASE
-            WHEN ISNULL(m.NetUnitQtyReqd, m.UnitQtyReqd) > 0
-              THEN ISNULL(m.NetUnitQtyReqd, m.UnitQtyReqd) * ISNULL(wm.QtyToMake, 1)
-            ELSE 0
-          END
-        ) > 0;
-      ELSE
-        SELECT TOP 0
-          CAST('' AS varchar(50)) AS componentCode,
-          CAST(0 AS decimal(18,4)) AS heldQty;
-    END TRY
-    BEGIN CATCH
-      SELECT TOP 0
-        CAST('' AS varchar(50)) AS componentCode,
-        CAST(0 AS decimal(18,4)) AS heldQty;
-    END CATCH
-  `,
-
-  /**
-   * All open-job WIP allocations grouped by (job, stockCode).
-   * Used by getJobMaterialPlans to avoid an N+1: fetch once, then for each
-   * job compute "other jobs' holdings" in-process by excluding that job's rows.
-   */
-  getAllJobAllocations: `
-    BEGIN TRY
-      IF OBJECT_ID('WipJobAllocation', 'U') IS NOT NULL
-        SELECT
-          a.Job AS jobId,
-          a.StockCode AS componentCode,
-          SUM(
-            CASE
-              WHEN ISNULL(a.QtyReqd, 0) > ISNULL(a.QtyIssued, 0)
-                THEN ISNULL(a.QtyReqd, 0) - ISNULL(a.QtyIssued, 0)
-              ELSE 0
-            END
-          ) AS heldQty
-        FROM WipJobAllocation a
-        LEFT JOIN WipMaster wm ON wm.Job = a.Job
-        WHERE ISNULL(wm.Complete, 'N') <> 'Y'
-          AND ISNULL(NULLIF(a.StockCode, ''), '') <> ''
-        GROUP BY a.Job, a.StockCode
-        HAVING SUM(
-          CASE
-            WHEN ISNULL(a.QtyReqd, 0) > ISNULL(a.QtyIssued, 0)
-              THEN ISNULL(a.QtyReqd, 0) - ISNULL(a.QtyIssued, 0)
-            ELSE 0
-          END
-        ) > 0;
-      ELSE IF OBJECT_ID('WipJobAllMat', 'U') IS NOT NULL
-        SELECT
-          m.Job AS jobId,
-          m.StockCode AS componentCode,
-          SUM(
-            CASE
-              WHEN ISNULL(m.NetUnitQtyReqd, m.UnitQtyReqd) > 0
-                THEN ISNULL(m.NetUnitQtyReqd, m.UnitQtyReqd) * ISNULL(wm.QtyToMake, 1)
-              ELSE 0
-            END
-          ) AS heldQty
-        FROM WipJobAllMat m
-        INNER JOIN WipMaster wm ON wm.Job = m.Job
-        WHERE ISNULL(wm.Complete, 'N') <> 'Y'
-          AND ISNULL(NULLIF(m.StockCode, ''), '') <> ''
-        GROUP BY m.Job, m.StockCode
-        HAVING SUM(
-          CASE
-            WHEN ISNULL(m.NetUnitQtyReqd, m.UnitQtyReqd) > 0
-              THEN ISNULL(m.NetUnitQtyReqd, m.UnitQtyReqd) * ISNULL(wm.QtyToMake, 1)
-            ELSE 0
-          END
-        ) > 0;
-      ELSE
-        SELECT TOP 0
-          CAST('' AS varchar(50)) AS jobId,
-          CAST('' AS varchar(50)) AS componentCode,
-          CAST(0 AS decimal(18,4)) AS heldQty;
-    END TRY
-    BEGIN CATCH
-      SELECT TOP 0
-        CAST('' AS varchar(50)) AS jobId,
-        CAST('' AS varchar(50)) AS componentCode,
-        CAST(0 AS decimal(18,4)) AS heldQty;
-    END CATCH
+  getOpenJobMaterialRequirements: `
+    SELECT
+      RTRIM(m.Job)                           AS jobId,
+      RTRIM(m.StockCode)                     AS componentCode,
+      RTRIM(ISNULL(m.Warehouse, ''))         AS warehouseCode,
+      RTRIM(ISNULL(NULLIF(m.Uom, ''), 'EA')) AS unitOfMeasure,
+      CAST(
+        CASE WHEN m.FixedQtyPerFlag = 'Y' THEN ISNULL(m.FixedQtyPer, 0)
+             ELSE ISNULL(NULLIF(m.NetUnitQtyReqd, 0), ISNULL(m.UnitQtyReqd, 0)) * ISNULL(wm.QtyToMake, 0)
+        END * (1 + ISNULL(m.ScrapPercentage, 0) / 100.0)
+      AS decimal(18, 6))                     AS requiredQty,
+      ISNULL(m.QtyIssued, 0)                 AS issuedQty,
+      CASE WHEN m.AllocCompleted = 'Y' THEN 1 ELSE 0 END AS allocCompleted
+    FROM WipJobAllMat m
+    JOIN WipMaster wm ON wm.Job = m.Job
+    WHERE ISNULL(wm.Complete, 'N') <> 'Y'
+      AND ISNULL(m.StockCode, '') <> ''
   `,
 
   /**
@@ -667,6 +558,10 @@ export const SYSPRO_QUERIES = {
         SET @sqlPo = N'
           SELECT
             MStockCode AS componentCode,
+            ' + CASE WHEN COL_LENGTH('PorMasterDetail', 'MWarehouse') IS NOT NULL
+                THEN N'RTRIM(ISNULL(MWarehouse, ''''))'
+                ELSE N'CAST('''' AS varchar(10))'
+              END + N' AS warehouseCode,
             ' + CASE WHEN COL_LENGTH('PorMasterDetail', 'MOrderNumber') IS NOT NULL
                 THEN N'CAST(MOrderNumber AS varchar(50))'
                 ELSE N'CAST('''' AS varchar(50))'

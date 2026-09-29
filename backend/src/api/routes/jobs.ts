@@ -367,7 +367,7 @@ router.post('/material-plan', async (req: Request, res: Response) => {
  *   wipAlloc      = sum of qtyAllocWip   (held by open jobs in SYSPRO)
  *   soAlloc       = sum of qtyAllocSO    (held by sales orders)
  *   otherJobsHold = WipJobAllocation outstanding qty for other open jobs
- *   freeOnHand    = max(0, onHandTotal - wipAlloc - soAlloc - otherJobsHold)
+ *   freeOnHand    = max(0, onHandTotal - soAlloc - otherJobsHold)   (wipAlloc shown, not subtracted)
  *   incomingQty   = sum of outstanding PO receipts
  *   availableQty  = freeOnHand + incomingQty
  *   shortageQty   = max(0, requiredQty - availableQty)
@@ -409,9 +409,9 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
     }
 
     // 3. Pull richer inventory + holds + PO receipts in parallel.
-    const [warehouseRows, allocations, poReceipts] = await Promise.all([
+    const [warehouseRows, requirementsByJob, poReceipts] = await Promise.all([
       sysproService.getInventoryByWarehouse(),
-      sysproService.getOpenJobAllocations(String(jobId)),
+      sysproService.getOpenJobMaterialRequirements().catch(() => new Map()),
       sysproService.getOpenPoReceipts(),
     ]);
 
@@ -425,9 +425,16 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
       warehousesByCode.set(code, arr);
     }
 
+    // Outstanding needs of OTHER open jobs (same source as the scheduler), and
+    // this job's own outstanding need per component (issued material excluded).
+    const thisJobId = String(jobId).trim();
     const holdsByCode = new Map<string, number>();
-    for (const a of allocations) {
-      holdsByCode.set(a.componentCode, (holdsByCode.get(a.componentCode) || 0) + a.heldQty);
+    const ownOutstandingByCode = new Map<string, number>();
+    for (const [otherJobId, reqLines] of requirementsByJob as Map<string, any[]>) {
+      for (const l of reqLines) {
+        const target = otherJobId === thisJobId ? ownOutstandingByCode : holdsByCode;
+        target.set(l.componentCode, (target.get(l.componentCode) || 0) + (Number(l.outstandingQty) || 0));
+      }
     }
 
     const receiptsByCode = new Map<string, typeof poReceipts>();
@@ -458,15 +465,19 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
         line.unitOfMeasure || whs.find((w) => w.unitOfMeasure)?.unitOfMeasure || 'EA';
       const leadTimeDays = whs.find((w) => w.leadTimeDays > 0)?.leadTimeDays || 0;
 
-      const freeOnHand = Math.max(0, onHandTotal - wipAlloc - soAlloc - otherJobsHold);
+      // QtyAllocatedWip is shown but NOT subtracted: it already includes every
+      // open job's allocation, which otherJobsHold covers (subtracting both
+      // double-counts and takes this job's own allocation from itself).
+      const freeOnHand = Math.max(0, onHandTotal - soAlloc - otherJobsHold);
       const incomingQty = incoming.reduce((s, r) => s + r.outstandingQty, 0);
       const availableQty = freeOnHand + incomingQty;
 
       const scrap = Math.max(0, Number(line.scrapFactor) || 0);
-      const requiredQty = Math.max(
-        0,
-        (Number(line.quantityRequired) || 0) * orderQty * (1 + scrap)
-      );
+      // Prefer the job's real outstanding need (required − issued) from
+      // WipJobAllMat; fall back to qty-per × order qty for non-SYSPRO jobs.
+      const requiredQty = ownOutstandingByCode.has(code)
+        ? ownOutstandingByCode.get(code)!
+        : Math.max(0, (Number(line.quantityRequired) || 0) * orderQty * (1 + scrap));
       const shortageQty = Math.max(0, requiredQty - availableQty);
 
       let status: 'Materials' | 'Partial' | 'No Materials';
@@ -490,9 +501,9 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
         requiredQty,
         // Headline numbers (kept stable for older modal versions):
         stockOnHand: onHandTotal,
-        // wipAlloc + soAlloc + otherJobsHold rolled into one for the legacy
+        // soAlloc + otherJobsHold rolled into one for the legacy
         // 'reservedQty' field so the modal can keep showing one column.
-        reservedQty: wipAlloc + soAlloc + otherJobsHold,
+        reservedQty: soAlloc + otherJobsHold,
         openPoQty: incomingQty,
         availableQty,
         shortageQty,

@@ -45,6 +45,7 @@ export interface JobMaterialPlan {
   shortages: JobMaterialShortage[];
 }
 import environment from '../config/environment';
+import { computeMaterialPlans, RequirementLine } from './materialPlan';
 
 /**
  * Operation status from SYSPRO. On this install WipJobAllLab.OperationStatus is
@@ -603,47 +604,51 @@ export class SysproDatabaseService {
   }
 
   /**
-   * Fetch ALL open-job WIP allocations grouped by (jobId, componentCode) in a
-   * single query. Returns a map: jobId → Map<componentCode, heldQty>.
-   *
-   * Used by getJobMaterialPlans to avoid an N+1 (one query per job).
+   * Outstanding material need of every open job (WipJobAllMat), grouped by job.
+   * One query — replaces the per-job BOM lookups the plan used to do.
    */
-  async getAllOpenJobAllocations(): Promise<Map<string, Map<string, number>>> {
-    try {
-      const result = await this.sysproDb.query(SYSPRO_QUERIES.getAllJobAllocations);
-      const byJob = new Map<string, Map<string, number>>();
-      for (const row of result.recordset || []) {
-        const jobId = String(row.jobId || '').trim();
-        const code = String(row.componentCode || '').trim();
-        if (!jobId || !code) continue;
-        if (!byJob.has(jobId)) byJob.set(jobId, new Map());
-        byJob.get(jobId)!.set(code, (byJob.get(jobId)!.get(code) || 0) + (Number(row.heldQty) || 0));
-      }
-      return byJob;
-    } catch (error) {
-      logger.warn({ err: error }, 'Error fetching all job allocations, falling back empty');
-      return new Map();
+  async getOpenJobMaterialRequirements(): Promise<Map<string, RequirementLine[]>> {
+    const result = await this.sysproDb.query(SYSPRO_QUERIES.getOpenJobMaterialRequirements);
+    const byJob = new Map<string, RequirementLine[]>();
+    for (const row of result.recordset || []) {
+      const jobId = String(row.jobId || '').trim();
+      const componentCode = String(row.componentCode || '').trim();
+      if (!jobId || !componentCode) continue;
+      const required = Number(row.requiredQty) || 0;
+      const issued = Number(row.issuedQty) || 0;
+      const outstandingQty = Number(row.allocCompleted) === 1 ? 0 : Math.max(0, required - issued);
+      const list = byJob.get(jobId) || [];
+      list.push({
+        jobId,
+        componentCode,
+        warehouseCode: String(row.warehouseCode || '').trim(),
+        unitOfMeasure: row.unitOfMeasure || 'EA',
+        outstandingQty,
+      });
+      byJob.set(jobId, list);
     }
+    return byJob;
   }
 
   /**
-   * Sums of in-flight component requirements held by every open job
-   * except the one being viewed. Used to subtract from "global stock"
-   * so the BOM modal reflects what's actually free for the current job.
+   * Outstanding needs of every open job EXCEPT `excludeJobId`, summed per
+   * component. The BOM modal subtracts this from stock to show what is left
+   * for the job being viewed.
    */
   async getOpenJobAllocations(
     excludeJobId: string
   ): Promise<Array<{ componentCode: string; heldQty: number }>> {
     try {
-      const result = await this.sysproDb.queryWithParams(SYSPRO_QUERIES.getOpenJobAllocations, {
-        excludeJobId: excludeJobId || '',
-      });
-      return (result.recordset || []).map((row: any) => ({
-        componentCode: String(row.componentCode || '').trim(),
-        heldQty: Number(row.heldQty) || 0,
-      }));
+      const reqs = await this.getOpenJobMaterialRequirements();
+      const exclude = String(excludeJobId || '').trim();
+      const byCode = new Map<string, number>();
+      for (const [jobId, lines] of reqs) {
+        if (jobId === exclude) continue;
+        for (const l of lines) byCode.set(l.componentCode, (byCode.get(l.componentCode) || 0) + l.outstandingQty);
+      }
+      return Array.from(byCode, ([componentCode, heldQty]) => ({ componentCode, heldQty }));
     } catch (error) {
-      logger.warn({ err: error }, 'Error fetching open-job allocations, falling back empty');
+      logger.warn({ err: error }, 'Error fetching open-job material needs, falling back empty');
       return [];
     }
   }
@@ -656,6 +661,7 @@ export class SysproDatabaseService {
   async getOpenPoReceipts(): Promise<
     Array<{
       componentCode: string;
+      warehouseCode: string;
       poNumber: string;
       promiseDate: Date | null;
       dueDate: Date | null;
@@ -666,6 +672,7 @@ export class SysproDatabaseService {
       const result = await this.sysproDb.query(SYSPRO_QUERIES.getOpenPoReceipts);
       return (result.recordset || []).map((row: any) => ({
         componentCode: String(row.componentCode || '').trim(),
+        warehouseCode: String(row.warehouseCode || '').trim(),
         poNumber: String(row.poNumber || '').trim(),
         promiseDate: row.promiseDate ? new Date(row.promiseDate) : null,
         dueDate: row.dueDate ? new Date(row.dueDate) : null,
@@ -678,196 +685,54 @@ export class SysproDatabaseService {
   }
 
   /**
-   * Build a per-job material plan for an arbitrary list of jobs.
+   * Per-job material plan for a list of jobs — the single source used by the
+   * scheduler (/generate, /optimize) and the /jobs/material-plan route.
+   * The formula lives in services/materialPlan.ts (pure, unit-tested).
    *
-   * Used by both the `/jobs/material-plan` and `/jobs/:jobId/bom-detail`
-   * routes, and by the scheduling engine to enforce material availability
-   * during placement. All three paths must produce the same numbers, so
-   * the formula lives here in one place.
-   *
-   * Formula per BOM line:
-   *   requiredQty   = quantityPerUnit * jobQty * (1 + scrapFactor)
-   *   onHandTotal   = sum of qtyOnHand across warehouses
-   *   wipAlloc      = sum of qtyAllocWip
-   *   soAlloc       = sum of qtyAllocSO
-   *   otherJobsHold = WipJobAllocation outstanding qty for OTHER open jobs
-   *   freeOnHand    = max(0, onHandTotal - wipAlloc - soAlloc - otherJobsHold)
-   *   incomingQty   = sum of outstanding PO receipts
-   *   availableQty  = freeOnHand + incomingQty
-   *
-   * Job status: Materials if every line OK, No Materials if every line empty,
-   * Partial otherwise.
+   * @param scheduledOrder job ids in schedule order; earlier jobs consume
+   *   shared stock first. Without it, the jobs' given (priority) order is used.
    */
   async getJobMaterialPlans(jobs: Job[], scheduledOrder?: string[]): Promise<Map<string, JobMaterialPlan>> {
     if (!jobs.length) return new Map();
 
-    const [warehouseRows, poReceipts, allJobAllocations] = await Promise.all([
+    const [warehouseRows, poReceipts, requirementsByJob] = await Promise.all([
       this.getInventoryByWarehouse(),
       this.getOpenPoReceipts(),
-      this.getAllOpenJobAllocations(),
+      this.getOpenJobMaterialRequirements(),
     ]);
 
-    // Aggregate per-component once across the whole job list.
-    const onHandByCode = new Map<string, number>();
-    const allocByCode = new Map<string, number>();
-    for (const row of warehouseRows) {
-      onHandByCode.set(row.code, (onHandByCode.get(row.code) || 0) + row.qtyOnHand);
-      allocByCode.set(
-        row.code,
-        (allocByCode.get(row.code) || 0) + row.qtyAllocWip + row.qtyAllocSO
+    // Jobs with no WipJobAllMat lines (e.g. bulk-imported jobs not in SYSPRO)
+    // fall back to the product BOM: qty per × job qty × (1 + scrap).
+    const missing = jobs.filter((j) => !requirementsByJob.has(String(j.jobId).trim()));
+    for (const job of missing) {
+      const lines = await this.getMaterialsByJob(String((job as any).itemCode || job.jobId), String(job.jobId))
+        .catch(() => [] as BOMLine[]);
+      if (!lines.length) continue;
+      const qty = Math.max(1, Number((job as any).quantity) || 1);
+      requirementsByJob.set(
+        String(job.jobId).trim(),
+        lines.map((l: any) => ({
+          jobId: String(job.jobId).trim(),
+          componentCode: String(l.componentCode || '').trim(),
+          warehouseCode: '',
+          unitOfMeasure: l.unitOfMeasure,
+          outstandingQty: (Number(l.quantityRequired) || 0) * qty * (1 + Math.max(0, Number(l.scrapFactor) || 0)),
+        }))
       );
     }
 
-    // PO receipts are kept as raw list so we can filter per-job by need date
-    // (#62 time-phased material check). Only receipts whose promiseDate falls
-    // on or before the job's need date count as "incoming" for that job.
-    // Jobs with no releaseDate / dueDate default to counting all receipts
-    // (conservative: better to show green than spuriously block scheduling).
-
-    // When scheduledOrder is provided, process jobs in schedule sequence so
-    // each job's BOM requirements deplete the shared pool for later jobs.
-    // Only jobs WITHOUT WIP picks are accumulated in scheduleConsumed —
-    // jobs with WIP picks are already captured in otherHoldsByCode via
-    // allJobAllocations, so double-counting is avoided.
-    const orderedJobs: Job[] = scheduledOrder
-      ? [...jobs].sort((a, b) => {
-          const ia = scheduledOrder.indexOf(String(a.jobId));
-          const ib = scheduledOrder.indexOf(String(b.jobId));
-          return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
-        })
-      : jobs;
-
-    // Running tally of component quantities consumed by earlier-scheduled
-    // jobs (those without WIP picks) that will reduce later jobs' availability.
-    const scheduleConsumed = new Map<string, number>();
-
-    const result = new Map<string, JobMaterialPlan>();
-
-    for (const job of orderedJobs) {
-      const jobId = String(job.jobId);
-      const hasWipPicks = allJobAllocations.has(jobId);
-
-      // Need date = earliest of releaseDate and dueDate, falling back to now.
-      const needDate: Date = (() => {
-        const r = job.releaseDate instanceof Date ? job.releaseDate : (job.releaseDate ? new Date(job.releaseDate as any) : null);
-        const d = job.dueDate instanceof Date ? job.dueDate : (job.dueDate ? new Date(job.dueDate as any) : null);
-        if (r && d) return r < d ? r : d;
-        return r || d || new Date();
-      })();
-
-      // Only count PO receipts promised on or before the need date (#62).
-      const incomingByCode = new Map<string, number>();
-      for (const r of poReceipts) {
-        if (r.promiseDate && r.promiseDate > needDate) continue; // arrives too late
-        incomingByCode.set(
-          r.componentCode,
-          (incomingByCode.get(r.componentCode) || 0) + r.outstandingQty
-        );
-      }
-
-      const otherHoldsByCode = new Map<string, number>();
-      for (const [otherJobId, codeMap] of allJobAllocations) {
-        if (otherJobId === jobId) continue;
-        for (const [code, qty] of codeMap) {
-          otherHoldsByCode.set(code, (otherHoldsByCode.get(code) || 0) + qty);
-        }
-      }
-
-      const bomLines = await this.getMaterialsByJob(
-        String((job as any).itemCode || jobId),
-        jobId
-      ).catch(() => [] as BOMLine[]);
-
-      if (!bomLines.length) {
-        result.set(jobId, {
-          jobId,
-          itemCode: (job as any).itemCode,
-          status: 'Materials',
-          available: true,
-          shortages: [],
-        });
-        // Nothing to consume — advance to next job.
-        continue;
-      }
-
-      const orderQty = Math.max(1, Number((job as any).quantity) || 1);
-      const shortages: JobMaterialShortage[] = [];
-      let okCount = 0;
-      let partialCount = 0;
-      let shortCount = 0;
-
-      // Collect this job's BOM requirements for pool-depletion tracking.
-      const reqsForThisJob = new Map<string, number>();
-
-      for (const line of bomLines) {
-        const code = String(line.componentCode || '').trim();
-        if (!code) continue;
-
-        const onHand = onHandByCode.get(code) || 0;
-        const alloc = allocByCode.get(code) || 0;
-        const otherHold = otherHoldsByCode.get(code) || 0;
-        const incoming = incomingByCode.get(code) || 0;
-        // Quantities consumed by earlier-scheduled jobs that haven't been
-        // picked from inventory yet (schedule-order depletion, #62).
-        const consumed = scheduledOrder ? (scheduleConsumed.get(code) || 0) : 0;
-
-        const free = Math.max(0, onHand - alloc - otherHold - consumed);
-        const availableQty = free + incoming;
-
-        const scrap = Math.max(0, Number(line.scrapFactor) || 0);
-        const requiredQty = Math.max(
-          0,
-          (Number(line.quantityRequired) || 0) * orderQty * (1 + scrap)
-        );
-        reqsForThisJob.set(code, (reqsForThisJob.get(code) || 0) + requiredQty);
-
-        const shortageQty = Math.max(0, requiredQty - availableQty);
-
-        if (requiredQty === 0 || availableQty >= requiredQty) {
-          okCount++;
-          continue;
-        }
-        if (availableQty > 0) {
-          partialCount++;
-        } else {
-          shortCount++;
-        }
-        shortages.push({
-          componentCode: code,
-          requiredQty,
-          availableQty,
-          shortageQty,
-          unitOfMeasure: line.unitOfMeasure,
-        });
-      }
-
-      // Accumulate this job's requirements in the depletion pool so that
-      // later-scheduled jobs see reduced availability.  Only jobs without
-      // WIP picks are tracked here — jobs with WIP picks are already
-      // captured in allJobAllocations / otherHoldsByCode.
-      if (scheduledOrder && !hasWipPicks) {
-        for (const [code, qty] of reqsForThisJob) {
-          scheduleConsumed.set(code, (scheduleConsumed.get(code) || 0) + qty);
-        }
-      }
-
-      const status: JobMaterialPlan['status'] =
-        shortCount === 0 && partialCount === 0
-          ? 'Materials'
-          : okCount === 0 && partialCount === 0
-          ? 'No Materials'
-          : 'Partial';
-
-      result.set(jobId, {
-        jobId,
-        itemCode: (job as any).itemCode,
-        status,
-        available: status === 'Materials',
-        shortages,
-      });
-    }
-
-    return result;
+    return computeMaterialPlans({
+      jobs: jobs as any,
+      requirementsByJob,
+      stock: warehouseRows.map((w) => ({
+        code: w.code,
+        warehouseCode: w.warehouseCode === '(default)' ? '' : w.warehouseCode,
+        qtyOnHand: w.qtyOnHand,
+        qtyAllocSO: w.qtyAllocSO,
+      })),
+      poReceipts,
+      order: scheduledOrder,
+    }) as Map<string, JobMaterialPlan>;
   }
 
   // ==================== CALENDARS ====================
