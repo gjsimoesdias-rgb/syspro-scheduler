@@ -53,6 +53,11 @@ export interface Operation {
   assignedResourceId?: string;
   predecessorOpId?: string;
   successorOpId?: string;
+  /** Subcontract (outside) operation: takes elapsed calendar time, books no machine. */
+  isSubcontract?: boolean;
+  subcontractSupplier?: string;
+  /** Elapsed time for a subcontract op, in minutes (converted from SYSPRO ElapsedTime). */
+  elapsedMinutes?: number;
   [key: string]: unknown;
 }
 

@@ -771,6 +771,9 @@ export class SchedulingEngine {
             // Pinned slot has invalid dates — fall back to normal scheduling
             operationSlot = this.findBestOperationSlot(operation, earliestStart, job, context, isFlowLine ? lockedLineGroupId : null);
           }
+        } else if (operation.isSubcontract) {
+          // Outside operation: elapsed time at the supplier, no internal capacity.
+          operationSlot = this.buildSubcontractSlot(operation, job, earliestStart, 'forward');
         } else {
           // Find best time slot for this operation
           operationSlot = this.findBestOperationSlot(
@@ -815,12 +818,12 @@ export class SchedulingEngine {
 
           // For pinned ops the slot was already pre-booked in prePlacePinnedOps;
           // only record it again if we found it via normal scheduling.
-          if (!isPinned) {
+          if (!isPinned && !operation.isSubcontract) {
             operationSlot.itemCode = job.itemCode;
             this.recordOperationInLoads(operationSlot);
           }
           // Update sequence tracking so the next operation on this resource gets correct setup time.
-          this.lastItemPerResource.set(operationSlot.resourceId, job.itemCode);
+          if (!operation.isSubcontract) this.lastItemPerResource.set(operationSlot.resourceId, job.itemCode);
 
           // Next operation can only start after the move time from this operation has elapsed
           predecessorEnd = operationSlot.moveEnd;
@@ -929,13 +932,15 @@ export class SchedulingEngine {
           successorStart.getTime() - (successorQueueLag + transitionMinutes) * 60 * 1000
         );
 
-        const operationSlot = this.findBestOperationSlotBackward(
-          operation,
-          latestEnd,
-          job,
-          context,
-          isFlowLineBack ? lockedLineGroupIdBack : null
-        );
+        const operationSlot = operation.isSubcontract
+          ? this.buildSubcontractSlot(operation, job, latestEnd, 'backward')
+          : this.findBestOperationSlotBackward(
+              operation,
+              latestEnd,
+              job,
+              context,
+              isFlowLineBack ? lockedLineGroupIdBack : null
+            );
 
         if (operationSlot) {
           if (isFlowLineBack && lockedLineGroupIdBack === null) {
@@ -968,9 +973,11 @@ export class SchedulingEngine {
 
           // Book the slot so later jobs see this capacity as taken. The backward
           // path never did this, so in backward mode jobs could overlap on a line.
-          operationSlot.itemCode = job.itemCode;
-          this.recordOperationInLoads(operationSlot);
-          this.lastItemPerResource.set(operationSlot.resourceId, job.itemCode);
+          if (!operation.isSubcontract) {
+            operationSlot.itemCode = job.itemCode;
+            this.recordOperationInLoads(operationSlot);
+            this.lastItemPerResource.set(operationSlot.resourceId, job.itemCode);
+          }
 
           // Update successor tracking for the next backward iteration.
           successorStart = operationSlot.start;
@@ -1055,6 +1062,51 @@ export class SchedulingEngine {
       queueTime: t.useQueueTime === false ? 0 : operation.queueTime,
       setupTime: t.useSetupTime === false ? 0 : operation.setupTime,
       moveTime: t.useMoveTime === false ? 0 : operation.moveTime,
+    };
+  }
+
+  /**
+   * Subcontract (outside) operation: occupies elapsed calendar time at the
+   * supplier (SYSPRO ElapsedTime), including nights and weekends, and books no
+   * internal machine or line. Falls back to setup + run minutes when no elapsed
+   * time is recorded. Forward: starts at `anchor`. Backward: ends at `anchor`.
+   */
+  private buildSubcontractSlot(
+    operation: Operation,
+    job: Job,
+    anchor: Date,
+    direction: 'forward' | 'backward'
+  ): OperationSlot {
+    const minutes = Math.max(
+      1,
+      operation.elapsedMinutes ?? ((operation.setupTime || 0) + (operation.duration || 0))
+    );
+    const start = direction === 'forward' ? new Date(anchor) : new Date(anchor.getTime() - minutes * 60000);
+    const end = new Date(start.getTime() + minutes * 60000);
+    const moveMinutes = operation.moveTime || 0;
+    return {
+      opId: operation.opId,
+      jobId: job.jobId,
+      workcentreId: operation.workcentreId,
+      start,
+      end,
+      resourceId: `SUB:${operation.subcontractSupplier || 'SUBCONTRACT'}`,
+      isOvertime: false,
+      duration: minutes,
+      setupTime: 0,
+      runTime: minutes,
+      queueTime: operation.queueTime || 0,
+      moveTime: moveMinutes,
+      setupStart: start,
+      setupEnd: start,
+      runStart: start,
+      runEnd: end,
+      queueEnd: start,
+      moveEnd: new Date(end.getTime() + moveMinutes * 60000),
+      capacityStart: start,
+      capacityEnd: end,
+      sequence: operation.sequence,
+      itemCode: job.itemCode,
     };
   }
 

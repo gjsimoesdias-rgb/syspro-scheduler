@@ -46,6 +46,38 @@ export interface JobMaterialPlan {
 }
 import environment from '../config/environment';
 
+/**
+ * Operation status from SYSPRO. On this install WipJobAllLab.OperationStatus is
+ * blank for every op; the real completion flag is OperCompleted = 'Y'. Reading
+ * only OperationStatus meant completed operations were never recognised and
+ * got rescheduled.
+ */
+export const deriveOperationStatus = (row: Record<string, any>): 'NotStarted' | 'InProgress' | 'Complete' => {
+  if (String(row.OperCompleted ?? '').trim().toUpperCase() === 'Y') return 'Complete';
+  const s = String(row.status ?? '').trim();
+  if (s === 'Complete' || s === 'InProgress') return s;
+  return 'NotStarted';
+};
+
+/** SYSPRO ElapsedTime unit for subcontract ops (days by default; set SUBCONTRACT_ELAPSED_UNIT=hours if yours is in hours). */
+const ELAPSED_MINUTES_PER_UNIT =
+  (process.env.SUBCONTRACT_ELAPSED_UNIT || 'days').toLowerCase().startsWith('hour') ? 60 : 24 * 60;
+
+/**
+ * Subcontract (outside) operations — WipJobAllLab.SubcontractOp = 'Y'. They take
+ * elapsed calendar time at the supplier and must not book an internal machine.
+ */
+export const subcontractFields = (row: Record<string, any>): Record<string, unknown> => {
+  const isSub = String(row.SubcontractOp ?? '').trim().toUpperCase() === 'Y';
+  if (!isSub) return { isSubcontract: false };
+  const elapsed = Number(row.ElapsedTime);
+  return {
+    isSubcontract: true,
+    subcontractSupplier: String(row.SubSupplier ?? '').trim() || undefined,
+    elapsedMinutes: Number.isFinite(elapsed) && elapsed > 0 ? elapsed * ELAPSED_MINUTES_PER_UNIT : undefined,
+  };
+};
+
 const mapDatabaseFields = (row: Record<string, any>): Record<string, unknown> => {
   const passthrough: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
@@ -185,7 +217,7 @@ export class SysproDatabaseService {
       moveMinutes,
       Number(row.batchSize) || 1,
       resourceIds,
-      row.status || 'NotStarted'
+      deriveOperationStatus(row)
     );
 
     Object.assign(operation as any, mapDatabaseFields(row), {
@@ -198,9 +230,10 @@ export class SysproDatabaseService {
       setupTime: setupMinutes,
       queueTime: queueMinutes,
       moveTime: moveMinutes,
+      status: deriveOperationStatus(row),
+      ...subcontractFields(row),
       batchSize: Number(row.batchSize) || 1,
       qualifiedResourceIds: resourceIds,
-      status: row.status || 'NotStarted',
       plannedStartDate,
       plannedEndDate,
       assignedResourceId: scheduledMachine || iMachine || undefined,
