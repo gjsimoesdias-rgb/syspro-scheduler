@@ -110,7 +110,14 @@ interface OperationSlot {
   capacityStart: Date;
   capacityEnd: Date;
   sequence: number;
+  /** Item made in this slot — lets a later op find its true predecessor on the line. */
+  itemCode?: string;
 }
+
+/** Local calendar day key (YYYY-MM-DD). toISOString() would give the UTC day, which in
+ *  Brisbane (UTC+10) files everything before 10:00 under the previous day. */
+export const localDayKey = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export class SchedulingEngine {
   private resourceLoads: Map<string, OperationSlot[]> = new Map();
@@ -625,6 +632,7 @@ export class SchedulingEngine {
         capacityStart: start,
         capacityEnd: end,
         sequence: 0,
+        itemCode: context.jobs.find((j) => j.jobId === pin.jobId)?.itemCode,
       };
 
       // Ensure the resource/workcentre lists exist (pinned resource might not
@@ -808,6 +816,7 @@ export class SchedulingEngine {
           // For pinned ops the slot was already pre-booked in prePlacePinnedOps;
           // only record it again if we found it via normal scheduling.
           if (!isPinned) {
+            operationSlot.itemCode = job.itemCode;
             this.recordOperationInLoads(operationSlot);
           }
           // Update sequence tracking so the next operation on this resource gets correct setup time.
@@ -957,6 +966,12 @@ export class SchedulingEngine {
             opStatus: operation.status,
           });
 
+          // Book the slot so later jobs see this capacity as taken. The backward
+          // path never did this, so in backward mode jobs could overlap on a line.
+          operationSlot.itemCode = job.itemCode;
+          this.recordOperationInLoads(operationSlot);
+          this.lastItemPerResource.set(operationSlot.resourceId, job.itemCode);
+
           // Update successor tracking for the next backward iteration.
           successorStart = operationSlot.start;
           nextWorkcentreId = operation.workcentreId;
@@ -1043,6 +1058,54 @@ export class SchedulingEngine {
     };
   }
 
+  /** Item of the slot that finishes last at or before `time` on this workcentre (the op that really runs before it). */
+  private predecessorItemAt(workcentreId: string, time: Date): string | undefined {
+    const slots = this.workcentreLoads.get(workcentreId) || [];
+    let best: OperationSlot | undefined;
+    for (const s of slots) {
+      if (s.capacityEnd <= time && (!best || s.capacityEnd > best.capacityEnd)) best = s;
+    }
+    return best?.itemCode;
+  }
+
+  /** Operation with its setup replaced by the changeover from `prevItemCode` (unchanged if none applies). */
+  private withSequenceSetup(
+    operation: Operation,
+    job: Job,
+    prevItemCode: string | undefined,
+    context: SchedulingContext
+  ): Operation {
+    if (!this.constraintManager || context.ruleToggles?.useSetupTime === false) return operation;
+    if (!prevItemCode || prevItemCode === job.itemCode) return operation;
+    const seqDuration = this.constraintManager.calculateOperationDuration(operation, prevItemCode, job.itemCode);
+    const adjustedSetup = Math.max(0, seqDuration - operation.duration - (operation.queueTime || 0));
+    return adjustedSetup !== operation.setupTime ? { ...operation, setupTime: adjustedSetup } : operation;
+  }
+
+  /**
+   * Sequence-dependent setup must be charged against the item that ACTUALLY
+   * runs before the slot on the line — not simply the last item placed. When an
+   * op back-fills an earlier gap those differ. First pass assumes the last item
+   * placed; if the slot found has a different predecessor, recompute the
+   * changeover for that predecessor and search once more.
+   */
+  private findSlotWithTruePredecessor(
+    operation: Operation,
+    job: Job,
+    context: SchedulingContext,
+    assumedPrev: string | undefined,
+    search: (op: Operation) => OperationSlot | null
+  ): OperationSlot | null {
+    const firstOp = this.withSequenceSetup(operation, job, assumedPrev, context);
+    const first = search(firstOp);
+    if (!first || !this.constraintManager || context.ruleToggles?.useSetupTime === false) return first;
+    const actualPrev = this.predecessorItemAt(operation.workcentreId, first.start);
+    if (actualPrev === assumedPrev) return first;
+    const secondOp = this.withSequenceSetup(operation, job, actualPrev, context);
+    if (secondOp.setupTime === firstOp.setupTime) return first;
+    return search(secondOp) || first;
+  }
+
   private findBestOperationSlot(
     operation: Operation,
     earliestStart: Date,
@@ -1110,35 +1173,21 @@ export class SchedulingEngine {
         continue;
       }
 
-      // Sequence-dependent setup time: if ConstraintManager knows the last item on this
-      // resource, recalculate setup time for the item transition.
-      // Skipped entirely when the company disables setup time (useSetupTime = false).
-      let effectiveOperation = operation;
-      if (this.constraintManager && context.ruleToggles?.useSetupTime !== false) {
-        const prevItemCode = this.lastItemPerResource.get(resource.resourceId);
-        if (prevItemCode && prevItemCode !== job.itemCode) {
-          const seqDuration = this.constraintManager.calculateOperationDuration(operation, prevItemCode, job.itemCode);
-          const adjustedSetup = Math.max(0, seqDuration - operation.duration - (operation.queueTime || 0));
-          if (adjustedSetup !== operation.setupTime) {
-            effectiveOperation = { ...operation, setupTime: adjustedSetup };
-          }
-        }
-      }
-
-      const slot = this.findFirstAvailableSlot(
-        effectiveOperation,
-        resource,
-        workcentre,
-        earliestStart,
-        context.planningHorizonEnd,
-        context
+      // Sequence-dependent setup (changeover) against the item that really runs
+      // before this slot on the line. Skipped when useSetupTime = false.
+      const slot = this.findSlotWithTruePredecessor(
+        operation,
+        job,
+        context,
+        this.lastItemPerResource.get(resource.resourceId),
+        (op) => this.findFirstAvailableSlot(op, resource, workcentre, earliestStart, context.planningHorizonEnd, context)
       );
 
       if (slot) {
         // S3.5: reject slot if accepting it would breach the overtime budget for this
         // workcentre/day — the slot is skipped and the next resource is tried instead.
         if (slot.isOvertime) {
-          const day = slot.start.toISOString().slice(0, 10);
+          const day = localDayKey(slot.start);
           const key = `${slot.workcentreId}|${day}`;
           const otHours = slot.duration / 60;
           const existing = this.overtimeUsage.get(key) ?? 0;
@@ -1385,32 +1434,19 @@ export class SchedulingEngine {
         continue;
       }
 
-      // Sequence-dependent setup time (backward path)
-      let effectiveOperation = operation;
-      if (this.constraintManager) {
-        const prevItemCode = this.lastItemPerResource.get(resource.resourceId);
-        if (prevItemCode && prevItemCode !== job.itemCode) {
-          const seqDuration = this.constraintManager.calculateOperationDuration(operation, prevItemCode, job.itemCode);
-          const adjustedSetup = Math.max(0, seqDuration - operation.duration - (operation.queueTime || 0));
-          if (adjustedSetup !== operation.setupTime) {
-            effectiveOperation = { ...operation, setupTime: adjustedSetup };
-          }
-        }
-      }
-
-      const slot = this.findLastAvailableSlot(
-        effectiveOperation,
-        resource,
-        workcentre,
-        latestEnd,
-        context.planningHorizonStart,
-        context
+      // Sequence-dependent setup (backward path) — same true-predecessor rule.
+      const slot = this.findSlotWithTruePredecessor(
+        operation,
+        job,
+        context,
+        this.lastItemPerResource.get(resource.resourceId),
+        (op) => this.findLastAvailableSlot(op, resource, workcentre, latestEnd, context.planningHorizonStart, context)
       );
 
       if (slot) {
         // S3.5: same overtime budget guard as the forward path.
         if (slot.isOvertime) {
-          const day = slot.start.toISOString().slice(0, 10);
+          const day = localDayKey(slot.start);
           const key = `${slot.workcentreId}|${day}`;
           const otHours = slot.duration / 60;
           const existing = this.overtimeUsage.get(key) ?? 0;
@@ -1581,7 +1617,7 @@ export class SchedulingEngine {
     // (the slot was already chosen) but we surface a Warning the first time
     // the daily overtime budget is exceeded so the planner can react.
     if (slot.isOvertime) {
-      const day = slot.capacityStart.toISOString().slice(0, 10); // YYYY-MM-DD
+      const day = localDayKey(slot.capacityStart);
       const key = `${slot.workcentreId}|${day}`;
       const otHours =
         (slot.capacityEnd.getTime() - slot.capacityStart.getTime()) / 3600000;
