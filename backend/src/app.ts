@@ -24,7 +24,7 @@ import shopfloorRoutes from './api/routes/shopfloor';
 import rateLimit from 'express-rate-limit';
 import environment from './config/environment';
 import { httpLogger, logger } from './utils/logger';
-import { requireAuth } from './api/middleware/requireAuth';
+import { requireAuth, requireCompanyAdmin } from './api/middleware/requireAuth';
 
 const app: Express = express();
 
@@ -97,13 +97,29 @@ app.use('/api/schedule', eventsRoutes);   // SSE events stream — public, Event
 app.use('/api/schedule', scheduleRateLimit, requireAuth, scheduleRoutes);
 app.use('/api/jobs', requireAuth, jobRoutes);
 app.use('/api/resources', requireAuth, resourceRoutes);
-// /databases and /connect are always allowed without JWT — these are the
-// pre-login setup routes used to configure the database connection.
-// All other status routes remain protected once the DB is live.
+// /databases and /connect can list databases, reconnect the whole server and
+// rewrite backend/.env, so they are tightly gated:
+//   - first-run (no DB connected yet): allowed without a login, but ONLY from
+//     the server itself (localhost) — nobody else on the LAN can repoint the app
+//   - once connected: a signed-in super_admin or company_admin only
+// Every other /api/status route needs a normal login.
+const LOCAL_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const isLocalRequest = (req: Request): boolean =>
+  LOCAL_ADDRESSES.has(req.socket.remoteAddress || '');
+
 app.use('/api/status', (req: Request, res: Response, next: NextFunction) => {
   const isSetupRoute = req.path === '/databases' || req.path === '/connect';
-  if (isSetupRoute) return next();
-  return requireAuth(req, res, next);
+  if (!isSetupRoute) return requireAuth(req, res, next);
+
+  const firstRun = !req.app.locals.sysproDb || !req.app.locals.schedulerDb;
+  if (firstRun && isLocalRequest(req)) return next();
+  if (firstRun && !req.headers.authorization) {
+    return res.status(403).json({
+      error: 'Database setup can only be done on the server PC itself (http://localhost:' +
+        environment.port + '/) until the scheduler is connected.',
+    });
+  }
+  return requireAuth(req, res, () => requireCompanyAdmin(req, res, next));
 }, statusRoutes);
 app.use('/api/inventory', requireAuth, inventoryRoutes);
 app.use('/api/users', requireAuth, userRoutes);

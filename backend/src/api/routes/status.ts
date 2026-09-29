@@ -379,6 +379,7 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
       req.log.warn({ err: ensureErr }, 'Could not ensure Syspro scheduler objects during connect');
     }
 
+    let initialAdmin: { username: string; password: string } | null = null;
     if (nextSchedulerDb) {
       if (req.app.locals.schedulerDb) {
         await req.app.locals.schedulerDb.disconnect().catch(() => undefined);
@@ -397,7 +398,7 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
       }
       try {
         const authSvc = new AuthService(nextSchedulerDb);
-        await authSvc.seedDefaultAdmin();
+        initialAdmin = await authSvc.seedDefaultAdmin();
       } catch (seedErr: any) {
         req.log.warn({ err: seedErr }, 'Seed warning during connect');
       }
@@ -429,7 +430,10 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
       sysproConnected: true,
       schedulerConnected: !!req.app.locals.schedulerDb,
       profile: req.app.locals.connectionProfile,
-      message: `Connected to ${database}. Settings saved for the next launch.`
+      message: `Connected to ${database}. Settings saved for the next launch.`,
+      // Only present when this request created the very first admin user on a
+      // brand-new scheduler DB (first-run, localhost-only — see app.ts).
+      ...(initialAdmin ? { initialAdmin } : {})
     });
   } catch (error) {
     if (nextSysproDb) {

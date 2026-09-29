@@ -317,3 +317,20 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* One-time notice shown after first-run setup creates the initial admin. */
+.login-notice {
+  background: var(--status-warn-soft);
+  border: 1px solid var(--status-warn);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.login-notice code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 600;
+  user-select: all;
+}

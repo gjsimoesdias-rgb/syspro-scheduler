@@ -11,6 +11,9 @@ const LoginPage: React.FC = () => {
   // JWT login state
   const [username, setUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  // Set only on a brand-new install: the one-time password the server generated
+  // for the first 'superadmin' account.
+  const [initialAdmin, setInitialAdmin] = useState<{ username: string; password: string } | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [ntlmLoading, setNtlmLoading] = useState(false);
@@ -91,7 +94,12 @@ const LoginPage: React.FC = () => {
         schedulerDatabase: setupForm.schedulerDatabase.trim() || 'SCHEDULER',
       };
       if (setupForm.port.trim()) payload.port = Number(setupForm.port.trim());
-      await statusService.connect(payload as any);
+      const result = await statusService.connect(payload as any);
+      if (result?.initialAdmin?.username && result?.initialAdmin?.password) {
+        setInitialAdmin(result.initialAdmin);
+        setUsername(result.initialAdmin.username);
+        setLoginPassword(result.initialAdmin.password);
+      }
       setSystemState('ready');
     } catch (err: any) {
       setSetupError(apiErrorMessage(err, 'Failed to connect'));
@@ -237,6 +245,14 @@ const LoginPage: React.FC = () => {
         {systemState === 'ready' && (
           <>
             <h2 className="login-heading">Sign in to your account</h2>
+
+            {initialAdmin && (
+              <div className="login-notice" role="status">
+                <strong>First admin account created.</strong> Username <code>{initialAdmin.username}</code>, password{' '}
+                <code>{initialAdmin.password}</code>. Copy it now — it won&rsquo;t be shown again. Change it after signing
+                in (Settings &rsaquo; Users).
+              </div>
+            )}
 
             {ntlmAvailable && (
               <div className="login-ntlm-section">
