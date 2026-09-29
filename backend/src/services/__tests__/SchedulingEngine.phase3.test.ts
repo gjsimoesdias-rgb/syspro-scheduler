@@ -180,3 +180,27 @@ describe('localDayKey', () => {
     expect(localDayKey(d)).toBe('2026-06-02');
   });
 });
+
+describe('time-model KPIs', () => {
+  it('utilization = booked setup+run ÷ shift hours over the horizon', async () => {
+    const wc = makeWorkcentre('WC01');
+    const res = makeResource('R01', 'WC01'); // Mon–Fri 08:00–16:00
+    const op = makeOperation('J1-OP10', 'J1', 10, 'WC01', 120);
+    op.setupTime = 60;
+    op.qualifiedResourceIds = ['R01'];
+    const job = makeJob('J1', [op], DAY, HORIZON_END);
+    // Horizon: Mon 1 June → Fri 5 June = 5 working days × 8 h = 40 h
+    const ctx = makeContext([job], [wc], [res], DAY, new Date('2026-06-05T16:00:00.000Z'));
+    const { metrics } = await new SchedulingEngine().schedule(ctx);
+
+    expect(metrics.operatingHours).toBe(40);
+    expect(metrics.productiveHours).toBe(2);
+    expect(metrics.directDowntimeHours).toBe(1);
+    expect(metrics.busyHours).toBe(3);
+    expect(metrics.resourceUtilization).toBe(7.5); // 3 / 40
+    expect(metrics.idleHours).toBe(37);
+    expect(metrics.otdRate).toBe(100);
+    expect(metrics.totalJobsScheduled).toBe(1);
+    expect(metrics.jobsUnscheduled).toBe(0);
+  });
+});

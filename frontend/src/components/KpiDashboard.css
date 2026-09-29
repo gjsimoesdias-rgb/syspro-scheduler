@@ -116,3 +116,11 @@
   font-weight: 700;
   color: var(--text-secondary);
 }
+
+/* Run / setup / idle split of shift time — segments sit side by side. */
+.kpi-util-track--stacked {
+  display: flex;
+}
+.kpi-util-track--stacked .kpi-util-fill {
+  border-radius: 0;
+}

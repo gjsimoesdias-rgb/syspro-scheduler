@@ -463,7 +463,7 @@ export class SchedulingEngine {
       const resourceLoads = this.buildResourceLoads(context);
 
       // Step 5: Calculate metrics
-      const metrics = this.calculateMetrics(jobSchedules, resourceLoads);
+      const metrics = this.calculateMetrics(jobSchedules, resourceLoads, context);
 
       const executionTimeMs = Date.now() - startTime;
 
@@ -1779,13 +1779,18 @@ export class SchedulingEngine {
         }
       });
 
+      const calendar = (resource as any)?.calendar
+        || (context.workcentres.get((resource as any).worcentreId) as any)?.calendar;
       dayLoads.forEach((load, dayKey) => {
+        const date = new Date(dayKey);
+        // Utilization against that day's actual shift hours (was a hardcoded 8 h).
+        const availableHours = this.productiveHoursForDay(calendar, date);
         loads.push({
           resourceId: resource.resourceId,
-          date: new Date(dayKey),
+          date,
           regularHours: load.regular,
           overtimeHours: load.overtime,
-          utilizationRate: Math.min(100, (load.regular / 8) * 100),
+          utilizationRate: availableHours > 0 ? Math.min(100, (load.regular / availableHours) * 100) : 0,
           assignedOperations: slots.filter((s) => s.start.toDateString() === dayKey) as any[]
         });
       });
@@ -1794,39 +1799,98 @@ export class SchedulingEngine {
     return loads;
   }
 
-  private calculateMetrics(jobSchedules: JobSchedule[], resourceLoads: ResourceLoad[]): ScheduleMetrics {
+  /** Shift hours available on one day for a calendar (sum of productive windows). */
+  private productiveHoursForDay(calendar: any, date: Date): number {
+    return this.getProductiveWindowsForDay(calendar, date)
+      .reduce((h, w) => h + (w.end.getTime() - w.start.getTime()) / 3600000, 0);
+  }
+
+  /**
+   * Time model per workcentre over the planning horizon (LYNQ definitions):
+   *   operating = shift hours; busy = setup + run booked; productive = run;
+   *   direct downtime = setup/changeover; idle = operating − busy (≥ 0).
+   * A workcentre (line) runs one operation at a time, so it is the unit of
+   * capacity; its calendar is taken from its first resource.
+   */
+  private computeTimeModel(context: SchedulingContext) {
+    const start = new Date(context.planningHorizonStart);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(context.planningHorizonEnd);
+
+    const calendarByWc = new Map<string, any>();
+    context.resources.forEach((r: any) => {
+      if (!calendarByWc.has(r.worcentreId)) {
+        calendarByWc.set(r.worcentreId, r.calendar || (context.workcentres.get(r.worcentreId) as any)?.calendar);
+      }
+    });
+
+    let operating = 0, busy = 0, productive = 0, setup = 0;
+    for (const [wcId, calendar] of calendarByWc) {
+      for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        operating += this.productiveHoursForDay(calendar, d);
+      }
+      for (const slot of this.workcentreLoads.get(wcId) || []) {
+        if (slot.capacityEnd <= context.planningHorizonStart || slot.capacityStart >= end) continue;
+        productive += (slot.runTime || 0) / 60;
+        setup += (slot.setupTime || 0) / 60;
+      }
+    }
+    busy = productive + setup;
+    const idle = Math.max(0, operating - busy);
+    const pct = (h: number) => (operating > 0 ? Math.round((h / operating) * 1000) / 10 : 0);
+    const r1 = (h: number) => Math.round(h * 10) / 10;
+    return {
+      operatingHours: r1(operating),
+      busyHours: r1(busy),
+      productiveHours: r1(productive),
+      directDowntimeHours: r1(setup),
+      idleHours: r1(idle),
+      busyPct: pct(busy),
+      productivePct: pct(productive),
+      directDowntimePct: pct(setup),
+      idlePct: pct(idle),
+    };
+  }
+
+  private calculateMetrics(
+    jobSchedules: JobSchedule[],
+    resourceLoads: ResourceLoad[],
+    context: SchedulingContext
+  ): ScheduleMetrics {
     const scheduledJobs = jobSchedules.filter((j) => j.status === 'Scheduled');
     const onTimeJobs = scheduledJobs.filter((j) => j.estimatedTardiness === 0);
     const tardyJobs = scheduledJobs.filter((j) => j.estimatedTardiness > 0);
 
     const totalOvertime = resourceLoads.reduce((acc, load) => acc + load.overtimeHours, 0);
-    const totalRegular = resourceLoads.reduce((acc, load) => acc + load.regularHours, 0);
-    const utilization = totalRegular / (totalRegular + totalOvertime || 1);
+    const timeModel = this.computeTimeModel(context);
 
-    // Accurate phase-level metrics from all operation schedules
     let totalSetupMinutes = 0;
     let totalQueueMinutes = 0;
     let totalMoveMinutes = 0;
-    let totalRunMinutes = 0;
-
     for (const job of jobSchedules) {
       for (const op of job.operationSchedules) {
         totalSetupMinutes += op.setupTime || 0;
         totalQueueMinutes += op.queueTime || 0;
         totalMoveMinutes += op.moveTime || 0;
-        totalRunMinutes += op.runTime || 0;
       }
     }
 
+    const leadTimes = scheduledJobs
+      .map((j) => (new Date(j.plannedEndDate).getTime() - new Date(j.plannedStartDate).getTime()) / 86400000)
+      .filter((d) => Number.isFinite(d) && d >= 0);
+
     return {
-      totalJobsScheduled: jobSchedules.length,
+      // Only fully scheduled jobs (unscheduled ones used to be counted too).
+      totalJobsScheduled: scheduledJobs.length,
       jobsOnTime: onTimeJobs.length,
       jobsTardy: tardyJobs.length,
       averageTardiness:
         tardyJobs.length > 0
           ? tardyJobs.reduce((acc, j) => acc + j.estimatedTardiness, 0) / tardyJobs.length
           : 0,
-      resourceUtilization: utilization * 100,
+      // Busy ÷ operating hours. It was regular ÷ (regular + overtime), which is
+      // ~100 % almost always and skewed the rule optimizer's ranking.
+      resourceUtilization: timeModel.busyPct,
       overtimeHours: totalOvertime,
       criticalPathLength: jobSchedules.reduce((acc: number, job: any) => {
         const jobDuration = job.operationSchedules.reduce(
@@ -1837,8 +1901,14 @@ export class SchedulingEngine {
       }, 0),
       totalSetupTime: totalSetupMinutes / 60,
       totalQueueTime: totalQueueMinutes / 60,
-      totalMoveTime: totalMoveMinutes / 60
-        };
+      totalMoveTime: totalMoveMinutes / 60,
+      ...timeModel,
+      otdRate: scheduledJobs.length > 0 ? Math.round((onTimeJobs.length / scheduledJobs.length) * 1000) / 10 : 0,
+      avgLeadTimeDays: leadTimes.length
+        ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10
+        : 0,
+      jobsUnscheduled: jobSchedules.length - scheduledJobs.length,
+    };
   }
 }
 

@@ -141,6 +141,18 @@ export interface ScheduleMetrics {
     totalSetupTime: number;
     totalQueueTime: number;
     totalMoveTime: number;
+    operatingHours?: number;
+    busyHours?: number;
+    productiveHours?: number;
+    directDowntimeHours?: number;
+    idleHours?: number;
+    busyPct?: number;
+    productivePct?: number;
+    directDowntimePct?: number;
+    idlePct?: number;
+    otdRate?: number;
+    avgLeadTimeDays?: number;
+    jobsUnscheduled?: number;
 }
 export interface Calendar {
     calendarId: string;

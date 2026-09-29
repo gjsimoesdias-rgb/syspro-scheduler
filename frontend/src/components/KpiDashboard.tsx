@@ -47,13 +47,21 @@ const KpiDashboard: React.FC<KpiDashboardProps> = ({ schedule, jobsTotal }) => {
     overtimeHours,
     criticalPathLength,
     totalSetupTime,
+    operatingHours,
+    busyHours,
+    productivePct,
+    directDowntimePct,
+    idlePct,
+    avgLeadTimeDays,
   } = schedule.metrics;
+  const hasTimeModel = typeof operatingHours === 'number' && operatingHours > 0;
 
   const onTimePct = totalJobsScheduled > 0 ? Math.round((jobsOnTime / totalJobsScheduled) * 100) : 0;
   const schedCoverage = jobsTotal > 0 ? Math.round((totalJobsScheduled / jobsTotal) * 100) : 0;
   const violations = schedule.constraintViolations.length;
   const criticalCount = schedule.constraintViolations.filter(v => v.severity === 'Critical').length;
-  const setupHours = Math.round((totalSetupTime || 0) / 60 * 10) / 10;
+  // totalSetupTime is already in hours (was divided by 60 again, showing 1/60th).
+  const setupHours = Math.round((totalSetupTime || 0) * 10) / 10;
   const utilPct = Math.round(resourceUtilization || 0);
 
   // Color tokens — defer to CSS vars so dark/light themes stay consistent.
@@ -93,12 +101,13 @@ const KpiDashboard: React.FC<KpiDashboardProps> = ({ schedule, jobsTotal }) => {
     {
       label: 'Resource Utilization',
       value: `${utilPct}%`,
-      sub:
-        utilPct >= 85
-          ? 'High load — check bottlenecks'
-          : utilPct >= 60
-          ? 'Good balance'
-          : 'Capacity available',
+      sub: hasTimeModel
+        ? `${Math.round(busyHours || 0)}h booked of ${Math.round(operatingHours || 0)}h shift time`
+        : utilPct >= 85
+        ? 'High load — check bottlenecks'
+        : utilPct >= 60
+        ? 'Good balance'
+        : 'Capacity available',
       color: utilPct >= 95 ? COLOR_BAD : utilPct >= 75 ? COLOR_WARN : COLOR_OK,
       iconKey: 'utilization',
     },
@@ -118,7 +127,8 @@ const KpiDashboard: React.FC<KpiDashboardProps> = ({ schedule, jobsTotal }) => {
     },
     {
       label: 'Critical Path',
-      value: `${Math.round(criticalPathLength || 0)}d`,
+      // criticalPathLength is in hours (the tile said days).
+      value: `${Math.round(criticalPathLength || 0)}h`,
       sub: 'Longest job chain',
       color: COLOR_INFO,
       iconKey: 'criticalPath',
@@ -130,6 +140,15 @@ const KpiDashboard: React.FC<KpiDashboardProps> = ({ schedule, jobsTotal }) => {
       color: COLOR_INFO,
       iconKey: 'setup',
     },
+    ...(typeof avgLeadTimeDays === 'number'
+      ? [{
+          label: 'Avg Lead Time',
+          value: `${avgLeadTimeDays.toFixed(1)}d`,
+          sub: 'Planned start → finish',
+          color: COLOR_INFO,
+          iconKey: 'criticalPath' as const,
+        }]
+      : []),
   ];
 
   return (
@@ -170,6 +189,19 @@ const KpiDashboard: React.FC<KpiDashboardProps> = ({ schedule, jobsTotal }) => {
           <span className="kpi-util-pct">{utilPct}%</span>
         </div>
       </div>
+
+      {hasTimeModel && (
+        <div className="kpi-utilbar-section">
+          <div className="kpi-util-label">Line time over the horizon</div>
+          <div className="kpi-util-track kpi-util-track--stacked" title="Share of shift (operating) time">
+            <div className="kpi-util-fill" style={{ width: `${productivePct || 0}%`, background: COLOR_OK }} />
+            <div className="kpi-util-fill" style={{ width: `${directDowntimePct || 0}%`, background: COLOR_WARN }} />
+            <span className="kpi-util-pct">
+              Run {Math.round(productivePct || 0)}% · Setup {Math.round(directDowntimePct || 0)}% · Idle {Math.round(idlePct || 0)}%
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="kpi-utilbar-section">
         <div className="kpi-util-label">Schedule Coverage</div>

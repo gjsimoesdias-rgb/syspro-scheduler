@@ -202,6 +202,28 @@ export interface ScheduleMetrics {
   totalSetupTime: number; // hours
   totalQueueTime: number; // hours
   totalMoveTime: number; // hours
+  // ── Time model (same definitions as LYNQ Gen 3). All hours over the planning
+  //    horizon, summed across workcentres; % are of operating time. ──
+  /** Shift / working time available. */
+  operatingHours?: number;
+  /** Setup + run booked on the line. */
+  busyHours?: number;
+  /** Run time only (excl. setup/changeover). */
+  productiveHours?: number;
+  /** Setup / changeover time. */
+  directDowntimeHours?: number;
+  /** Operating time with nothing booked. */
+  idleHours?: number;
+  busyPct?: number;
+  productivePct?: number;
+  directDowntimePct?: number;
+  idlePct?: number;
+  /** On-time delivery: scheduled jobs finishing by their due date, % */
+  otdRate?: number;
+  /** Average planned start → finish, days. */
+  avgLeadTimeDays?: number;
+  /** Jobs that could not be fully scheduled. */
+  jobsUnscheduled?: number;
 }
 
 // ==================== CALENDAR & AVAILABILITY ====================
