@@ -265,3 +265,50 @@ describe('POST /api/schedule/save', () => {
     expect(res.body).toMatchObject({ saved: true, scheduleId: 'save-test-1' });
   });
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/schedule/:scheduleId/export-to-syspro
+// ---------------------------------------------------------------------------
+
+describe('POST /api/schedule/:scheduleId/export-to-syspro', () => {
+  const token = makeToken('planner');
+  afterEach(() => { app.locals.sysproDb = undefined; });
+
+  it('returns 404 when the schedule was never saved', async () => {
+    app.locals.sysproDb = makeFakeDb() as any;
+    const res = await request(app)
+      .post('/api/schedule/S1/export-to-syspro')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ schedule: { scheduleId: 'S1', jobSchedules: [] } });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 409 when the saved schedule is not Approved', async () => {
+    app.locals.sysproDb = makeFakeDb({
+      queryWithParams: jest.fn().mockResolvedValue({
+        recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [] }), Status: 'Draft' }],
+      }),
+    }) as any;
+    const res = await request(app)
+      .post('/api/schedule/S1/export-to-syspro')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(409);
+  });
+
+  it('exports the SAVED schedule (not the request body) and marks it Exported', async () => {
+    const qwp = jest.fn().mockImplementation(async (sql: string) =>
+      /SELECT ScheduleData, Status/.test(sql)
+        ? { recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [] }), Status: 'Approved' }] }
+        : { recordset: [] }
+    );
+    app.locals.sysproDb = makeFakeDb({ queryWithParams: qwp }) as any;
+    const res = await request(app)
+      .post('/api/schedule/S1/export-to-syspro')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ schedule: { scheduleId: 'S1', jobSchedules: [{ jobId: 'INJECTED', operationSchedules: [] }] } });
+    expect(res.status).toBe(200);
+    expect(qwp.mock.calls.some(([sql]) => /SET Status = 'Exported'/.test(sql))).toBe(true);
+    expect(JSON.stringify(qwp.mock.calls)).not.toContain('INJECTED');
+  });
+});

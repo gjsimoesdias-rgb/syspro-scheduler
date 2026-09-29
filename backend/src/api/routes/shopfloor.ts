@@ -26,7 +26,7 @@ router.get('/today', async (req: Request, res: Response) => {
     // Fetch the latest schedule record
     const scheduleResult = await sysproDb.query(
       `SELECT TOP 1 ScheduleData FROM aps.SavedSchedules
-       WHERE Status IN ('Approved', 'Draft') AND IsLatest = 1
+       WHERE Status IN ('Approved', 'Exported', 'Draft') AND IsLatest = 1
        ORDER BY SavedAt DESC`
     );
 
@@ -87,7 +87,7 @@ router.get('/workcentre/:wcId', async (req: Request, res: Response) => {
   try {
     const scheduleResult = await sysproDb.query(
       `SELECT TOP 1 ScheduleData FROM aps.SavedSchedules
-       WHERE Status IN ('Approved', 'Draft') AND IsLatest = 1
+       WHERE Status IN ('Approved', 'Exported', 'Draft') AND IsLatest = 1
        ORDER BY SavedAt DESC`
     );
     if (!scheduleResult.recordset?.length) {

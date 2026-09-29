@@ -107,7 +107,7 @@ export interface Schedule {
   scheduleId: string;
   scheduledDate: Date;
   version: number;
-  status: 'Draft' | 'Approved' | 'Released' | 'Executing' | 'Complete';
+  status: 'Draft' | 'Approved' | 'Exported' | 'Released' | 'Executing' | 'Complete';
   planningHorizon: {
     startDate: Date;
     endDate: Date;

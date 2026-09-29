@@ -1589,12 +1589,15 @@ router.post('/:scheduleId/approve', requireAuth, requirePlanner, async (req: Req
 /**
  * POST /api/schedule/:scheduleId/export-to-syspro
  * Export schedule to Syspro via APS compatibility layer.
- * Requires planner, company_admin, or super_admin role.
+ *
+ * The schedule is read from aps.SavedSchedules — never from the request body —
+ * and must be in status 'Approved', so only a persisted, approved plan can be
+ * written to SYSPRO. On success the row is marked 'Exported'.
+ * Requires a planning role (see requirePlanner).
  */
 router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async (req: Request, res: Response) => {
   try {
     const { scheduleId } = req.params;
-    const { schedule } = req.body as { schedule?: any };
 
     const sysproDb = req.app.locals.sysproDb;
     if (!sysproDb) {
@@ -1603,11 +1606,20 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
       });
     }
 
-    if (!schedule) {
-      return res.status(400).json({
-        error: 'Export request must include schedule data'
+    const saved = await sysproDb.queryWithParams(
+      `SELECT ScheduleData, Status FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
+      { scheduleId }
+    );
+    const row = saved.recordset?.[0];
+    if (!row) {
+      return res.status(404).json({ error: 'Schedule not found — save it before sending to SYSPRO' });
+    }
+    if (row.Status !== 'Approved') {
+      return res.status(409).json({
+        error: `Schedule is '${row.Status}'. Only an Approved schedule can be sent to SYSPRO.`
       });
     }
+    const schedule = JSON.parse(row.ScheduleData);
 
     req.log.info({ scheduleId }, 'Exporting schedule to Syspro APS layer');
     
@@ -1618,6 +1630,15 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
     if (exportResult.success) {
       req.log.info({ schedulesWritten: exportResult.schedulesWritten, operationsWritten: exportResult.operationsWritten }, 'Schedule export succeeded');
       
+      try {
+        await sysproDb.queryWithParams(
+          `UPDATE aps.SavedSchedules SET Status = 'Exported' WHERE ScheduleID = @scheduleId`,
+          { scheduleId }
+        );
+      } catch (statusErr) {
+        req.log.warn({ err: statusErr }, 'Export succeeded but status could not be set to Exported');
+      }
+
       // Optionally cleanup old records
       try {
         await apsService.cleanupClosedOperations(1); // Clean records older than 1 day

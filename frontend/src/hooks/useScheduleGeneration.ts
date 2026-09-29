@@ -152,13 +152,25 @@ export function useScheduleGeneration({
       toast.error('No schedule to export');
       return;
     }
+    const jobCount = schedule.jobSchedules.filter((j) => j.operationSchedules?.length).length;
+    const opCount = schedule.jobSchedules.reduce((n, j) => n + (j.operationSchedules?.length || 0), 0);
+    if (!window.confirm(
+      `Send this schedule to SYSPRO?\n\n${jobCount} jobs / ${opCount} operations will get new scheduled ` +
+      'dates and machines in SYSPRO. Due dates are not changed.\n\nThe schedule will be saved and approved first.'
+    )) {
+      return;
+    }
     try {
       setLoading(true);
-      console.log('📤 Exporting schedule to Syspro...');
-      await scheduleService.exportToSyspro(schedule.scheduleId, schedule);
+      // Export reads the schedule from the server, so persist exactly what is on
+      // screen, approve it, then export that approved version.
+      await scheduleService.save(schedule);
+      await scheduleService.approve(schedule.scheduleId);
+      const result = await scheduleService.exportToSyspro(schedule.scheduleId);
       setScheduleSource('none');
       await loadJobsAndResources();
-      toast.success('✓ Schedule exported to Syspro');
+      const written = result?.details?.schedulesWritten;
+      toast.success(written != null ? `✓ Sent to SYSPRO — ${written} jobs updated` : '✓ Schedule sent to SYSPRO');
     } catch (error: any) {
       console.error('Error exporting schedule:', error);
       toast.error(apiErrorMessage(error, 'Failed to export schedule'));

@@ -598,10 +598,11 @@ export class APSDatabaseService {
           ScheduleFlag    = 'U',
           -- Set calculation method to Manual so SYSPRO won't auto-recalculate dates
           -- (mirrors LYNQ DateCalcMethod='M')
-          DateCalcMethod  = 'M',
-          -- Keep planned dates in sync
-          JobStartDate    = @startDate,
-          JobDeliveryDate = @endDate
+          DateCalcMethod  = 'M'
+          -- JobStartDate / JobDeliveryDate are deliberately NOT written:
+          -- JobDeliveryDate is the customer due date and JobStartDate is read back
+          -- as the job's release date, so overwriting them would erase the due date
+          -- and stop the job ever moving earlier on the next run.
         WHERE Job = @jobId;
 
         SELECT @@ROWCOUNT AS rowsAffected;

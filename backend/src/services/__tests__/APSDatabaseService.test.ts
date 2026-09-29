@@ -242,6 +242,19 @@ describe('APSDatabaseService.exportSchedule — ordering', () => {
     expect(sprocIdx).toBeGreaterThanOrEqual(0);
     expect(wipIdx).toBeGreaterThan(sprocIdx);
   });
+
+  it('never overwrites the job due date or start date in WipMaster', async () => {
+    const db = happyDb();
+    const svc = new APSDatabaseService(db as any);
+    await svc.exportSchedule(makeSchedule([makeJobSchedule('J01', [makeOp()])]));
+
+    const wip = db.calls.find((c) => c.sql.includes('UPDATE WipMaster'));
+    expect(wip).toBeDefined();
+    // Strip SQL comments, then make sure neither column is assigned.
+    const code = wip!.sql.replace(/--.*$/gm, '');
+    expect(code).not.toMatch(/JobDeliveryDate\s*=/);
+    expect(code).not.toMatch(/JobStartDate\s*=/);
+  });
 });
 
 // ---------------------------------------------------------------------------
