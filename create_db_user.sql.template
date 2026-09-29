@@ -1,0 +1,23 @@
+-- create_db_user.sql.template
+-- Rendered by scripts/render-sql.mjs from environment variables.
+-- DO NOT commit the rendered output (create_db_user.sql) to source control.
+-- Run: node scripts/render-sql.mjs to generate the runnable file.
+
+-- Create a SQL Server login and database user for the Scheduler application
+IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name='{{SCHEDULER_SQL_USER}}')
+BEGIN
+    CREATE LOGIN {{SCHEDULER_SQL_USER}} WITH PASSWORD='{{SCHEDULER_SQL_PASSWORD}}';
+END
+GO
+
+USE {{SYSPRO_DB_NAME}};
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name='{{SCHEDULER_SQL_USER}}')
+BEGIN
+    CREATE USER {{SCHEDULER_SQL_USER}} FROM LOGIN {{SCHEDULER_SQL_USER}};
+    ALTER ROLE db_owner ADD MEMBER {{SCHEDULER_SQL_USER}};
+END
+GO
+
+SELECT 'User {{SCHEDULER_SQL_USER}} created successfully!' AS Status;

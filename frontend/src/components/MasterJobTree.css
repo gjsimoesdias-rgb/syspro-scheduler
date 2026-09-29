@@ -1,0 +1,513 @@
+/* MasterJobTree — "Job Tree" tab: read-only job-level Gantt.
+   Uses theme tokens so both themes adapt. */
+
+.jobtree {
+  display: flex;
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar: family list ──────────────────────────────────────────────────── */
+
+.jobtree-sidebar {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.jobtree-sidebar-head {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.jobtree-sidebar-head h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.jobtree-search {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.jobtree-family-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.jobtree-family {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.jobtree-family:hover {
+  background: var(--accent-soft, rgba(79, 139, 255, 0.12));
+}
+
+.jobtree-family.active {
+  background: var(--accent-soft, rgba(79, 139, 255, 0.16));
+  border-color: var(--accent);
+}
+
+.jobtree-family-id {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.jobtree-family-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.jobtree-family-none {
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.jobtree-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.jobtree-dot--ok       { background: var(--status-success, #10b981); }
+.jobtree-dot--late     { background: var(--status-warning, #f59e0b); }
+.jobtree-dot--violated { background: var(--status-error, #ef4444); }
+
+/* ── Main area ─────────────────────────────────────────────────────────────── */
+
+.jobtree-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* KPI cards */
+.jobtree-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.jobtree-kpi {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.jobtree-kpi--hot { border-color: var(--accent); }
+
+.jobtree-kpi--bad {
+  border-color: var(--status-error, #ef4444);
+  background: color-mix(in srgb, var(--status-error, #ef4444) 8%, var(--bg-card));
+}
+
+.jobtree-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.jobtree-kpi strong {
+  font-size: 14px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jobtree-kpi small {
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Timeline (read-only job-level Gantt) ──────────────────────────────────── */
+
+.jobtree-timeline {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.jobtree-tl-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.jobtree-tl-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.jobtree-tl-zoom { display: flex; gap: 4px; }
+
+.jobtree-tl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.jobtree-tl-btn:hover { border-color: var(--accent); }
+.jobtree-tl-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.jobtree-tl-scroll {
+  overflow: auto;
+  min-height: 0;
+}
+
+.jobtree-tl-grid { display: flex; flex-direction: column; }
+
+/* Header */
+.jobtree-tl-header {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.jobtree-tl-label-head {
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.jobtree-tl-lane-head {
+  position: relative;
+  overflow: hidden;
+}
+
+.jobtree-tl-tick {
+  position: absolute;
+  top: 6px;
+  transform: translateX(2px);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  border-left: 1px solid var(--border-color);
+  padding-left: 3px;
+  line-height: 14px;
+}
+
+/* Body: label column + lane */
+.jobtree-tl-body { display: flex; position: relative; }
+
+.jobtree-tl-label-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.jobtree-tl-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.jobtree-tl-label.critical {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.jobtree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.jobtree-toggle:hover { background: var(--accent-soft, rgba(79, 139, 255, 0.15)); color: var(--text-primary); }
+.jobtree-toggle--leaf { cursor: default; }
+
+.jobtree-role {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 13px;
+  padding: 0 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.jobtree-role--m { background: var(--accent); color: #fff; }
+.jobtree-role--s { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+
+.jobtree-jobid {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jobtree-jobid:hover { color: var(--accent); text-decoration: underline; }
+
+.jobtree-flame { color: var(--status-error, #ef4444); flex-shrink: 0; }
+
+.jobtree-late-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-error, #ef4444);
+  flex-shrink: 0;
+}
+
+/* Lane */
+.jobtree-tl-lane {
+  position: relative;
+  flex-shrink: 0;
+  background: var(--bg-card);
+}
+
+.jobtree-tl-weekend {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--text-muted) 9%, transparent);
+  pointer-events: none;
+}
+
+.jobtree-tl-rowline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-color);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.jobtree-tl-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--status-error, #ef4444);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Bars — READ-ONLY: no cursor affordance for dragging */
+.jobtree-tl-bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1.5px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 30%, var(--bg-card));
+  color: var(--text-primary);
+  font-size: 9.5px;
+  overflow: hidden;
+  white-space: nowrap;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+.jobtree-tl-bar--master {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.jobtree-tl-bar--critical {
+  border-width: 2px;
+}
+
+.jobtree-tl-bar--bottleneck {
+  border-color: var(--status-error, #ef4444);
+  background: color-mix(in srgb, var(--status-error, #ef4444) 32%, var(--bg-card));
+}
+
+.jobtree-tl-bar--planned {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--text-muted) 14%, var(--bg-card));
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.jobtree-tl-bar--late:not(.jobtree-tl-bar--bottleneck) {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-error, #ef4444) 60%, transparent);
+}
+
+.jobtree-tl-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.jobtree-tl-bar-flame { color: var(--status-error, #ef4444); flex-shrink: 0; }
+.jobtree-tl-bar--bottleneck .jobtree-tl-bar-flame,
+.jobtree-tl-bar--master .jobtree-tl-bar-flame { color: #fff; }
+
+.jobtree-tl-nodates {
+  position: absolute;
+  left: 8px;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Due-date marker */
+.jobtree-tl-due {
+  position: absolute;
+  width: 0;
+  border-left: 2px dotted var(--status-warning, #f59e0b);
+  pointer-events: auto;
+  z-index: 1;
+}
+.jobtree-tl-due.late { border-left-color: var(--status-error, #ef4444); border-left-style: solid; }
+
+/* Dependency arrows overlay */
+.jobtree-tl-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: visible;
+}
+
+/* Legend */
+.jobtree-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--border-color);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.jobtree-legend span { display: inline-flex; align-items: center; gap: 4px; }
+
+.jobtree-lg {
+  display: inline-block;
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+.jobtree-lg--master     { background: var(--accent); }
+.jobtree-lg--sub        { border: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent) 30%, var(--bg-card)); }
+.jobtree-lg--critical   { border: 2px solid var(--accent); background: transparent; }
+.jobtree-lg--bottleneck { border: 1.5px solid var(--status-error, #ef4444); background: color-mix(in srgb, var(--status-error, #ef4444) 32%, var(--bg-card)); }
+.jobtree-lg--planned    { border: 1.5px dashed var(--text-muted); background: transparent; }
+.jobtree-lg--due        { width: 2px; height: 12px; border-radius: 0; background: var(--status-warning, #f59e0b); }
+.jobtree-lg--arrow      { width: 16px; height: 2px; border-radius: 0; background: repeating-linear-gradient(90deg, var(--accent) 0 5px, transparent 5px 8px); }
+
+.jobtree-footnote {
+  margin-top: 10px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  max-width: 720px;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────────── */
+
+.jobtree-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.jobtree-empty h3 { margin: 0; color: var(--text-primary); font-size: 14px; }
+.jobtree-empty p { margin: 0; font-size: 12px; max-width: 460px; line-height: 1.5; }

@@ -1,0 +1,133 @@
+/* ShopFloorView — mobile-first styles (#65) */
+
+.sf-root {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0.75rem;
+  font-family: system-ui, sans-serif;
+}
+
+.sf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--accent);
+}
+
+.sf-header h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .sf-header h1 { color: #e2e8f0; }
+
+.sf-refresh {
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.sf-wc {
+  margin-bottom: 1.5rem;
+}
+
+.sf-wc-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+}
+
+.sf-op-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sf-op-card {
+  background: #f8fafc;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.15rem 0.5rem;
+}
+
+[data-theme="dark"] .sf-op-card {
+  background: #1e293b;
+  border-color: var(--text-primary);
+}
+
+.sf-op-job {
+  font-weight: 600;
+  color: var(--text-primary);
+  grid-column: 1;
+  grid-row: 1;
+}
+
+[data-theme="dark"] .sf-op-job { color: #e2e8f0; }
+
+.sf-op-time {
+  font-size: 0.85rem;
+  color: #64748b;
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+}
+
+.sf-op-resource {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.sf-loading,
+.sf-empty,
+.sf-error {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #64748b;
+}
+
+.sf-error {
+  color: var(--status-bad);
+}
+
+.sf-error button {
+  margin-left: 0.5rem;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--status-bad);
+  border-radius: 4px;
+  color: var(--status-bad);
+  padding: 0.2rem 0.5rem;
+}
+
+@media (max-width: 400px) {
+  .sf-op-card {
+    grid-template-columns: 1fr;
+  }
+  .sf-op-time {
+    text-align: left;
+  }
+}

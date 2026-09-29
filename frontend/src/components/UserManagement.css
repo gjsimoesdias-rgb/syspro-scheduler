@@ -1,0 +1,101 @@
+.um-panel { display: flex; flex-direction: column; gap: 10px; padding: 0; }
+
+.um-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 10px; border-bottom: 1px solid var(--border-default);
+}
+.um-title { font-size: 14px; font-weight: 800; color: var(--text-primary); margin: 0; }
+.um-sub { font-size: 11px; color: var(--text-muted); margin: 2px 0 0; }
+
+.um-add-btn {
+  padding: 6px 16px; background: var(--accent); color: var(--text-on-accent);
+  border: none; border-radius: 4px; font-weight: 700; font-size: 12px;
+  cursor: pointer;
+}
+.um-add-btn:hover { background: var(--accent-strong); }
+
+.um-error {
+  background: var(--status-bad-soft); border: 1px solid var(--status-bad-soft); color: var(--status-bad);
+  padding: 7px 12px; border-radius: 4px; font-size: 11px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.um-error button { background: none; border: none; cursor: pointer; color: var(--status-bad); font-size: 14px; }
+
+.um-loading { color: var(--text-muted); font-size: 12px; padding: 20px; text-align: center; }
+
+.um-table {
+  border-collapse: collapse; width: 100%; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: 4px; overflow: hidden;
+  font-size: 12px;
+}
+.um-table th {
+  background: linear-gradient(180deg, #d8e7f8, #c8ddf2);
+  color: var(--text-primary); font-weight: 700; padding: 7px 12px; text-align: left;
+  border-bottom: 1px solid var(--border-default);
+}
+.um-table td {
+  padding: 7px 12px; border-bottom: 1px solid #e8f2fd;
+  vertical-align: middle;
+}
+.um-row-inactive td { opacity: 0.55; }
+.um-name { font-weight: 600; color: var(--text-primary); }
+.um-username { color: var(--text-muted); font-size: 11px; }
+.um-date { color: var(--text-muted); font-size: 11px; }
+
+.um-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 12px;
+  color: var(--text-on-accent); font-size: 10px; font-weight: 700;
+}
+.um-status { font-size: 11px; font-weight: 600; }
+.um-status.active { color: var(--status-ok); }
+.um-status.inactive { color: var(--text-muted); }
+
+.um-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.um-btn {
+  padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border-default); background: var(--accent-soft); color: var(--text-primary);
+  transition: background 0.1s;
+}
+.um-btn:hover { background: var(--accent-soft); }
+.um-btn.danger { border-color: var(--status-bad-soft); background: var(--status-bad-soft); color: var(--status-bad); }
+.um-btn.danger:hover { background: var(--status-bad-soft); }
+.um-btn.primary { background: var(--accent); border-color: var(--accent-strong); color: var(--text-on-accent); }
+.um-btn.primary:hover { background: var(--accent-strong); }
+.um-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Modal */
+.um-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+}
+.um-modal {
+  background: var(--bg-surface); border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  width: 400px; max-width: 95vw; display: flex; flex-direction: column;
+}
+.um-modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px; border-bottom: 1px solid var(--border-default);
+}
+.um-modal-header h3 { margin: 0; font-size: 14px; color: var(--text-primary); }
+.um-modal-header button {
+  background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); line-height: 1;
+}
+.um-modal-body {
+  padding: 18px; display: flex; flex-direction: column; gap: 12px;
+}
+.um-modal-body label {
+  display: flex; flex-direction: column; gap: 4px; font-size: 12px;
+  font-weight: 600; color: var(--text-secondary);
+}
+.um-modal-body input, .um-modal-body select {
+  padding: 7px 10px; border: 1px solid var(--border-default); border-radius: 4px;
+  font-size: 13px; outline: none; width: 100%; box-sizing: border-box;
+}
+.um-modal-body input:focus, .um-modal-body select:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+.um-modal-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 18px; border-top: 1px solid var(--border-default);
+}

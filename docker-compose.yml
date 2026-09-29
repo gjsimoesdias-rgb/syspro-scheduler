@@ -1,0 +1,88 @@
+version: '3.8'
+
+# All credentials must come from a .env file (or the docker host environment).
+# Compose will refuse to start if a referenced variable is unset thanks to the
+# ?err suffix below — that is intentional. Never re-introduce defaults like
+# 'sa' / 'YourPassword123': they leak straight into production images.
+services:
+  scheduler-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SYSPRO_DB_SERVER: ${SYSPRO_DB_SERVER:?SYSPRO_DB_SERVER must be set}
+      SYSPRO_DB_NAME: ${SYSPRO_DB_NAME:?SYSPRO_DB_NAME must be set}
+      SYSPRO_DB_USER: ${SYSPRO_DB_USER:?SYSPRO_DB_USER must be set}
+      SYSPRO_DB_PASSWORD: ${SYSPRO_DB_PASSWORD:?SYSPRO_DB_PASSWORD must be set}
+      SCHEDULER_DB_SERVER: ${SCHEDULER_DB_SERVER:?SCHEDULER_DB_SERVER must be set}
+      SCHEDULER_DB_NAME: ${SCHEDULER_DB_NAME:?SCHEDULER_DB_NAME must be set}
+      SCHEDULER_DB_USER: ${SCHEDULER_DB_USER:?SCHEDULER_DB_USER must be set}
+      SCHEDULER_DB_PASSWORD: ${SCHEDULER_DB_PASSWORD:?SCHEDULER_DB_PASSWORD must be set}
+      # CP-SAT sidecar — route requests to the sidecar container
+      CP_SAT_URL: http://cp-sat-sidecar:5050
+    depends_on:
+      - sql-server
+      - cp-sat-sidecar
+    networks:
+      - scheduler-network
+    restart: unless-stopped
+
+  cp-sat-sidecar:
+    build:
+      context: ./cp-sat
+      dockerfile: Dockerfile
+    ports:
+      - "5050:5050"
+    networks:
+      - scheduler-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5050/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  scheduler-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:80"
+    depends_on:
+      - scheduler-backend
+    networks:
+      - scheduler-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
+    environment:
+      ACCEPT_EULA: Y
+      # Reuse the scheduler DB password (same set of secrets, just one source).
+      SA_PASSWORD: ${SCHEDULER_DB_PASSWORD:?SCHEDULER_DB_PASSWORD must be set}
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    networks:
+      - scheduler-network
+    restart: unless-stopped
+
+networks:
+  scheduler-network:
+    driver: bridge
+
+volumes:
+  mssql-data:
+    driver: local

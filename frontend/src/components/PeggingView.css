@@ -1,0 +1,207 @@
+.pegging-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+
+.pegging-view.empty {
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  min-height: 200px;
+  display: flex;
+}
+
+.peg-header {
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid var(--border-default);
+  background: linear-gradient(180deg, #d8e7f8 0%, #c8dbf0 100%);
+}
+
+.peg-header h3 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.peg-header p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.peg-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.peg-sidebar {
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.peg-sidebar-title {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: #dce9f8;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.peg-job-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.peg-job-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  border-bottom: 1px solid #d6e3f2;
+  background: white;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.peg-job-btn:hover {
+  background: var(--accent-soft);
+}
+
+.peg-job-btn.active {
+  background: #daeafc;
+  border-left: 3px solid var(--accent);
+}
+
+.peg-job-id {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.peg-job-item {
+  color: var(--text-secondary);
+}
+
+.peg-job-status {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.peg-trace {
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.peg-select-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 20px;
+  text-align: center;
+}
+
+.peg-node {
+  border-radius: 5px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 480px;
+}
+
+.peg-node-job {
+  background: #e8f5e9;
+  border: 1px solid #4caf5040;
+}
+
+.peg-node-op {
+  background: #e3f2fd;
+  border: 1px solid #2196f340;
+  margin-left: 20px;
+}
+
+.peg-node-resource {
+  background: #fce4ec;
+  border: 1px solid #e91e6340;
+  margin-left: 40px;
+}
+
+.peg-node-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  padding-bottom: 4px;
+}
+
+.peg-node-row {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  align-items: baseline;
+}
+
+.peg-node-row span {
+  color: var(--text-muted);
+  min-width: 90px;
+}
+
+.peg-node-row strong {
+  color: var(--text-secondary);
+}
+
+.peg-overtime-flag {
+  font-size: 10px;
+  color: var(--status-warn);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.peg-inline-status {
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.peg-inline-status.scheduled {
+  background: var(--status-ok-soft);
+  color: var(--status-ok);
+}
+
+.peg-inline-status.constraintviolation {
+  background: var(--status-bad-soft);
+  color: var(--status-bad);
+}
+
+.peg-inline-status.unschedulable {
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+}
+
+.peg-arrow {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 12px;
+  font-weight: 600;
+}
+
+.peg-arrow-seq {
+  margin-left: 40px;
+  color: #7c3aed;
+}

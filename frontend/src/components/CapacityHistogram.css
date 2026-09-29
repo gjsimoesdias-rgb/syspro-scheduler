@@ -1,0 +1,123 @@
+.capacity-histogram {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #eef5fe;
+  overflow: auto;
+}
+
+.capacity-histogram.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  min-height: 200px;
+}
+
+.cap-hist-header {
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid #b7cae0;
+  background: linear-gradient(180deg, #d8e7f8 0%, #c8dbf0 100%);
+}
+
+.cap-hist-header h3 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  color: #173559;
+}
+
+.cap-hist-header p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.cap-hist-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+}
+
+.cap-wc-block {
+  background: white;
+  border: 1px solid #c5d7ed;
+  border-radius: 4px;
+  padding: 8px 10px;
+  min-width: 180px;
+  flex: 1;
+}
+
+.cap-wc-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  border-bottom: 1px solid #e0eaf6;
+  padding-bottom: 4px;
+}
+
+.cap-wc-chart {
+  overflow-x: auto;
+}
+
+.cap-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 4px 0;
+}
+
+.cap-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 24px;
+}
+
+.cap-bar-outer {
+  position: relative;
+  width: 22px;
+  background: #e8f0fc;
+  border: 1px solid #c5d7ed;
+  border-radius: 2px 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.cap-bar-fill {
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease;
+}
+
+.cap-bar-fill.under {
+  background: linear-gradient(180deg, var(--status-ok) 0%, #10b981 100%);
+}
+
+.cap-bar-fill.over {
+  background: linear-gradient(180deg, #fca5a5 0%, #ef4444 100%);
+}
+
+.cap-capacity-line {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  height: 2px;
+  background: #1d3554;
+  border-top: 2px dashed #1d3554;
+  z-index: 2;
+}
+
+.cap-bar-label {
+  font-size: 9px;
+  color: var(--text-secondary);
+  text-align: center;
+  white-space: nowrap;
+  transform: rotate(-45deg);
+  transform-origin: center;
+  width: 30px;
+  margin-top: 10px;
+}

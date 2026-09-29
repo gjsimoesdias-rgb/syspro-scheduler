@@ -1,0 +1,50 @@
+{
+  "name": "syspro-scheduler",
+  "version": "1.0.0",
+  "description": "Syspro Finite Capacity Scheduler - Direct DB Integration with Constraint Management",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0 <23.0.0",
+    "npm": ">=9.0.0"
+  },
+  "scripts": {
+    "setup": "npm run setup:backend && npm run setup:frontend",
+    "setup:backend": "cd backend && npm install && npm run build",
+    "setup:frontend": "cd frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "start": "npm run build:frontend && cd backend && npm start",
+    "start:dev": "npm run build:frontend && cd backend && npm run dev",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "configure:db": "node installer/setup-wizard.js",
+    "build:software": "npm run build",
+    "start:software": "cd backend && npm start",
+    "install:software": "npm run setup && npm run configure:db && npm run build:software",
+    "build:installer": "powershell -ExecutionPolicy Bypass -File installer/build-installer.ps1",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "lint": "eslint \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml}\"",
+    "test": "npm run test --workspace=backend && npm run test --workspace=frontend",
+    "test:backend": "npm run test --workspace=backend",
+    "test:frontend": "npm run test --workspace=frontend"
+  },
+  "keywords": [
+    "scheduling",
+    "syspro",
+    "finite-capacity",
+    "production-planning",
+    "constraint-programming",
+    "gantt"
+  ],
+  "author": "AI Development Team",
+  "license": "ISC",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}

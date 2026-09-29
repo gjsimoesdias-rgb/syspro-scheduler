@@ -1,0 +1,253 @@
+/* ============================================================
+   Syspro Scheduler — design tokens
+   "High-end APS console" palette: muted slate base, restrained
+   accents reserved for status semantics. Dark theme is default;
+   :root[data-theme='light'] flips to a daylight palette.
+
+   Use these tokens from any component CSS:
+     color: var(--text-primary);
+     background: var(--bg-surface);
+     border: 1px solid var(--border-subtle);
+
+   Numeric scales follow a 4px base.
+   ============================================================ */
+
+:root,
+:root[data-theme='dark'] {
+  /* ---------- Surfaces ---------- */
+  --bg-base:        #0b1020;   /* page background */
+  --bg-canvas:      #0f1530;   /* gantt canvas, large panels */
+  --bg-surface:     #131a37;   /* cards, modals, table bodies */
+  --bg-surface-2:   #182143;   /* table headers, sub-panels */
+  --bg-elevated:    #1d2752;   /* popovers, context menus */
+  --bg-hover:       rgba(255, 255, 255, 0.04);
+  --bg-pressed:     rgba(255, 255, 255, 0.08);
+
+  /* ---------- Borders ---------- */
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong:  rgba(255, 255, 255, 0.20);
+  --border-divider: rgba(255, 255, 255, 0.08);
+
+  /* ---------- Text ---------- */
+  --text-primary:   #e6ebf5;
+  --text-secondary: #9aa6c2;
+  --text-muted:     #828fb0;
+  --text-inverse:   #0b1020;
+  --text-on-accent: #ffffff;
+
+  /* ---------- Accent (single brand colour, restrained) ---------- */
+  --accent:         #4f8bff;
+  --accent-strong:  #3b78f0;
+  --accent-soft:    rgba(79, 139, 255, 0.16);
+  --accent-ring:    rgba(79, 139, 255, 0.45);
+
+  /* ---------- Semantic status ---------- */
+  --status-ok:        #2ec27e;     /* available, on-time */
+  --status-ok-soft:   rgba(46, 194, 126, 0.14);
+  --status-warn:      #f5a524;     /* partial, at-risk */
+  --status-warn-soft: rgba(245, 165, 36, 0.14);
+  --status-bad:       #e35d6a;     /* short, overdue */
+  --status-bad-soft:  rgba(227, 93, 106, 0.14);
+  --status-info:      #38bdf8;
+  --status-info-soft: rgba(56, 189, 248, 0.14);
+
+  /* ---------- Lateness gradient (Gantt) ---------- */
+  --gantt-on-time:    var(--status-ok);
+  --gantt-at-risk:    var(--status-warn);
+  --gantt-late:       var(--status-bad);
+  --gantt-locked:     #8a93b3;
+  --gantt-grid:       rgba(255, 255, 255, 0.05);
+  --gantt-grid-major: rgba(255, 255, 255, 0.10);
+  --gantt-non-shift:  rgba(255, 255, 255, 0.025);
+
+  /* ---------- Type ---------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+               'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
+               Consolas, monospace;
+
+  --fs-2xs: 11px;
+  --fs-xs:  12px;
+  --fs-sm:  13px;
+  --fs-md:  14px;
+  --fs-lg:  16px;
+  --fs-xl:  18px;
+  --fs-2xl: 22px;
+
+  --lh-tight: 1.25;
+  --lh-normal: 1.45;
+
+  /* ---------- Spacing (4px base) ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* ---------- Radii ---------- */
+  --r-xs: 2px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+
+  /* ---------- Shadows (subtle, no heavy drop shadows) ---------- */
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, 0.40);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.50);
+
+  /* ---------- Motion ---------- */
+  --t-fast: 80ms;
+  --t-base: 140ms;
+
+  /* ---------- Z-layers ---------- */
+  --z-toolbar: 50;
+  --z-popover: 200;
+  --z-modal:   1000;
+  --z-toast:   2000;
+
+  /* Legacy variable aliases — older component CSS still references these names.
+     Defined once here; they reference tokens that already flip per theme, so
+     these adapt to light/dark automatically. */
+  --bg-primary:    var(--bg-base);
+  --bg-secondary:  var(--bg-surface);
+  --bg-card:       var(--bg-surface);
+  --border:        var(--border-default);
+  --border-color:  var(--border-default);
+}
+
+/* Light theme override — keeps the same variable names, swaps values. */
+:root[data-theme='light'] {
+  --bg-base:        #f6f7fb;
+  --bg-canvas:      #ffffff;
+  --bg-surface:     #ffffff;
+  --bg-surface-2:   #f1f3f9;
+  --bg-elevated:    #ffffff;
+  --bg-hover:       rgba(15, 23, 42, 0.04);
+  --bg-pressed:     rgba(15, 23, 42, 0.08);
+
+  --border-subtle:  rgba(15, 23, 42, 0.06);
+  --border-default: rgba(15, 23, 42, 0.12);
+  --border-strong:  rgba(15, 23, 42, 0.20);
+  --border-divider: rgba(15, 23, 42, 0.08);
+
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #64748b;
+  --text-inverse:   #ffffff;
+  --text-on-accent: #ffffff;
+
+  --accent:         #2563eb;
+  --accent-strong:  #1d4ed8;
+  --accent-soft:    rgba(37, 99, 235, 0.10);
+  --accent-ring:    rgba(37, 99, 235, 0.30);
+
+  --status-ok:        #047857;
+  --status-ok-soft:   rgba(16, 185, 129, 0.12);
+  --status-warn:      #b45309;
+  --status-warn-soft: rgba(251, 191, 36, 0.16);
+  --status-bad:       #b91c1c;
+  --status-bad-soft:  rgba(220, 38, 38, 0.12);
+  --status-info:      #0369a1;
+  --status-info-soft: rgba(56, 189, 248, 0.12);
+
+  --gantt-grid:       rgba(15, 23, 42, 0.06);
+  --gantt-grid-major: rgba(15, 23, 42, 0.12);
+  --gantt-non-shift:  rgba(15, 23, 42, 0.03);
+  /* gantt-on-time / at-risk / late inherit via var(--status-*) — already correct */
+  --gantt-locked:     #64748b;   /* slate-500 — readable on light backgrounds */
+
+  --shadow-1: 0 1px 0 rgba(15, 23, 42, 0.04);
+  --shadow-2: 0 6px 18px rgba(15, 23, 42, 0.10);
+  --shadow-3: 0 12px 32px rgba(15, 23, 42, 0.16);
+
+  --bg-primary:    var(--bg-base);
+  --bg-secondary:  var(--bg-surface);
+}
+
+/* ============================================================
+   Global resets aligned to the token system.
+   Kept minimal so individual component CSS can opt in via vars.
+   ============================================================ */
+
+html,
+body,
+#root {
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Keyboard focus ring used across buttons / inputs in the theme refresh */
+.aps-focusable:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+  border-radius: var(--r-sm);
+}
+
+/* Tabular numerics utility — apply to columns showing quantities/dates */
+.aps-numeric,
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle scrollbar styling for dense panels */
+.aps-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.aps-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+.aps-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+.aps-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Global themed scrollbars — every scroll area matches the theme instead of
+   the bright OS default, which was jarring in dark mode. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-default) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: padding-box; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+
+/* Status pill primitives — components can adopt these instead of rolling their own */
+.aps-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 18px;
+}
+.aps-pill--ok   { color: var(--status-ok);   background: var(--status-ok-soft); }
+.aps-pill--warn { color: var(--status-warn); background: var(--status-warn-soft); }
+.aps-pill--bad  { color: var(--status-bad);  background: var(--status-bad-soft); }
+.aps-pill--info { color: var(--status-info); background: var(--status-info-soft); }

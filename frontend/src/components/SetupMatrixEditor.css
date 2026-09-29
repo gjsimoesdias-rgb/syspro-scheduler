@@ -1,0 +1,158 @@
+.setup-matrix {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  padding: 12px 14px;
+  gap: 10px;
+}
+
+.setup-matrix-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setup-matrix-header h3 {
+  margin: 0 0 3px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.setup-matrix-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 640px;
+}
+
+.setup-matrix-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px;
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: 6px;
+  background: var(--bg-card);
+}
+
+.setup-matrix-add select,
+.setup-matrix-add input {
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.setup-matrix-add input[type='text'] {
+  width: 150px;
+  text-transform: uppercase;
+}
+
+.setup-matrix-minutes {
+  width: 76px;
+}
+
+.setup-matrix-arrow {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.setup-matrix-unit {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.setup-matrix-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.setup-matrix-toolbar input {
+  flex: 0 1 280px;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.setup-matrix-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.setup-matrix-table-wrap {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: 6px;
+  background: var(--bg-card);
+}
+
+.setup-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.setup-matrix-table th,
+.setup-matrix-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default, var(--border-color));
+  color: var(--text-primary);
+}
+
+.setup-matrix-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  z-index: 1;
+}
+
+.setup-matrix-table .num {
+  text-align: right;
+}
+
+.setup-matrix-table .mono {
+  font-family: 'Consolas', 'Menlo', monospace;
+}
+
+.setup-matrix-table .actions {
+  width: 36px;
+  text-align: center;
+}
+
+.setup-matrix-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.setup-matrix-delete:hover {
+  color: var(--status-danger, #e5484d);
+  background: var(--bg-secondary);
+}
+
+.setup-matrix-empty {
+  text-align: center;
+  padding: 24px 12px !important;
+  color: var(--text-secondary);
+}

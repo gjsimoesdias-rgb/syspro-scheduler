@@ -1,0 +1,206 @@
+/* OptimizerPanel — Sequencing Optimizer. Uses design tokens (theme.css) so it
+   adapts to light/dark automatically. No hardcoded brand hex. */
+
+.opt-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.opt-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 3px;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.opt-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 70ch;
+}
+
+/* Controls */
+.opt-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+.opt-objective {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.opt-objective select {
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: 5px;
+  background: var(--bg-primary, var(--bg-card));
+  color: var(--text-primary);
+}
+.opt-objective-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 180px;
+}
+.opt-run { margin-left: auto; }
+
+/* Empty / loading */
+.opt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-default, var(--border-color));
+  border-radius: 8px;
+}
+.opt-empty p { margin: 0; font-size: 13px; }
+.opt-empty-sub { font-size: 11px; opacity: 0.8; }
+
+/* Summary */
+.opt-summary {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+
+/* Ranked cards */
+.opt-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.opt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: 8px;
+  background: var(--bg-card, var(--bg-secondary));
+}
+.opt-card.winner {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.opt-card.failed { opacity: 0.6; }
+
+.opt-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.opt-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  min-width: 26px;
+}
+.opt-card-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+.opt-card.winner .opt-card-label { color: var(--accent); }
+.opt-active-chip {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+/* Score bar */
+.opt-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.opt-score-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.opt-score-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--accent);
+}
+.opt-score-num {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 34px;
+  text-align: right;
+}
+
+/* Metrics row */
+.opt-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.opt-metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.opt-apply { align-self: flex-start; }
+.opt-card-error {
+  font-size: 11.5px;
+  color: var(--status-bad, #dc2626);
+}
+
+.opt-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Reuse the app spinner if present; fallback keyframe otherwise. */
+.opt-empty .spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-default, var(--border-color));
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: opt-spin 0.8s linear infinite;
+}
+@keyframes opt-spin { to { transform: rotate(360deg); } }

@@ -1,0 +1,587 @@
+/**
+ * API Services
+ */
+
+import axios from 'axios';
+import { Schedule, Job, Resource } from '../types';
+import { setTypedClientTokenProvider } from './typed-client';
+
+export type BomLineStatus = 'Materials' | 'Partial' | 'No Materials';
+
+export interface BomWarehouseRow {
+  warehouseCode: string;
+  qtyOnHand: number;
+  qtyAllocWip: number;
+  qtyAllocSO: number;
+}
+
+export interface BomIncomingReceipt {
+  poNumber: string;
+  promiseDate: string | null; // ISO string
+  dueDate: string | null;     // ISO string
+  outstandingQty: number;
+}
+
+export interface BomDetailLine {
+  componentCode: string;
+  description: string;
+  unitOfMeasure: string;
+  quantityPerUnit: number;
+  scrapFactor: number;
+  requiredQty: number;
+
+  // Headline numbers (kept for backward compatibility with the original modal)
+  stockOnHand: number;        // sum of QtyOnHand across warehouses
+  reservedQty: number;        // wipAlloc + soAlloc + otherJobsHold rolled together
+  openPoQty: number;          // sum of outstanding PO qty
+  availableQty: number;
+  shortageQty: number;
+  leadTimeDays: number;
+  status: BomLineStatus;
+
+  // Richer breakdown (added 2026-05-06)
+  wipAllocQty?: number;       // QtyAllocWip from InvWarehouse
+  soAllocQty?: number;        // QtyAllocSO from InvWarehouse
+  otherJobsHoldQty?: number;  // From WipJobAllocation excluding current job
+  freeOnHandQty?: number;     // onHand - wip - so - otherHolds (clamped >= 0)
+  warehouses?: BomWarehouseRow[];
+  incomingReceipts?: BomIncomingReceipt[];
+}
+
+export interface BomDetail {
+  jobId: string;
+  itemCode: string;
+  itemDescription?: string;
+  quantity: number;
+  dueDate?: string | null;
+  status: BomLineStatus;
+  lineCount: number;
+  okCount?: number;
+  partialCount?: number;
+  shortageCount: number;
+  lines: BomDetailLine[];
+  note?: string;
+}
+
+// Vite builds: vite.config.ts defines process.env.REACT_APP_API_URL = VITE_API_URL at build time.
+// Jest / CRA builds: process.env.REACT_APP_API_URL comes from the .env file as usual.
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:3000/api');
+
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000
+});
+
+// ── Auth token injection ──────────────────────────────────────────────────────
+// AuthContext calls setTokenProvider() whenever the access token changes.
+// This keeps api.ts decoupled from React while still injecting the header.
+// The typed openapi-fetch client (typed-client.ts) is kept in sync automatically.
+let _tokenProvider: () => string | null = () => null;
+export const setTokenProvider = (fn: () => string | null): void => {
+  _tokenProvider = fn;
+  // Sync the typed openapi-fetch client so AuthContext needs only one call site.
+  setTypedClientTokenProvider(fn);
+};
+
+apiClient.interceptors.request.use((config) => {
+  const token = _tokenProvider();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// Broadcast 401s as a DOM event so AuthContext can clear state without
+// creating a circular import dependency.
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      window.dispatchEvent(new CustomEvent('aps:unauthorized'));
+    }
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Extract a human-readable message from ANY backend error shape.
+ * Route-level catches send { error: string }; the Express 404 handler and the
+ * centralised error middleware send { error: { code, message, details? } }.
+ * Rendering the object form directly (e.g. in a toast) crashes React with
+ * error #31 — always go through this helper.
+ */
+export const apiErrorMessage = (err: any, fallback: string): string => {
+  const e = err?.response?.data?.error;
+  if (typeof e === 'string' && e) return e;
+  if (e && typeof e.message === 'string' && e.message) return e.message;
+  const detail = err?.response?.data?.details?.[0]?.message;
+  if (typeof detail === 'string' && detail) return detail;
+  if (typeof err?.message === 'string' && err.message) return err.message;
+  return fallback;
+};
+
+export const scheduleService = {
+  generate: async (startDate: Date, endDate: Date): Promise<Schedule> => {
+    const response = await apiClient.post('/schedule/generate', {
+      planningHorizonStartDate: startDate,
+      planningHorizonEndDate: endDate
+    });
+    return response.data.schedule;
+  },
+
+  getById: async (scheduleId: string): Promise<Schedule> => {
+    const response = await apiClient.get(`/schedule/${scheduleId}`);
+    return response.data;
+  },
+
+  approve: async (scheduleId: string): Promise<void> => {
+    await apiClient.post(`/schedule/${scheduleId}/approve`);
+  },
+
+  exportToSyspro: async (scheduleId: string, schedule: Schedule): Promise<void> => {
+    await apiClient.post(`/schedule/${scheduleId}/export-to-syspro`, { schedule });
+  },
+
+  save: async (schedule: Schedule): Promise<void> => {
+    await apiClient.post('/schedule/save', { schedule });
+  },
+
+  loadLatest: async (): Promise<{ schedule: Schedule | null; meta?: any }> => {
+    const response = await apiClient.get('/schedule/latest');
+    return response.data;
+  },
+
+  restoreVersion: async (scheduleId: string): Promise<{ schedule: Schedule; restoredAt: string }> => {
+    const response = await apiClient.post(`/schedule/load-version/${encodeURIComponent(scheduleId)}`);
+    return response.data;
+  }
+};
+
+export const jobService = {
+  getAll: async (): Promise<{ items: Job[]; warning?: string }> => {
+    const response = await apiClient.get('/jobs');
+    return {
+      items: response.data.jobs,
+      warning: response.data.warning
+    };
+  },
+
+  getMaterialPlan: async (jobs: Partial<Job>[]) => {
+    const response = await apiClient.post('/jobs/material-plan', { jobs });
+    return response.data;
+  },
+
+  /**
+   * Returns the BOM for a single job along with per-line availability.
+   * Used by the Gantt right-click → "View materials" feature.
+   */
+  getBomDetail: async (jobId: string): Promise<BomDetail> => {
+    const response = await apiClient.get(`/jobs/${encodeURIComponent(jobId)}/bom-detail`);
+    return response.data;
+  },
+
+  getById: async (jobId: string): Promise<Job> => {
+    const response = await apiClient.get(`/jobs/${jobId}`);
+    return response.data;
+  },
+
+  getOperations: async (jobId: string) => {
+    const response = await apiClient.get(`/jobs/${jobId}/operations`);
+    return response.data.operations;
+  }
+};
+
+export const resourceService = {
+  getAll: async (): Promise<{ items: Resource[]; warning?: string }> => {
+    const response = await apiClient.get('/resources');
+    return {
+      items: response.data.resources,
+      warning: response.data.warning
+    };
+  },
+
+  getWorkcentres: async () => {
+    const response = await apiClient.get('/resources/workcentres');
+    return response.data.workcentres;
+  },
+
+  getWorkcentreDetails: async () => {
+    const response = await apiClient.get('/resources/workcentres/details');
+    return response.data;
+  },
+
+  getAlternativeGroups: async () => {
+    const response = await apiClient.get('/resources/alternatives/groups');
+    return response.data.groups || [];
+  },
+
+  saveAlternativeGroup: async (payload: { workcentreId: string; name: string; machineIds: string[]; notes?: string }) => {
+    const response = await apiClient.post('/resources/alternatives/groups', payload);
+    return response.data.group;
+  },
+
+  deleteAlternativeGroup: async (groupId: string) => {
+    const response = await apiClient.delete(`/resources/alternatives/groups/${groupId}`);
+    return response.data;
+  },
+
+  getDefinitions: async (): Promise<{ definitions: any[]; shifts: any[]; warning?: string }> => {
+    const response = await apiClient.get('/resources/definitions');
+    return {
+      definitions: response.data.definitions || [],
+      shifts: response.data.shifts || [],
+      warning: response.data.warning
+    };
+  },
+
+  updateDefinition: async (resourceId: string, payload: { quantity?: number; shiftId?: string; activated?: boolean; lineGroupId?: string }) => {
+    const response = await apiClient.put(`/resources/definitions/${resourceId}`, payload);
+    return response.data.definition;
+  },
+
+  createShift: async (payload: {
+    name: string;
+    startTime?: string;
+    endTime?: string;
+    workingDays: number[];
+    hoursPerDay: number;
+    diversions?: any[];
+  }) => {
+    const response = await apiClient.post('/resources/shifts', payload);
+    return response.data.shift;
+  },
+
+  updateShift: async (shiftId: string, payload: {
+    name: string;
+    startTime?: string;
+    endTime?: string;
+    workingDays: number[];
+    hoursPerDay: number;
+    diversions?: any[];
+  }) => {
+    const response = await apiClient.put(`/resources/shifts/${shiftId}`, payload);
+    return response.data.shift;
+  },
+
+  deleteShift: async (shiftId: string) => {
+    const response = await apiClient.delete(`/resources/shifts/${shiftId}`);
+    return response.data;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// Inventory — Stock On Hand and Open Purchase Orders
+// ─────────────────────────────────────────────────────────────
+
+export interface StockItem {
+  StockCode: string;
+  Description: string;
+  ProductClass: string;
+  PreferredSupplier: string;
+  LeadTime: number;
+  UnitOfMeasure: string;
+  Warehouse: string;
+  QtyOnHand: number;
+  QtyAllocated: number;
+  QtyAllocatedWip: number;
+  QtyOnOrder: number;
+  QtyInTransit: number;
+  QtyInInspection: number;
+  SafetyStockQty: number;
+  ReOrderQty: number;
+  MinimumQty: number;
+  MaximumQty: number;
+  UnitCost: number;
+  FreeOnHand: number;
+  DateLastSale: string | null;
+  DateLastStockMove: string | null;
+  DateLastPurchase: string | null;
+}
+
+export interface PurchaseOrderLine {
+  PurchaseOrder: string;
+  OrderStatus: string;
+  OrderStatusLabel: string;
+  Supplier: string;
+  OrderEntryDate: string;
+  OrderDueDate: string;
+  Warehouse: string;
+  Line: number;
+  StockCode: string;
+  StockDescription: string;
+  LineWarehouse: string;
+  OrderUom: string;
+  OrderedQty: number;
+  ReceivedQty: number;
+  OutstandingQty: number;
+  LineDueDate: string;
+  UnitPrice: number;
+  OutstandingValue: number;
+}
+
+export interface MaterialShortage {
+  job: string;
+  jobStockCode: string;
+  componentCode: string;
+  componentDesc: string;
+  totalRequired: number;
+  qtyIssued: number;
+  qtyOutstanding: number;
+  onHand: number;
+  freeOnHand: number;
+  openPoQty: number;
+  netAvailable: number;
+  shortage: number;
+  unitOfMeasure: string;
+  preferredSupplier: string;
+  leadTime: number;
+  abcClass: string;
+  productClass: string;
+}
+
+export const inventoryService = {
+  getStock: async (params?: { warehouse?: string; stockCode?: string; lowStock?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.warehouse) query.set('warehouse', params.warehouse);
+    if (params?.stockCode) query.set('stockCode', params.stockCode);
+    if (params?.lowStock) query.set('lowStock', 'true');
+    const response = await apiClient.get(`/inventory/stock?${query.toString()}`);
+    return response.data as { items: StockItem[]; count: number };
+  },
+
+  getStockByCode: async (stockCode: string) => {
+    const response = await apiClient.get(`/inventory/stock/${encodeURIComponent(stockCode)}`);
+    return response.data;
+  },
+
+  getPurchaseOrders: async (params?: { supplier?: string; stockCode?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.supplier) query.set('supplier', params.supplier);
+    if (params?.stockCode) query.set('stockCode', params.stockCode);
+    if (params?.status) query.set('status', params.status);
+    const response = await apiClient.get(`/inventory/purchase-orders?${query.toString()}`);
+    return response.data as { items: PurchaseOrderLine[]; count: number };
+  },
+
+  getPurchaseOrdersByStockCode: async (stockCode: string) => {
+    const response = await apiClient.get(`/inventory/purchase-orders/${encodeURIComponent(stockCode)}`);
+    return response.data;
+  },
+
+  getShortages: async () => {
+    const response = await apiClient.get('/inventory/shortages');
+    return response.data as { items: MaterialShortage[]; count: number; affectedJobs: number };
+  },
+
+  getWarehouses: async () => {
+    const response = await apiClient.get('/inventory/warehouses');
+    return response.data as { items: { Warehouse: string; Description: string }[] };
+  }
+};
+
+// ── Live schema introspection (HOME → Schema diagram) ──────────────────────────
+
+export interface SchemaColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  pk: boolean;
+}
+
+export interface SchemaObject {
+  schema: string;
+  name: string;
+  type: 'table' | 'view';
+  rows?: number;
+  columns: SchemaColumn[];
+}
+
+export interface SchemaRelationship {
+  name: string;
+  fromSchema: string;
+  fromTable: string;
+  fromColumn: string;
+  toSchema: string;
+  toTable: string;
+  toColumn: string;
+}
+
+export interface SchemaDatabase {
+  name: string;
+  role: 'syspro' | 'scheduler';
+  tableCount: number;
+  viewCount: number;
+  objects: SchemaObject[];
+  relationships: SchemaRelationship[];
+}
+
+export interface SchemaResponse {
+  databases: SchemaDatabase[];
+  generatedAt: string;
+}
+
+export const statusService = {
+  getStatus: async () => {
+    const response = await apiClient.get('/status');
+    return response.data;
+  },
+
+  getSchema: async (): Promise<SchemaResponse> => {
+    // SYSPRO catalogs are large — allow a generous timeout for the round-trip.
+    const response = await apiClient.get('/status/schema', { timeout: 120000 });
+    return response.data as SchemaResponse;
+  },
+
+  getDatabases: async (payload: {
+    server?: string;
+    userName?: string;
+    username?: string;
+    password?: string;
+    authMode?: string;
+    instanceName?: string;
+    port?: number | string;
+  }) => {
+    const response = await apiClient.post('/status/databases', payload);
+    return response.data;
+  },
+
+  connect: async (payload: {
+    server: string;
+    database: string;
+    schedulerDatabase?: string;
+    userName?: string;
+    username?: string;
+    password?: string;
+    authMode?: string;
+    instanceName?: string;
+    port?: number | string;
+  }) => {
+    const response = await apiClient.post('/status/connect', payload);
+    return response.data;
+  }
+};
+
+// ── Audit log ────────────────────────────────────────────────────────────────
+
+export interface AuditRow {
+  auditId: string;
+  actorId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  before?: string;
+  after?: string;
+  traceId?: string;
+  ts: string;
+}
+
+export const auditService = {
+  getHistory: async (params?: {
+    entityType?: string;
+    entityId?: string;
+    limit?: number;
+  }): Promise<{ entries: AuditRow[]; total: number }> => {
+    const query = new URLSearchParams();
+    if (params?.entityType) query.set('entityType', params.entityType);
+    if (params?.entityId)   query.set('entityId',   params.entityId);
+    if (params?.limit)      query.set('limit',       String(params.limit));
+    const response = await apiClient.get(`/audit?${query.toString()}`);
+    return response.data as { entries: AuditRow[]; total: number };
+  },
+};
+
+// Bundled default — assigned to a named const so ESLint's
+// import/no-anonymous-default-export rule passes and the React DevTools
+// can show a friendlier display name.
+const apiServices = {
+  scheduleService,
+  jobService,
+  resourceService,
+  statusService,
+  inventoryService,
+};
+
+export const columnProfileService = {
+  get: async (): Promise<{ visibleJobColumns: string[]; profileName?: string }> => {
+    const res = await apiClient.get('/users/me/column-profile');
+    return res.data;
+  },
+  save: async (visibleJobColumns: string[], profileName?: string): Promise<void> => {
+    await apiClient.put('/users/me/column-profile', { visibleJobColumns, profileName });
+  },
+};
+
+// ─────────────────────────────────────────────────────────────
+// Settings service
+// ─────────────────────────────────────────────────────────────
+
+export interface PlanningIntervalSettings {
+  mode: 'from-today' | 'previous-loaded' | 'custom';
+  fromTodayStartOffset: number;   // days from today → schedule start
+  fromTodayDurationWeeks: number; // weeks from start → schedule end
+  customFrom: string;             // ISO date (YYYY-MM-DD)
+  customTo: string;               // ISO date (YYYY-MM-DD)
+}
+
+export interface CompanySettingsDto {
+  general?: {
+    theme?: string;
+    [key: string]: unknown;
+  };
+  jobManagement?: {
+    defaultDirection?: string;
+    includeCompletedOps?: boolean;
+    [key: string]: unknown;
+  };
+  fcs?: {
+    planningInterval?: PlanningIntervalSettings;
+    schedulingRules?: {
+      schedulingMethod?: string;
+      sequenceBy?: string;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  [key: string]: any;
+}
+
+export const settingsService = {
+  getCompany: async (): Promise<CompanySettingsDto> => {
+    const res = await apiClient.get('/settings/company');
+    return res.data;
+  },
+};
+
+// ─────────────────────────────────────────────────────────────
+// Pin service — freeze / unfreeze operation time slots
+// ─────────────────────────────────────────────────────────────
+
+export interface PinnedOperationDto {
+  jobId: string;
+  opId: string;
+  workcentreId: string;
+  resourceId: string;
+  plannedStartDate: string; // ISO 8601
+  plannedEndDate: string;   // ISO 8601
+  pinnedAt: string;         // ISO 8601
+  pinnedBy?: string;
+}
+
+export const pinService = {
+  getAll: async (): Promise<PinnedOperationDto[]> => {
+    const res = await apiClient.get('/schedule/pins');
+    return res.data;
+  },
+
+  pin: async (pin: Omit<PinnedOperationDto, 'pinnedAt' | 'pinnedBy'>): Promise<{ ok: boolean; key: string }> => {
+    const res = await apiClient.post('/schedule/pin', pin);
+    return res.data;
+  },
+
+  unpin: async (jobId: string, opId: string): Promise<{ ok: boolean }> => {
+    const res = await apiClient.delete(`/schedule/pin/${encodeURIComponent(jobId)}/${encodeURIComponent(opId)}`);
+    return res.data;
+  },
+};
+
+export default apiServices;

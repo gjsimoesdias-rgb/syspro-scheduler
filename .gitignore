@@ -1,0 +1,39 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+credentials.txt
+credentials.*.txt
+*.log
+npm-debug.log*
+# Rendered SQL files contain credentials — never commit them
+create_sysprouser.sql
+create_db_user.sql
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.nyc_output/
+coverage/
+.cache/
+.next/
+out/
+yarn.lock
+.turbo/
+pids/
+*.pid
+
+# Archived files (kept locally, never committed)
+_archive_*/
+*.bak
+*.bak-*
+__pycache__/
+*.pyc
+# Rendered SQL / local creds
+credentials.txt

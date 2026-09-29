@@ -1,0 +1,8 @@
+node_modules
+**/dist
+**/build
+dist/installer-output
+dist/installer-package
+ConfigApp
+TCPEnabler
+package-lock.json

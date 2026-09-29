@@ -1,0 +1,98 @@
+.draggable-gantt {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 20px;
+}
+
+.draggable-gantt h3 {
+  margin: 0 0 15px 0;
+  color: var(--text-primary);
+}
+
+.draggable-gantt.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #9ca3af;
+}
+
+.gantt-timeline {
+  overflow-x: auto;
+  user-select: none;
+}
+
+.op-row {
+  display: flex;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+  align-items: center;
+}
+
+.op-label {
+  min-width: 100px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.op-bar-container {
+  flex: 1;
+  position: relative;
+  height: 24px;
+  margin-right: 10px;
+}
+
+.op-bar {
+  position: absolute;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: white;
+  cursor: grab;
+  transition: box-shadow 0.2s, transform 0.1s;
+  user-select: none;
+}
+
+.op-bar:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+.op-bar.dragging {
+  cursor: grabbing;
+  opacity: 0.8;
+  box-shadow: 0 8px 24px rgba(79, 139, 255, 0.4);
+}
+
+.timeline-header {
+  background: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0;
+  margin-left: 100px;
+}
+
+.timeline-labels {
+  display: flex;
+}
+
+.timeline-label {
+  flex: 1;
+  min-width: 80px;
+  padding: 10px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-right: 1px solid #e5e7eb;
+}

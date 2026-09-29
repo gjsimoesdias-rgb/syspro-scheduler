@@ -1,0 +1,943 @@
+/* ============================================================
+   APS console — targeted overrides
+
+   Layered on top of App.css so we can refine the visual tone
+   (header, ribbon, tab strip, buttons, panels, KPI cards, jobs
+   table) without rewriting 2k+ lines of legacy styles.
+
+   Rules of engagement:
+   - Use design tokens (--bg-*, --text-*, --border-*, etc.)
+   - Override existing class names with the same specificity, no !important
+     unless absolutely needed
+   - Keep selectors shallow so component CSS still wins where they should
+   ============================================================ */
+
+/* ---------- App shell ---------- */
+.app,
+.app-container {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+/* ---------- Top header ---------- */
+.app-header {
+  background: linear-gradient(180deg, var(--bg-surface-2) 0%, var(--bg-surface) 100%);
+  border-bottom: 1px solid var(--border-default);
+  box-shadow: var(--shadow-1);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-toolbar);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-2) var(--sp-5);
+  min-height: 48px;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.brand-icon {
+  width: 48px;
+  height: 38px;
+  background: url('/logo.png') no-repeat left center;
+  background-size: auto 38px;
+  flex-shrink: 0;
+}
+.brand-text {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+}
+.brand-ascend {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.brand-aps {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  padding: 2px 6px;
+  background: var(--accent-soft);
+  border-radius: var(--r-xs);
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* ---------- Buttons (within the header / ribbon) ---------- */
+.btn {
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  border-radius: var(--r-sm);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease,
+    border-color var(--t-fast) ease;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  width: 30px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.btn-info,
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: 1px solid var(--accent);
+}
+.btn-info:hover,
+.btn-primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.btn-sm {
+  font-size: var(--fs-xs);
+  height: 26px;
+  padding: 0 10px;
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+.btn-sm:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.btn-sm.active-tab-btn,
+.btn-sm:active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------- Status banner ---------- */
+.status-banner {
+  font-size: var(--fs-xs);
+  padding: 6px 16px;
+  border-top: 1px solid var(--border-divider);
+}
+.status-banner.status-warning {
+  background: var(--status-warn-soft);
+  color: var(--status-warn);
+}
+.status-banner.status-info {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ---------- Main "ribbon" tabs (FILE / HOME / MANAGE / ...) ---------- */
+.aps-main {
+  background: var(--bg-base);
+}
+.aps-main-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  padding: 0 var(--sp-3);
+}
+.aps-main-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--t-fast) ease, border-color var(--t-fast) ease,
+    background-color var(--t-fast) ease;
+}
+.aps-main-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.aps-main-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.aps-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-divider);
+}
+.aps-ribbon-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--sp-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+.aps-ribbon-title {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+/* ---------- Generic panels / cards ---------- */
+.panel,
+.card,
+.kpi-card,
+.feature-tab-content {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+/* ---------- KPI cards ---------- */
+.kpi-card {
+  border-radius: var(--r-sm);
+  padding: var(--sp-3) var(--sp-4);
+  box-shadow: var(--shadow-1);
+}
+.kpi-value {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.kpi-label {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* KpiDashboard component */
+.kpi-dashboard {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  padding: var(--sp-4);
+}
+.kpi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border-divider);
+}
+.kpi-schedule-id {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+}
+.kpi-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-3);
+}
+.kpi-tile {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  padding: var(--sp-3) var(--sp-4);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--t-base) ease, border-color var(--t-base) ease;
+}
+.kpi-tile:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-default);
+}
+.kpi-tile-icon {
+  color: var(--text-muted);
+  font-size: var(--fs-md);
+  margin-bottom: 4px;
+}
+.kpi-tile-value {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.kpi-tile-label {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.kpi-tile-sub {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+
+.kpi-utilbar-section {
+  margin-top: var(--sp-3);
+}
+.kpi-util-label {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.kpi-util-track {
+  position: relative;
+  height: 18px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.kpi-util-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--accent-strong), var(--accent));
+  transition: width var(--t-base) ease;
+}
+.kpi-util-pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Tables ---------- */
+.aps-table,
+table.aps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.aps-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface-2);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-default);
+}
+.aps-table tbody td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.aps-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+/* Apply tighter, APS-grade spacing to legacy job-row tables too */
+.job-row,
+.job-table tr,
+.master-job-row {
+  font-size: var(--fs-sm);
+}
+.job-row-highlighted,
+.master-job-row.job-row-highlighted {
+  background: var(--accent-soft) !important;
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ---------- Inputs ---------- */
+input[type='text'],
+input[type='number'],
+input[type='date'],
+input[type='datetime-local'],
+input[type='search'],
+select,
+textarea {
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-xs);
+  padding: 5px 10px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  transition: border-color var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+  outline: none;
+}
+
+/* ---------- Toasts ---------- */
+.go2072408551,
+.go2344853693,
+.toast,
+.react-hot-toast {
+  font-family: var(--font-sans) !important;
+  font-size: var(--fs-sm) !important;
+}
+
+/* ---------- Tooltip (Gantt) ---------- */
+.gantt-tooltip {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-xs);
+  font-family: var(--font-sans);
+}
+.gantt-tooltip-content { padding: var(--sp-2); min-width: 220px; }
+.gantt-tt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 1px 0;
+}
+.gantt-tt-row span { color: var(--text-muted); }
+.gantt-tt-row strong { color: var(--text-primary); font-weight: 600; }
+.gantt-tt-divider {
+  height: 1px;
+  background: var(--border-divider);
+  margin: 4px 0;
+}
+
+/* ---------- Machine Gantt board ---------- */
+.machine-gantt {
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+.machine-gantt-header {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+.machine-gantt-header h3 { color: var(--text-primary); }
+.machine-gantt-header p,
+.machine-gantt.empty,
+.machine-gantt.loading {
+  color: var(--text-secondary);
+}
+
+.machine-gantt-grid {
+  background: var(--bg-canvas);
+}
+
+/* Lane (one machine) */
+.machine-row {
+  border-bottom: 1px solid var(--border-divider);
+}
+.machine-row:nth-child(even) { background: rgba(255, 255, 255, 0.015); }
+.machine-name {
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border-default);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.02em;
+}
+[data-theme='light'] .machine-row:nth-child(even) { background: rgba(15, 23, 42, 0.02); }
+
+/* Op bar */
+.machine-op-bar {
+  border-radius: var(--r-xs);
+  font-family: var(--font-sans);
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.30) inset;
+  transition: filter var(--t-fast) ease, transform var(--t-fast) ease;
+}
+.machine-op-bar:hover {
+  filter: brightness(1.08);
+}
+.machine-op-bar.locked {
+  outline: 1px dashed var(--gantt-locked);
+  outline-offset: -1px;
+}
+.machine-op-bar.highlighted {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 1px;
+}
+
+.op-bar-label {
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  font-weight: 600;
+}
+.op-bar-label small {
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
+}
+
+.op-phase.phase-setup { mix-blend-mode: normal; }
+.op-phase.phase-queue,
+.op-phase.phase-move {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.05) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+/* Lock button on op bar */
+.op-lock-btn {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--r-xs);
+}
+.op-lock-btn:hover {
+  background: rgba(0, 0, 0, 0.55);
+  border-color: var(--accent);
+}
+
+/* ---------- Job context menu (the original right-click menu in App.tsx) ---------- */
+.job-context-menu {
+  position: fixed;
+  z-index: var(--z-popover);
+  min-width: 220px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-sm);
+}
+.ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  border-radius: var(--r-xs);
+  color: inherit;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.ctx-item:hover { background: var(--bg-hover); }
+.ctx-sep {
+  height: 1px;
+  background: var(--border-divider);
+  margin: 4px 6px;
+}
+
+/* ============================================================
+   Comprehensive dark / light mode wiring for legacy App.css elements.
+   These rules key off the design tokens so they work in both themes.
+   ============================================================ */
+
+/* --- Main app shell --- */
+.app { background: var(--bg-base); color: var(--text-primary); }
+.app-header { background: var(--bg-surface-2); color: var(--text-primary); border-bottom: 1px solid var(--border-default); }
+.app-main, .app-content { background: var(--bg-base); }
+.app-footer { background: var(--bg-surface); color: var(--text-muted); border-top: 1px solid var(--border-divider); }
+
+/* --- Sidebar / left panel --- */
+.sidebar, .left-panel, .factory-explorer {
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+.sidebar-section, .explorer-section {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+.sidebar-section h3, .sidebar-section h4 { color: var(--text-primary); }
+
+/* --- APS content panels / tab areas --- */
+.aps-content, .aps-left, .aps-jobs-panel, .aps-gantt-panel {
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+/* --- Job table --- */
+.job-table, .ops-table {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+.job-table thead tr, .ops-table thead tr {
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-default);
+}
+.job-table th, .ops-table th {
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-default);
+}
+.job-table td, .ops-table td {
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+.job-table tbody tr:hover, .ops-table tbody tr:hover { background: var(--bg-hover); }
+.job-count-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-soft);
+}
+.ops-header { color: var(--text-secondary); }
+.ops-wrap { background: var(--bg-canvas); border: 1px solid var(--border-subtle); }
+
+/* --- Filter bar above jobs table --- */
+.job-filter-bar, .job-filters {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-divider);
+}
+.job-filter-select, .job-filter-input {
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+/* --- Feature tab bar (📊 Gantt / 🎯 KPIs / ...) --- */
+.feature-tab-bar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+}
+.feature-tab {
+  color: var(--text-secondary);
+  background: transparent;
+  border-bottom: 2px solid transparent;
+}
+.feature-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.feature-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* --- Modals / dialogs --- */
+.modal-overlay { background: rgba(0, 0, 0, 0.6); }
+.modal-content, .modal-body, .shortcuts-modal,
+.settings-fullscreen-modal, .connection-modal,
+.schedule-setup-modal, .bom-detail-modal {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+.modal-header, .settings-modal-header {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-default);
+}
+.modal-footer {
+  background: var(--bg-surface-2);
+  border-top: 1px solid var(--border-default);
+}
+.settings-fullscreen-modal { background: var(--bg-canvas); }
+
+/* --- Manage tab sub-panels --- */
+.manage-content, .manage-tab-content,
+.wc-table-wrapper, .wc-detail-card {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* --- Status cells / pills in table --- */
+.status-badge, .schedule-status-badge {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+/* --- Ribbon KPIs area (progress bar inside generate button) --- */
+.generation-progress-bar { background: var(--bg-surface-2); }
+.generation-progress-fill { background: var(--accent); }
+
+/* --- Info row / status bar at bottom of ribbon --- */
+.status-bar, .info-bar {
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-divider);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+}
+
+/* --- Resizable splitter handle --- */
+.panel-splitter { background: var(--border-divider); }
+.panel-splitter:hover { background: var(--accent); }
+
+/* --- Empty / placeholder states --- */
+.empty-grid-state, .tab-placeholder { color: var(--text-muted); }
+
+/* --- index.css base reset (light): ensure body uses token in both themes --- */
+html, body, #root {
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+
+/* ============================================================
+   Visual-polish pass — interactive elements
+   Restrained hover elevation + press feedback, consistent with
+   the "no heavy drop shadows" design intent. Layered last so it
+   wins the specificity battle over legacy App.css states.
+   ============================================================ */
+
+/* Bring the primary action buttons onto one motion + shape system */
+.btn-primary,
+.btn-info,
+.btn-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: 30px;
+  padding: 0 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: var(--r-sm);
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease,
+    box-shadow var(--t-base) ease, transform var(--t-fast) ease, filter var(--t-fast) ease;
+}
+
+.btn-success {
+  background: var(--status-ok);
+  color: var(--text-on-accent);
+  border: 1px solid var(--status-ok);
+}
+
+/* Subtle lift on hover — reads as "raised", not shadowed-heavy */
+.btn-primary:hover:not(:disabled),
+.btn-info:hover:not(:disabled),
+.btn-success:hover:not(:disabled) {
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+}
+
+/* Press feedback — settle back down */
+.btn-primary:active:not(:disabled),
+.btn-info:active:not(:disabled),
+.btn-success:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-1);
+}
+
+.btn:disabled,
+.btn-primary:disabled,
+.btn-info:disabled,
+.btn-success:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Ghost / icon buttons: soften the hover into the token surface */
+.btn-ghost {
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Honour reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary,
+  .btn-info,
+  .btn-success {
+    transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+    transform: none !important;
+  }
+}
+
+/* ============================================================
+   Visual-polish pass — surfaces & depth
+   Consistent radius + elevation across cards and modals.
+   ============================================================ */
+
+/* Softer, unified corners on generic surfaces */
+.panel,
+.card,
+.kpi-card,
+.sidebar-section,
+.explorer-section,
+.feature-tab-content {
+  border-radius: var(--r-md);
+}
+
+/* Modals read as clearly elevated, single radius + shadow system */
+.modal-content, .shortcuts-modal,
+.settings-fullscreen-modal, .connection-modal,
+.schedule-setup-modal, .bom-detail-modal {
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  overflow: hidden; /* keep header/footer bars inside the rounded corners */
+}
+
+/* Slightly deeper overlay scrim for better focus on the dialog */
+.modal-overlay {
+  background: rgba(4, 8, 20, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+/* ============================================================
+   Visual-polish pass — typography & spacing
+   Cleaner section labels + tabular figures for numeric columns.
+   ============================================================ */
+
+/* Section "eyebrow" headings — smaller, tracked, muted for hierarchy */
+.sidebar-section h3,
+.sidebar-section h4,
+.explorer-section h3,
+.explorer-section h4 {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 var(--sp-3) 0;
+}
+
+/* Tabular figures so quantity/date/time columns line up cleanly */
+.aps-grid td,
+.aps-grid th,
+.kpi-value,
+.kpi-tile-value,
+.kpi-util-pct,
+.num,
+.aps-numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Give KPI values a touch more presence */
+.kpi-tile-value {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Consistent header title rhythm */
+.header-title h1 {
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   Visual-polish pass — finishing touches
+   ============================================================ */
+
+/* Themed text selection (was browser-default blue, clashed in dark) */
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+/* Consistent, readable placeholder text across all inputs */
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1; /* Firefox lowers this by default */
+}
+
+/* Disabled inputs read as clearly inert */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   Master/sub-job dependency visuals (SYSPRO WipMasterSub)
+   ============================================================ */
+
+/* Dependency arrow overlay — sits above bars (z 2) but below the
+   sticky lane label columns (z 3/4) so labels stay readable. */
+.gantt-dep-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: visible;
+}
+
+/* M/S dependency badge on Gantt operation bars */
+.op-dep-badge {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  margin-right: 2px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 12px;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.op-dep-badge--sub {
+  background: var(--bg-card, #1f2937);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.op-dep-badge--both {
+  background: var(--accent);
+}
+
+/* Materials cell -> opens BOM/material breakdown modal */
+.materials-cell-clickable { cursor: pointer; }
+.materials-cell-clickable:hover { text-decoration: underline; filter: brightness(1.15); }

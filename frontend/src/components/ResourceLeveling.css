@@ -1,0 +1,230 @@
+.resource-leveling {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-surface);
+  border-radius: 6px;
+}
+
+.leveling-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.leveling-header p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.leveling-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px;
+  background: white;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+}
+
+.metric-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: center;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-value.critical {
+  color: var(--status-bad);
+}
+
+.metric-value.warning {
+  color: var(--status-warn);
+}
+
+.leveling-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: white;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+}
+
+.control-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.control-group label {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.control-group select {
+  padding: 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: white;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border: 1px solid var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.resource-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.list-header,
+.list-item {
+  display: grid;
+  grid-template-columns: 100px minmax(120px, 1fr) 80px 80px 60px;
+  gap: 0;
+  border-bottom: 1px solid var(--border-default);
+  font-size: 11px;
+  background: white;
+}
+
+.list-header {
+  background: var(--bg-surface-2);
+  font-weight: 700;
+  color: var(--text-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.list-header > span,
+.list-item > span {
+  padding: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.list-item.util-high {
+  border-left: 3px solid var(--status-bad);
+  background: var(--status-bad-soft);
+}
+
+.list-item.util-low {
+  border-left: 3px solid var(--status-warn);
+  background: var(--status-warn-soft);
+}
+
+.list-item.util-normal {
+  border-left: 3px solid #10b981;
+}
+
+.col-name {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.col-util {
+  flex: 1;
+}
+
+.util-bar {
+  position: relative;
+  height: 14px;
+  background: var(--bg-surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.util-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  transition: width 0.3s ease;
+}
+
+.util-label {
+  position: relative;
+  z-index: 1;
+  font-size: 9px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+.col-peak,
+.col-slack,
+.col-ops {
+  text-align: center;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.leveling-suggestion {
+  padding: 10px;
+  background: var(--status-warn-soft);
+  border: 1px solid var(--status-warn);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--status-warn);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.leveling-suggestion.info {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: #0c4a6e;
+}

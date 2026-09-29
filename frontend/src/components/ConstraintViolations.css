@@ -1,0 +1,203 @@
+.constraint-violations {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+}
+
+.constraint-violations h3 {
+  margin: 0 0 15px 0;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.no-violations {
+  padding: 20px;
+  background: var(--status-ok-soft);
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  color: var(--status-ok);
+  text-align: center;
+  font-weight: 500;
+}
+
+.violation-section {
+  margin-bottom: 20px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.violation-section.critical {
+  border: 1px solid var(--status-bad-soft);
+  background: var(--status-bad-soft);
+}
+
+.violation-section.warning {
+  border: 1px solid var(--status-warn-soft);
+  background: var(--status-warn-soft);
+}
+
+.violation-section.info {
+  border: 1px solid var(--accent-soft);
+  background: var(--accent-soft);
+}
+
+.section-header {
+  padding: 10px 15px;
+  background: rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid currentColor;
+  opacity: 0.3;
+}
+
+.section-header.critical {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Status dots replacing emoji */
+.cv-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.cv-dot--critical { background: var(--status-bad,   #e35d6a); }
+.cv-dot--warning  { background: var(--status-warn,  #f5a524); }
+.cv-dot--info     { background: var(--status-info,  #38bdf8); }
+.cv-checkmark     { color: var(--status-ok, #2ec27e); font-weight: 700; }
+.cv-arrow         { font-style: normal; }
+
+.violations-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.violation-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px 15px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.violation-item--clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.violation-item--clickable:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.violation-item--selected {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+}
+
+.violation-item:last-child {
+  border-bottom: none;
+}
+
+.violation-content {
+  flex: 1;
+}
+
+.violation-type {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.violation-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.suggested-action {
+  font-size: 12px;
+  color: var(--status-ok);
+  font-style: italic;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+}
+
+.affected-id {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  color: var(--text-primary);
+  min-width: 80px;
+  text-align: center;
+  margin-left: 10px;
+}
+
+.violation-more {
+  padding: 10px 15px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  background: rgba(0, 0, 0, 0.02);
+}
+.violation-more--btn {
+  display: block;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  font-style: italic;
+  transition: background 0.15s;
+}
+.violation-more--btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-secondary);
+}
+
+.summary-stats {
+  display: flex;
+  gap: 15px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border-default);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.stat label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.stat span {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.stat.critical-stat span {
+  color: var(--status-bad);
+}
+
+.stat.warning-stat span {
+  color: #f97316;
+}

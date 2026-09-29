@@ -1,0 +1,553 @@
+openapi: "3.1.0"
+info:
+  title: Syspro APS Scheduler API
+  version: "1.0.0"
+  description: |
+    Finite-capacity production scheduler that reads master data from SYSPRO
+    and writes approved schedules back via the APS compatibility layer.
+  contact:
+    name: APS Development Team
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development / production (same port)
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:  { type: string }
+        refreshToken: { type: string }
+        user:
+          type: object
+          properties:
+            sub:      { type: integer }
+            username: { type: string }
+            role:     { type: string, enum: [Reviewer, Approver, super_admin] }
+
+    # ── Jobs ──────────────────────────────────────────────────────────────────
+    Job:
+      type: object
+      properties:
+        jobId:       { type: string }
+        itemCode:    { type: string }
+        description: { type: string }
+        quantity:    { type: number }
+        priority:    { type: integer }
+        status:      { type: string }
+        dueDate:     { type: string, format: date-time }
+        releaseDate: { type: string, format: date-time }
+        operations:  { type: array, items: { $ref: '#/components/schemas/Operation' } }
+
+    Operation:
+      type: object
+      properties:
+        opId:          { type: string }
+        sequence:      { type: integer }
+        description:   { type: string }
+        workcentreId:  { type: string }
+        setupTime:     { type: number, description: Minutes }
+        runTime:       { type: number, description: Minutes per unit }
+        quantity:      { type: number }
+        status:        { type: string }
+
+    # ── Resources ─────────────────────────────────────────────────────────────
+    Resource:
+      type: object
+      properties:
+        resourceId:   { type: string }
+        worcentreId:  { type: string }
+        name:         { type: string }
+        type:         { type: string }
+        skills:       { type: array, items: { type: string } }
+
+    # ── Schedule ──────────────────────────────────────────────────────────────
+    GenerateScheduleRequest:
+      type: object
+      properties:
+        planningHorizonStartDate: { type: string, format: date-time }
+        planningHorizonEndDate:   { type: string, format: date-time }
+        schedulingRule:           { type: string, enum: [priority, edd, fifo, spt, critical-ratio] }
+        schedulingDirection:      { type: string, enum: [forward, backward] }
+        dateAnchorMode:           { type: string, enum: [manual, syspro] }
+        anchorDate:               { type: string, format: date-time }
+        selectedJobIds:           { type: array, items: { type: string } }
+        engineType:               { type: string, enum: [greedy], default: greedy, description: "Scheduling algorithm to use. 'greedy' is the only built-in option; the ISchedulingEngine interface allows additional implementations to be registered." }
+
+    OperationSchedule:
+      type: object
+      properties:
+        opId:              { type: string }
+        workcentreId:      { type: string }
+        resourceId:        { type: string }
+        plannedStartDate:  { type: string, format: date-time }
+        plannedEndDate:    { type: string, format: date-time }
+        setupStartDate:    { type: string, format: date-time }
+
+    JobSchedule:
+      type: object
+      properties:
+        jobId:               { type: string }
+        plannedStartDate:    { type: string, format: date-time }
+        plannedEndDate:      { type: string, format: date-time }
+        operationSchedules:  { type: array, items: { $ref: '#/components/schemas/OperationSchedule' } }
+
+    Schedule:
+      type: object
+      properties:
+        scheduleId:       { type: string, format: uuid }
+        status:           { type: string, enum: [Draft, Approved] }
+        generatedAt:      { type: string, format: date-time }
+        jobSchedules:     { type: array, items: { $ref: '#/components/schemas/JobSchedule' } }
+        violations:       { type: array, items: { $ref: '#/components/schemas/ConstraintViolation' } }
+
+    ConstraintViolation:
+      type: object
+      properties:
+        jobId:       { type: string }
+        opId:        { type: string }
+        type:        { type: string }
+        severity:    { type: string, enum: [Critical, Warning, Info] }
+        message:     { type: string }
+
+    Scenario:
+      type: object
+      properties:
+        scenarioId:     { type: string, format: uuid }
+        baseScheduleId: { type: string, format: uuid }
+        name:           { type: string }
+        description:    { type: string }
+        status:         { type: string, enum: [draft, promoted, archived] }
+        createdBy:      { type: string }
+        createdAt:      { type: string, format: date-time }
+        promotedAt:     { type: string, format: date-time, nullable: true }
+
+    # ── Errors ────────────────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      properties:
+        error:   { type: string }
+        code:    { type: string }
+        details: { type: object }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Insufficient role
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServiceUnavailable:
+      description: Database not connected
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+paths:
+  # Auth
+  /auth/login:
+    post:
+      summary: Obtain JWT access + refresh tokens
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        "200":
+          description: Tokens issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      summary: Exchange refresh token for new access token
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "200":
+          description: New access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # Health
+  /health:
+    get:
+      summary: Liveness probe
+      security: []
+      tags: [Health]
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:    { type: string }
+                  uptime:    { type: number }
+                  timestamp: { type: string, format: date-time }
+
+  /health/ready:
+    get:
+      summary: Readiness probe — checks DB connections
+      security: []
+      tags: [Health]
+      responses:
+        "200":
+          description: All dependencies healthy
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  # Jobs
+  /jobs:
+    get:
+      summary: List open production jobs from SYSPRO
+      tags: [Jobs]
+      responses:
+        "200":
+          description: Array of jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs: { type: array, items: { $ref: '#/components/schemas/Job' } }
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /jobs/{jobId}:
+    get:
+      summary: Get a single job with its operations
+      tags: [Jobs]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Job with operations
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /jobs/material-plan:
+    post:
+      summary: Compute material availability for a list of jobs
+      tags: [Jobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                jobIds: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Material plan per job
+
+  /jobs/{jobId}/bom-detail:
+    get:
+      summary: Full BOM + shortage detail for a single job
+      tags: [Jobs]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: BOM lines with availability
+
+  # Resources
+  /resources:
+    get:
+      summary: List all workcentres and resources
+      tags: [Resources]
+      responses:
+        "200":
+          description: Resource list
+
+  # Schedule
+  /schedule/generate:
+    post:
+      summary: Generate a new finite-capacity schedule (worker thread)
+      tags: [Schedule]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateScheduleRequest' }
+      responses:
+        "200":
+          description: Generated schedule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /schedule/latest:
+    get:
+      summary: Retrieve the most recently saved schedule
+      tags: [Schedule]
+      responses:
+        "200":
+          description: Latest schedule or null
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+
+  /schedule/{scheduleId}/approve:
+    post:
+      summary: Approve a draft schedule (Approver role required)
+      tags: [Schedule]
+      parameters:
+        - in: path
+          name: scheduleId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Schedule approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scheduleId: { type: string }
+                  status:     { type: string }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /schedule/{scheduleId}/export-to-syspro:
+    post:
+      summary: Write approved schedule back to SYSPRO (Approver role required)
+      tags: [Schedule]
+      parameters:
+        - in: path
+          name: scheduleId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                schedule: { $ref: '#/components/schemas/Schedule' }
+      responses:
+        "200":
+          description: Export successful
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  # Audit
+  /audit:
+    get:
+      summary: Retrieve audit log entries (authenticated)
+      tags: [Audit]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Audit entries
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # SSE — real-time replan signals (#63)
+  /schedule/events:
+    get:
+      summary: |
+        Server-Sent Events stream for replan notifications.
+        The server pushes a `replan` event when SYSPRO job changes are
+        detected (polling interval configurable via REPLAN_POLL_MS env var).
+        Connect with EventSource in the browser.
+      tags: [Schedule]
+      security: []
+      responses:
+        "200":
+          description: SSE stream (text/event-stream)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Events emitted:
+                  - `ping`   — keepalive every 30 s
+                  - `replan` — job state changed, payload { jobId, reason }
+
+  # Shop floor (mobile read-only view, #65)
+  /shopfloor/today:
+    get:
+      summary: Today's scheduled operations grouped by workcentre (mobile shop-floor view)
+      tags: [ShopFloor]
+      security: []
+      responses:
+        "200":
+          description: Operations for today
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date: { type: string, format: date }
+                  workcentres:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        workcentreId: { type: string }
+                        operations:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              jobId:            { type: string }
+                              opId:             { type: string }
+                              resourceId:       { type: string }
+                              plannedStartDate: { type: string, format: date-time }
+                              plannedEndDate:   { type: string, format: date-time }
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  # Scenario branching (#64)
+  /scenarios:
+    get:
+      summary: List all scenarios (optionally filtered by base schedule)
+      tags: [Scenarios]
+      parameters:
+        - in: query
+          name: baseScheduleId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Scenario list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenarios:
+                    type: array
+                    items: { $ref: '#/components/schemas/Scenario' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Clone a saved schedule into a new named scenario (Approver role)
+      tags: [Scenarios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [baseScheduleId, name]
+              properties:
+                baseScheduleId: { type: string, format: uuid }
+                name:           { type: string, maxLength: 120 }
+                description:    { type: string }
+      responses:
+        "201":
+          description: Scenario created
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /scenarios/{scenarioId}/promote:
+    post:
+      summary: Promote scenario to live schedule (Approver role)
+      tags: [Scenarios]
+      parameters:
+        - in: path
+          name: scenarioId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Scenario promoted
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /scenarios/{scenarioId}:
+    delete:
+      summary: Delete a scenario (Approver role)
+      tags: [Scenarios]
+      parameters:
+        - in: path
+          name: scenarioId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Scenario deleted
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'

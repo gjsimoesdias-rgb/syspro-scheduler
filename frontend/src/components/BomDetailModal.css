@@ -1,0 +1,342 @@
+/* BomDetailModal — material availability for one scheduled job
+   Refreshed 2026-05-06 to use design tokens from theme.css. */
+
+.bom-modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  padding: var(--sp-6);
+  backdrop-filter: blur(3px);
+}
+
+.bom-modal {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  width: min(1180px, 96vw);
+  max-height: 92vh;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  font-family: var(--font-sans);
+}
+
+.bom-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: var(--sp-4) var(--sp-6) var(--sp-3);
+  border-bottom: 1px solid var(--border-divider);
+  background: var(--bg-surface-2);
+}
+
+.bom-modal__title {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.bom-modal__subtitle {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.bom-modal__close {
+  background: transparent;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  width: 28px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0;
+  border-radius: var(--r-sm);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+.bom-modal__close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.bom-modal__state {
+  padding: var(--sp-8);
+  text-align: center;
+  color: var(--text-secondary);
+}
+.bom-modal__state--error { color: var(--status-bad); }
+
+.bom-modal__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: center;
+  padding: var(--sp-3) var(--sp-6);
+  border-bottom: 1px solid var(--border-divider);
+  background: var(--bg-canvas);
+}
+
+.bom-stat {
+  min-width: 88px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  text-align: center;
+}
+.bom-stat__value {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.bom-stat__label {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.bom-stat--ok    .bom-stat__value { color: var(--status-ok); }
+.bom-stat--warn  .bom-stat__value { color: var(--status-warn); }
+.bom-stat--bad   .bom-stat__value { color: var(--status-bad); }
+.bom-stat--muted .bom-stat__value { color: var(--text-muted); }
+
+.bom-modal__filter {
+  margin-left: auto;
+  display: inline-flex;
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.bom-modal__filter button {
+  border: none;
+  background: transparent;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  transition: color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+.bom-modal__filter button:hover { color: var(--text-primary); background: var(--bg-hover); }
+.bom-modal__filter button.is-active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.bom-modal__note {
+  padding: var(--sp-2) var(--sp-6);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.bom-modal__table-wrap {
+  overflow: auto;
+  flex: 1;
+}
+
+.bom-modal__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.bom-modal__table th,
+.bom-modal__table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: middle;
+}
+.bom-modal__table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface-2);
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+  z-index: 1;
+  border-bottom: 1px solid var(--border-default);
+}
+.bom-modal__table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.bom-modal__table tbody tr:hover { background: var(--bg-hover); }
+.bom-modal__table code {
+  background: var(--bg-surface-2);
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+.bom-modal__desc {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.bom-modal__shortage { color: var(--status-bad); font-weight: 600; }
+.bom-modal__muted { color: var(--text-muted); }
+
+.bom-row--warn { background: var(--status-warn-soft); }
+.bom-row--bad  { background: var(--status-bad-soft); }
+
+.bom-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 18px;
+}
+.bom-pill--lg { padding: 3px 12px; font-size: var(--fs-xs); letter-spacing: 0.04em; }
+.bom-pill--ok   { background: var(--status-ok-soft);   color: var(--status-ok); }
+.bom-pill--warn { background: var(--status-warn-soft); color: var(--status-warn); }
+.bom-pill--bad  { background: var(--status-bad-soft);  color: var(--status-bad); }
+
+.bom-modal__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-6);
+  border-top: 1px solid var(--border-divider);
+  background: var(--bg-surface-2);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.bom-modal__ok {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  padding: 6px 16px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-family: var(--font-sans);
+  transition: background-color var(--t-fast) ease;
+}
+.bom-modal__ok:hover { background: var(--accent-strong); }
+
+/* Expand-row chevron button on each BOM line */
+.bom-modal__caret {
+  width: 26px;
+  text-align: center;
+  padding: 6px 0 !important;
+}
+.bom-modal__expand-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  width: 22px;
+  height: 22px;
+  line-height: 18px;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  transition: transform var(--t-fast) ease, background-color var(--t-fast) ease,
+    color var(--t-fast) ease;
+  padding: 0;
+}
+.bom-modal__expand-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.bom-modal__expand-btn.is-open {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+
+/* Drill-down row */
+.bom-modal__detail-row > td {
+  background: var(--bg-canvas);
+  padding: var(--sp-3) var(--sp-3) var(--sp-4) !important;
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.bom-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+}
+@media (max-width: 760px) {
+  .bom-detail { grid-template-columns: 1fr; }
+}
+
+.bom-detail__col {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+}
+.bom-detail__heading {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+
+.bom-detail__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+}
+.bom-detail__table th,
+.bom-detail__table td {
+  padding: 4px 8px;
+  border-bottom: 1px dashed var(--border-subtle);
+}
+.bom-detail__table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.bom-detail__table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.bom-detail__table tr:last-child td { border-bottom: none; }
+
+.bom-detail__hold {
+  margin-top: var(--sp-2);
+  text-align: right;
+}
+
+.bom-detail__late {
+  background: var(--status-bad-soft);
+}
+.bom-detail__late-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--status-bad);
+  background: var(--status-bad-soft);
+  border-radius: 999px;
+}
+
+/* Drill-down panel is theme-aware via tokens. */
+
+/* Dark/light theming is handled by theme.css tokens — no manual overrides needed. */

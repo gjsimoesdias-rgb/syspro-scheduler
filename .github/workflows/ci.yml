@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+
+jobs:
+  backend:
+    name: Backend — lint, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  frontend:
+    name: Frontend — lint, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        # Use ESLint directly (react-scripts is test-only; Vite build uses eslint)
+        run: npx eslint "src/**/*.{ts,tsx}" --max-warnings=0
+
+      - name: Test
+        run: npm test -- --watchAll=false
+        env:
+          CI: true
+
+      - name: Build
+        run: npm run build
+        env:
+          CI: false
+          # The build-time API URL; overridden at runtime via window.__APS_CONFIG__
+          # in production. This default keeps the CI build from erroring.
+          VITE_API_URL: http://localhost:3000/api
+
+      - name: Bundle size check (#68)
+        # Asserts JS < 400 kB gz and CSS < 60 kB gz (paths match Vite output in build/assets/).
+        # Fail the build if the bundle grows beyond the budgets in package.json.
+        run: |
+          npm install --save-dev @size-limit/preset-app size-limit --legacy-peer-deps
+          npm run size
+        env:
+          CI: true

@@ -1,0 +1,24 @@
+-- create_sysprouser.sql.template
+-- Rendered by scripts/render-sql.mjs from environment variables.
+-- DO NOT commit the rendered output (create_sysprouser.sql) to source control.
+-- Run: node scripts/render-sql.mjs to generate the runnable file.
+
+IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name='{{SYSPRO_SQL_USER}}')
+BEGIN
+    CREATE LOGIN {{SYSPRO_SQL_USER}} WITH PASSWORD='{{SYSPRO_SQL_PASSWORD}}';
+END
+
+USE {{SYSPRO_DB_NAME}};
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name='{{SYSPRO_SQL_USER}}')
+BEGIN
+    CREATE USER {{SYSPRO_SQL_USER}} FOR LOGIN {{SYSPRO_SQL_USER}};
+    EXEC sp_addrolemember 'db_datareader', '{{SYSPRO_SQL_USER}}';
+END
+
+USE {{SCHEDULER_DB_NAME}};
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name='{{SYSPRO_SQL_USER}}')
+BEGIN
+    CREATE USER {{SYSPRO_SQL_USER}} FOR LOGIN {{SYSPRO_SQL_USER}};
+    EXEC sp_addrolemember 'db_datareader', '{{SYSPRO_SQL_USER}}';
+    EXEC sp_addrolemember 'db_datawriter', '{{SYSPRO_SQL_USER}}';
+END

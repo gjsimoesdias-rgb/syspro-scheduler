@@ -1,0 +1,22 @@
+-- ============================================================
+-- Migration 008: Performance indexes for SYSPRO hot-path tables
+-- ============================================================
+-- These indexes target the SYSPRO database (WipJobAllLab, WipMaster)
+-- which is a different database from the SCHEDULER DB that MigrationRunner
+-- operates on.  Applying cross-database DDL via a migration is not safe
+-- (we cannot USE $(SysproDb) through the MSSQL driver), so this migration
+-- is intentionally a no-op.
+--
+-- To apply the indexes manually on the SYSPRO database, run the following
+-- statements as a DBA on the SysproEdu2 (or equivalent) database:
+--
+--   CREATE NONCLUSTERED INDEX [IX_WipJobAllLab_Job_Operation]
+--     ON [dbo].[WipJobAllLab] ([Job] ASC, [Operation] ASC)
+--     WITH (ONLINE = ON);
+--
+--   CREATE NONCLUSTERED INDEX [IX_WipMaster_Complete_Priority_Delivery]
+--     ON [dbo].[WipMaster] ([Complete] ASC, [Priority] ASC, [JobDeliveryDate] ASC)
+--     WITH (ONLINE = ON);
+-- ============================================================
+
+SELECT 1 AS migration_008_ok;

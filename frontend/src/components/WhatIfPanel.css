@@ -1,0 +1,200 @@
+.whatif-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--accent-soft);
+  overflow: auto;
+}
+
+.whatif-header {
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid var(--border-default);
+  background: linear-gradient(180deg, #d8e7f8 0%, #c8dbf0 100%);
+}
+
+.whatif-header h3 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.whatif-header p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.whatif-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #c5d7ed;
+  background: var(--accent-soft);
+}
+
+.whatif-btn {
+  padding: 7px 14px;
+  border-radius: 4px;
+  border: 1px solid;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.whatif-btn-create {
+  background: var(--accent);
+  border-color: #2c67c6;
+  color: white;
+}
+
+.whatif-btn-create:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.whatif-btn-create:hover:not(:disabled) {
+  background: #2c67c6;
+}
+
+.whatif-btn-clear {
+  background: var(--status-bad-soft);
+  border-color: var(--status-bad-soft);
+  color: var(--status-bad);
+}
+
+.whatif-btn-clear:hover {
+  background: #fca5a5;
+}
+
+.whatif-scenario-badge {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 5px 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+
+.whatif-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.whatif-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--accent-soft);
+}
+
+.whatif-tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+}
+
+.whatif-tab.active {
+  color: var(--accent-strong);
+  border-bottom-color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.whatif-compare-grid {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.whatif-compare-row {
+  display: grid;
+  grid-template-columns: 180px 100px 100px 80px;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  align-items: center;
+}
+
+.whatif-compare-row:nth-child(even) {
+  background: var(--accent-soft);
+}
+
+.whatif-compare-row.header {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: #dce8f8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.diff-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.diff-better {
+  background: var(--status-ok-soft);
+  color: var(--status-ok);
+}
+
+.diff-worse {
+  background: var(--status-bad-soft);
+  color: var(--status-bad);
+}
+
+.diff-neutral {
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+}
+
+.whatif-notes {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.whatif-notes label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.whatif-textarea {
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  resize: vertical;
+  background: white;
+}
+
+.whatif-empty-hint {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.whatif-hint-icon {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+.whatif-empty-hint p {
+  margin: 5px 0;
+  font-size: 13px;
+}

@@ -1,0 +1,198 @@
+/* AuditLogFeed ── history-tab timeline of sch_AuditLog entries */
+
+.alf-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 1rem 1.25rem;
+  height: 100%;
+  overflow: hidden;
+}
+
+.alf-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.alf-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary, #111827);
+}
+
+.alf-count {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #6b7280);
+  background: var(--bg-secondary, #f3f4f6);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.alf-refresh-btn {
+  margin-left: auto;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #374151);
+  transition: background 0.15s;
+}
+.alf-refresh-btn:hover:not(:disabled) {
+  background: var(--bg-secondary, #f3f4f6);
+}
+.alf-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.alf-loading,
+.alf-empty,
+.alf-error {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary, #6b7280);
+  font-size: 0.9rem;
+}
+
+.alf-error {
+  color: #ef4444;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ── list ─────────────────────────────────────────────── */
+
+.alf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.alf-item {
+  border-bottom: 1px solid var(--border-color, #f3f4f6);
+}
+.alf-item:last-child {
+  border-bottom: none;
+}
+
+.alf-item-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  flex-wrap: wrap;
+}
+.alf-item-summary[role='button'] {
+  cursor: pointer;
+}
+.alf-item-summary[role='button']:hover .alf-action {
+  text-decoration: underline;
+}
+
+.alf-ts {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #9ca3af);
+  white-space: nowrap;
+  min-width: 10rem;
+}
+
+.alf-actor {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alf-action {
+  font-size: 0.85rem;
+  color: var(--text-primary, #374151);
+  flex: 1;
+}
+
+.alf-entity {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #9ca3af);
+  background: var(--bg-secondary, #f3f4f6);
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alf-chevron {
+  font-size: 0.65rem;
+  color: var(--text-secondary, #9ca3af);
+}
+
+/* ── expanded detail ─────────────────────────────────── */
+
+.alf-detail {
+  padding: 0.5rem 0.25rem 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.alf-detail-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.alf-detail-key {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  min-width: 5rem;
+  padding-top: 0.1rem;
+}
+
+.alf-detail-val {
+  font-size: 0.78rem;
+  color: var(--text-primary, #374151);
+  word-break: break-all;
+}
+
+.alf-detail-pre {
+  font-size: 0.75rem;
+  background: var(--bg-secondary, #f9fafb);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  overflow-x: auto;
+  max-height: 12rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary, #374151);
+  margin: 0;
+}
+
+/* ── dark mode ──────────────────────────────────────── */
+.dark-mode .alf-title             { color: #f9fafb; }
+.dark-mode .alf-count             { background: #374151; color: #d1d5db; }
+.dark-mode .alf-refresh-btn       { border-color: var(--text-secondary); color: #d1d5db; }
+.dark-mode .alf-refresh-btn:hover:not(:disabled) { background: #374151; }
+.dark-mode .alf-header            { border-color: var(--text-primary); }
+.dark-mode .alf-item              { border-color: var(--text-primary); }
+.dark-mode .alf-action            { color: #e5e7eb; }
+.dark-mode .alf-entity            { background: #1f2937; color: #9ca3af; }
+.dark-mode .alf-ts                { color: #6b7280; }
+.dark-mode .alf-detail-pre        { background: #111827; border-color: var(--text-primary); color: #e5e7eb; }
+.dark-mode .alf-detail-key        { color: #9ca3af; }
+.dark-mode .alf-empty,
+.dark-mode .alf-loading           { color: #9ca3af; }
