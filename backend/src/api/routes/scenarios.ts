@@ -10,6 +10,7 @@
 
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { saveAsLatest } from '../../services/ScheduleStore';
 import { requireAuth, requirePlanner } from '../middleware/requireAuth';
 
 const router = Router();
@@ -141,23 +142,10 @@ router.post('/:scenarioId/promote', requireAuth, requirePlanner, async (req: Req
     const scheduleData = JSON.parse(row.ScheduleData);
     scheduleData.scheduleId = newScheduleId;
 
-    await sysproDb.query(`UPDATE aps.SavedSchedules SET IsLatest = 0`);
-    await sysproDb.queryWithParams(
-      `INSERT INTO aps.SavedSchedules
-         (ScheduleID, ScheduleData, Status, JobCount, OperationCount,
-          HorizonStart, HorizonEnd, GeneratedAt, SavedAt, IsLatest)
-       VALUES
-         (@scheduleId, @scheduleData, 'Approved', @jobCount, @opCount,
-          GETDATE(), GETDATE(), GETDATE(), GETDATE(), 1)`,
-      {
-        scheduleId: newScheduleId,
-        scheduleData: JSON.stringify(scheduleData),
-        jobCount: scheduleData.jobSchedules?.length ?? 0,
-        opCount: (scheduleData.jobSchedules ?? []).reduce(
-          (s: number, j: any) => s + (j.operationSchedules?.length ?? 0), 0
-        ),
-      }
-    );
+    // Becomes the live schedule as a Draft: it still goes through Approve
+    // before it can be sent to SYSPRO. Atomic — see ScheduleStore.
+    scheduleData.status = 'Draft';
+    await saveAsLatest(sysproDb, scheduleData, { status: 'Draft' });
 
     await sysproDb.queryWithParams(
       `UPDATE aps.Scenarios SET Status = 'Promoted', PromotedAt = SYSUTCDATETIME() WHERE ScenarioId = @scenarioId`,

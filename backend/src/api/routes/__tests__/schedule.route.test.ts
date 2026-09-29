@@ -312,3 +312,18 @@ describe('POST /api/schedule/:scheduleId/export-to-syspro', () => {
     expect(JSON.stringify(qwp.mock.calls)).not.toContain('INJECTED');
   });
 });
+
+describe('POST /api/schedule/save — approval is never carried over', () => {
+  it('stores the schedule as Draft even if the body says Approved', async () => {
+    const qwp = jest.fn().mockResolvedValue({ recordset: [] });
+    app.locals.sysproDb = makeFakeDb({ queryWithParams: qwp }) as any;
+    const res = await request(app)
+      .post('/api/schedule/save')
+      .set('Authorization', `Bearer ${makeToken('planner')}`)
+      .send({ schedule: { scheduleId: 'S9', status: 'Approved', jobSchedules: [] } });
+    expect(res.status).toBe(200);
+    const insert = qwp.mock.calls.find(([sql]) => /INSERT INTO aps\.SavedSchedules/.test(sql));
+    expect(insert?.[1].status).toBe('Draft');
+    app.locals.sysproDb = undefined;
+  });
+});

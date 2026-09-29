@@ -23,8 +23,56 @@ import { completeJobFamilies } from '../../utils/jobFamilies';
 import { stripCompletedOperations } from '../../utils/jobFilters';
 import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
+import { saveAsLatest, promoteToLatest } from '../../services/ScheduleStore';
 
 const router = Router();
+
+/** Hard stop for one scheduling run (SCHEDULE_WORKER_TIMEOUT_MS, default 10 min). */
+const WORKER_TIMEOUT_MS = Math.max(
+  30_000,
+  parseInt(process.env.SCHEDULE_WORKER_TIMEOUT_MS || '600000', 10)
+);
+
+/**
+ * Run the scheduling engine in a worker thread and resolve with its schedule.
+ * The worker is terminated if it runs past WORKER_TIMEOUT_MS, so a stuck run
+ * can no longer hang the HTTP request (and the planner's screen) forever.
+ */
+export function runScheduleWorker(workerData: any, timeoutMs = WORKER_TIMEOUT_MS): Promise<any> {
+  return new Promise<any>((resolve, reject) => {
+    // __dirname is .../dist/api/routes in production, .../src/api/routes in dev
+    const isCompiled = __dirname.includes('dist');
+    const workerPath = isCompiled
+      ? path.resolve(__dirname, '../../services/scheduleWorker.js')
+      : path.resolve(__dirname, '../../services/scheduleWorker.ts');
+    const workerOptions: any = { workerData };
+    if (!isCompiled) workerOptions.execArgv = ['--require', 'ts-node/register'];
+    const worker = new Worker(workerPath, workerOptions);
+
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => {
+      finish(() => reject(new Error(
+        `Scheduling run stopped after ${Math.round(timeoutMs / 1000)} s. ` +
+        'Try fewer jobs or a shorter horizon, or raise SCHEDULE_WORKER_TIMEOUT_MS.'
+      )));
+      void worker.terminate();
+    }, timeoutMs);
+
+    worker.on('message', (msg: any) =>
+      finish(() => (msg.success ? resolve(msg.schedule) : reject(new Error(msg.error))))
+    );
+    worker.on('error', (err) => finish(() => reject(err)));
+    worker.on('exit', (code) => {
+      if (code !== 0) finish(() => reject(new Error(`Scheduler worker exited with code ${code}`)));
+    });
+  });
+}
 
 const buildCapacityMaps = (
   app: any,
@@ -106,6 +154,7 @@ const applyAssignedShiftCalendars = (app: any, resources: any[]) => {
  * Generate new schedule
  */
 router.post('/generate', requirePlanner, async (req: Request, res: Response) => {
+  const startedAt = Date.now();
   const validation = validate(generateScheduleSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
 
@@ -368,31 +417,7 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
       })(),
     };
 
-    const schedule = await new Promise<any>((resolve, reject) => {
-      // __dirname is .../dist/api/routes in production, .../src/api/routes in dev
-      const isCompiled = __dirname.includes('dist');
-      const workerPath = isCompiled
-        ? path.resolve(__dirname, '../../services/scheduleWorker.js')
-        : path.resolve(__dirname, '../../services/scheduleWorker.ts');
-      const workerOptions: any = { workerData: workerPayload };
-      if (!isCompiled) {
-        workerOptions.execArgv = ['--require', 'ts-node/register'];
-      }
-      const worker = new Worker(workerPath, workerOptions);
-
-      worker.on('message', (msg: any) => {
-        if (msg.success) {
-          resolve(msg.schedule);
-        } else {
-          reject(new Error(msg.error));
-        }
-      });
-
-      worker.on('error', (err) => reject(err));
-      worker.on('exit', (code) => {
-        if (code !== 0) reject(new Error(`Scheduler worker exited with code ${code}`));
-      });
-    });
+    const schedule = await runScheduleWorker(workerPayload);
 
     req.log.info({ scheduledJobs: schedule.jobSchedules.length }, 'Schedule generated');
 
@@ -411,12 +436,14 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
 
         // Emit new violations only for jobs that are now short due to
         // schedule-order depletion but were OK in the pre-schedule plan.
-        schedule.violations = schedule.violations ?? [];
+        // Must be constraintViolations — the engine, UI and counts all read that
+        // field; these warnings used to go to an unused 'violations' array.
+        schedule.constraintViolations = schedule.constraintViolations ?? [];
         for (const [jobId, plan] of refinedPlan) {
           const originalPlan = materialPlan.get(jobId);
           if (!plan.available && originalPlan?.available === true) {
             for (const shortage of plan.shortages) {
-              schedule.violations.push({
+              schedule.constraintViolations.push({
                 violationId: uuidv4(),
                 type: 'MaterialShortage',
                 severity: 'Warning',
@@ -435,32 +462,9 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
       }
     }
 
-    // Auto-save to DB so the schedule survives page reloads
+    // Auto-save to DB so the schedule survives page reloads (atomic — see ScheduleStore).
     try {
-      const jobCount = schedule.jobSchedules.length;
-      const operationCount = schedule.jobSchedules.reduce(
-        (sum: number, j: any) => sum + (j.operationSchedules?.length || 0), 0
-      );
-      await sysproDb.query(`UPDATE aps.SavedSchedules SET IsLatest = 0`);
-      await sysproDb.queryWithParams(
-        `DELETE FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
-        { scheduleId: schedule.scheduleId }
-      );
-      await sysproDb.queryWithParams(`
-        INSERT INTO aps.SavedSchedules
-          (ScheduleID, ScheduleData, Status, JobCount, OperationCount,
-           HorizonStart, HorizonEnd, GeneratedAt, SavedAt, IsLatest)
-        VALUES
-          (@scheduleId, @scheduleData, 'Draft', @jobCount, @opCount,
-           @horizonStart, @horizonEnd, GETDATE(), GETDATE(), 1)
-      `, {
-        scheduleId: schedule.scheduleId,
-        scheduleData: JSON.stringify(schedule),
-        jobCount,
-        opCount: operationCount,
-        horizonStart: schedule.planningHorizon?.startDate ? new Date(schedule.planningHorizon.startDate) : null,
-        horizonEnd: schedule.planningHorizon?.endDate ? new Date(schedule.planningHorizon.endDate) : null
-      });
+      const { jobCount } = await saveAsLatest(sysproDb, schedule, { status: 'Draft', generatedAt: new Date() });
       req.log.info({ jobCount }, 'Schedule auto-saved to DB');
     } catch (saveErr) {
       req.log.warn({ err: saveErr }, 'Could not auto-save schedule to DB (non-blocking)');
@@ -468,7 +472,7 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
 
     res.json({
       schedule,
-      executionTimeMs: Date.now(),
+      executionTimeMs: Date.now() - startedAt,
       warningCount: schedule.constraintViolations.filter((c: any) => c.severity === 'Warning').length,
       errorCount: schedule.constraintViolations.filter((c: any) => c.severity === 'Critical').length
     });
@@ -618,18 +622,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
     };
 
     const runWorker = (schedulingRule: SchedulingRule) =>
-      new Promise<any>((resolve, reject) => {
-        const isCompiled = __dirname.includes('dist');
-        const workerPath = isCompiled
-          ? path.resolve(__dirname, '../../services/scheduleWorker.js')
-          : path.resolve(__dirname, '../../services/scheduleWorker.ts');
-        const workerOptions: any = { workerData: { ...basePayload, jobs, schedulingRule } };
-        if (!isCompiled) workerOptions.execArgv = ['--require', 'ts-node/register'];
-        const worker = new Worker(workerPath, workerOptions);
-        worker.on('message', (msg: any) => (msg.success ? resolve(msg.schedule) : reject(new Error(msg.error))));
-        worker.on('error', reject);
-        worker.on('exit', (code) => { if (code !== 0) reject(new Error(`Scheduler worker exited with code ${code}`)); });
-      });
+      runScheduleWorker({ ...basePayload, jobs, schedulingRule });
 
     // Run rules sequentially — worker threads are CPU-bound; parallel spawn would
     // just contend for the same cores and muddy the comparison.
@@ -729,39 +722,9 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const jobCount = schedule.jobSchedules?.length || 0;
-    const operationCount = schedule.jobSchedules?.reduce(
-      (sum: number, j: any) => sum + (j.operationSchedules?.length || 0), 0
-    ) || 0;
-    const horizonStart = schedule.planningHorizon?.startDate || null;
-    const horizonEnd = schedule.planningHorizon?.endDate || null;
-    const scheduleJson = JSON.stringify(schedule);
-
-    // Mark all existing records as not-latest and replace the current schedule row if it already exists
-    await sysproDb.query(`UPDATE aps.SavedSchedules SET IsLatest = 0`);
-    await sysproDb.queryWithParams(
-      `DELETE FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
-      { scheduleId: schedule.scheduleId }
-    );
-
-    // Insert new record
-    await sysproDb.queryWithParams(`
-      INSERT INTO aps.SavedSchedules
-        (ScheduleID, ScheduleData, Status, JobCount, OperationCount,
-         HorizonStart, HorizonEnd, GeneratedAt, SavedAt, IsLatest)
-      VALUES
-        (@scheduleId, @scheduleData, @status, @jobCount, @opCount,
-         @horizonStart, @horizonEnd, @generatedAt, GETDATE(), 1)
-    `, {
-      scheduleId: schedule.scheduleId,
-      scheduleData: scheduleJson,
-      status: schedule.status || 'Draft',
-      jobCount,
-      opCount: operationCount,
-      horizonStart: horizonStart ? new Date(horizonStart) : null,
-      horizonEnd: horizonEnd ? new Date(horizonEnd) : null,
-      generatedAt: schedule.scheduledDate ? new Date(schedule.scheduledDate) : new Date()
-    });
+    // Any saved change is a new Draft: an edit made after approval must be
+    // approved again before it can be sent to SYSPRO. Atomic — see ScheduleStore.
+    const { jobCount, operationCount } = await saveAsLatest(sysproDb, schedule, { status: 'Draft' });
 
     req.log.info({ scheduleId: schedule.scheduleId, jobCount, operationCount }, 'Schedule saved');
     res.json({ saved: true, scheduleId: schedule.scheduleId });
@@ -796,12 +759,8 @@ router.post('/load-version/:scheduleId', requirePlanner, async (req: Request, re
     const schedule = JSON.parse(result.recordset[0].ScheduleData);
     const restoredAt = new Date().toISOString();
 
-    // Promote this version as the new latest (demote all others)
-    await sysproDb.query(`UPDATE aps.SavedSchedules SET IsLatest = 0`);
-    await sysproDb.queryWithParams(
-      `UPDATE aps.SavedSchedules SET IsLatest = 1 WHERE ScheduleID = @scheduleId`,
-      { scheduleId }
-    );
+    // Promote this version as the new latest (demote all others) — atomically.
+    await promoteToLatest(sysproDb, scheduleId);
 
     req.log.info({ scheduleId, restoredAt }, 'version_restore');
 
