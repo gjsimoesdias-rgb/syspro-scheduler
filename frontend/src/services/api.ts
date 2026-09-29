@@ -63,9 +63,13 @@ export interface BomDetail {
   note?: string;
 }
 
-// Vite builds: vite.config.ts defines process.env.REACT_APP_API_URL = VITE_API_URL at build time.
-// Jest / CRA builds: process.env.REACT_APP_API_URL comes from the .env file as usual.
-const API_BASE_URL =
+/**
+ * The ONE API base URL for the whole frontend. Import it — never hardcode
+ * 'http://localhost:3000/api', which only works on the server PC itself.
+ * Vite builds: vite.config.ts maps VITE_API_URL to process.env.REACT_APP_API_URL.
+ * Otherwise the API is on the same origin that served the page.
+ */
+export const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
   (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:3000/api');
 
@@ -87,15 +91,47 @@ export const setTokenProvider = (fn: () => string | null): void => {
 
 apiClient.interceptors.request.use((config) => {
   const token = _tokenProvider();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  // A retried request already carries the freshly refreshed token — keep it.
+  if (token && !config.headers.Authorization) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Broadcast 401s as a DOM event so AuthContext can clear state without
-// creating a circular import dependency.
+// ── Silent token refresh ──────────────────────────────────────────────────────
+// AuthContext registers how to get a new access token (refresh token or
+// Windows re-auth). On a 401 we refresh ONCE — concurrent 401s share the same
+// in-flight refresh — and replay the request. Only if that fails do we
+// broadcast 'aps:unauthorized' so AuthContext signs the user out.
+let _refreshHandler: (() => Promise<string | null>) | null = null;
+let _refreshInFlight: Promise<string | null> | null = null;
+
+export const setRefreshHandler = (fn: () => Promise<string | null>): void => {
+  _refreshHandler = fn;
+};
+
+/** Get a new access token, de-duplicating concurrent callers. */
+export const refreshAccessToken = (): Promise<string | null> => {
+  if (!_refreshHandler) return Promise.resolve(null);
+  if (!_refreshInFlight) {
+    _refreshInFlight = _refreshHandler()
+      .catch(() => null)
+      .finally(() => { _refreshInFlight = null; });
+  }
+  return _refreshInFlight;
+};
+
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error.config as (typeof error.config & { _retried?: boolean }) | undefined;
+    const isAuthCall = String(config?.url || '').includes('/auth/');
+    if (error.response?.status === 401 && config && !config._retried && !isAuthCall) {
+      config._retried = true;
+      const token = await refreshAccessToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        return apiClient(config);
+      }
+    }
     if (error.response?.status === 401) {
       window.dispatchEvent(new CustomEvent('aps:unauthorized'));
     }

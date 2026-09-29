@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL as API } from '../services/api';
 import { GanttSettingsState, GANTT_SETTINGS_DEFAULTS } from './GanttSettings';
 import UserManagement from './UserManagement';
 import LicenseAdmin from './LicenseAdmin';
 import './SettingsPanel.css';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 // ─── Settings types ────────────────────────────────────────────────────────
 

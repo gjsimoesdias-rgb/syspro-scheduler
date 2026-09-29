@@ -1,7 +1,19 @@
-import React, { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback } from 'react';
-import { setTokenProvider } from '../services/api';
+import React, { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { setTokenProvider, setRefreshHandler, API_BASE_URL as API } from '../services/api';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+/** Seconds until a JWT expires (0 if unreadable/expired). No signature check — only used to decide when to refresh. */
+const secondsUntilExpiry = (token: string | null): number => {
+  if (!token) return 0;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return Math.max(0, Number(payload.exp) - Date.now() / 1000);
+  } catch {
+    return 0;
+  }
+};
+
+/** Refresh when less than this is left on the access token. */
+const REFRESH_MARGIN_S = 30 * 60;
 
 export type UserRole = 'super_admin' | 'company_admin' | 'planner' | 'viewer' | 'Reviewer' | 'Approver';
 
@@ -25,7 +37,7 @@ interface AuthContextValue extends AuthState {
   login: (username: string, password: string) => Promise<void>;
   loginWithNtlm: () => Promise<void>;
   logout: () => Promise<void>;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<string | null>;
   isRole: (...roles: UserRole[]) => boolean;
   authHeader: () => Record<string, string>;
   ntlmAvailable: boolean;
@@ -41,11 +53,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Whether the server has NTLM configured (learned on first attempted NTLM call)
   const [ntlmAvailable, setNtlmAvailable] = useState(true);
 
-  const setToken = (access: string, user: AuthUser) =>
-    setState({ user, accessToken: access, loading: false });
+  // Mirrors state.accessToken for callbacks/listeners that must see the
+  // CURRENT token without re-subscribing (the old 401 listener captured the
+  // initial null token and therefore never signed anyone out).
+  const tokenRef = useRef<string | null>(null);
 
-  const clearState = () =>
+  const setToken = (access: string, user: AuthUser) => {
+    tokenRef.current = access;
+    setState({ user, accessToken: access, loading: false });
+  };
+
+  const clearState = () => {
+    tokenRef.current = null;
     setState({ user: null, accessToken: null, loading: false });
+  };
 
   const login = useCallback(async (username: string, password: string) => {
     const res = await fetch(`${API}/auth/login`, {
@@ -92,7 +113,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearState();
   }, []);
 
-  const refreshSession = useCallback(async () => {    const authMode = localStorage.getItem(AUTH_MODE_KEY);
+  /** Get a fresh access token. Returns it, or null (and signs out) if the session can't be renewed. */
+  const refreshSession = useCallback(async (): Promise<string | null> => {
+    const authMode = localStorage.getItem(AUTH_MODE_KEY);
     // NTLM users: silently re-authenticate via Windows credentials
     if (authMode === 'ntlm') {
       try {
@@ -101,41 +124,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           headers: { 'X-Requested-With': 'XMLHttpRequest' },
         });
         if (res.status === 503) { setNtlmAvailable(false); }
-        if (!res.ok) { localStorage.removeItem(AUTH_MODE_KEY); clearState(); return; }
+        if (!res.ok) { localStorage.removeItem(AUTH_MODE_KEY); clearState(); return null; }
         const data = await res.json();
         setToken(data.accessToken, data.user);
-        return;
+        return data.accessToken as string;
       } catch {
         localStorage.removeItem(AUTH_MODE_KEY);
         clearState();
-        return;
+        return null;
       }
     }
     // Local users: use refresh token
     const rt = localStorage.getItem(REFRESH_KEY);
-    if (!rt) { clearState(); return; }
+    if (!rt) { clearState(); return null; }
     try {
       const res = await fetch(`${API}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: rt }),
       });
-      if (!res.ok) { localStorage.removeItem(REFRESH_KEY); clearState(); return; }
+      if (!res.ok) { localStorage.removeItem(REFRESH_KEY); clearState(); return null; }
       const data = await res.json();
       localStorage.setItem(REFRESH_KEY, data.refreshToken);
       setToken(data.accessToken, data.user);
-    } catch { clearState(); }
+      return data.accessToken as string;
+    } catch { clearState(); return null; }
   }, []);
 
   // Try to restore session on mount
   useEffect(() => { refreshSession(); }, []); // eslint-disable-line
 
-  // Auto-refresh every 7 hours
+  // Keep the token fresh. A fixed 7-hour timer missed laptops that slept past
+  // the 8-hour expiry; instead check every 5 minutes and whenever the tab
+  // becomes visible again, and refresh when under 30 minutes remain.
   useEffect(() => {
     if (!state.accessToken) return;
-    const timer = setInterval(refreshSession, 7 * 60 * 60 * 1000);
-    return () => clearInterval(timer);
+    const refreshIfNearExpiry = () => {
+      if (tokenRef.current && secondsUntilExpiry(tokenRef.current) < REFRESH_MARGIN_S) {
+        refreshSession();
+      }
+    };
+    const timer = setInterval(refreshIfNearExpiry, 5 * 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshIfNearExpiry(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', refreshIfNearExpiry);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', refreshIfNearExpiry);
+    };
   }, [state.accessToken, refreshSession]);
+
+  // Let the API client refresh + replay a request that got a 401.
+  useLayoutEffect(() => {
+    setRefreshHandler(refreshSession);
+  }, [refreshSession]);
 
   // Wire access token into the axios client in api.ts.
   // useLayoutEffect runs before any passive useEffect in child components,
@@ -149,7 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // requests from the previous render from clearing a freshly-restored token.
   useEffect(() => {
     const handler = () => {
-      if (!state.accessToken) return; // no active session, nothing to clear
+      if (!tokenRef.current) return; // no active session, nothing to clear
       localStorage.removeItem(REFRESH_KEY);
       localStorage.removeItem(AUTH_MODE_KEY);
       clearState();

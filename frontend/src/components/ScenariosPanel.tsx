@@ -7,8 +7,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import './ScenariosPanel.css';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+import { apiClient, apiErrorMessage } from '../services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,17 +67,14 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
     setLoading(true);
     setError(null);
     try {
-      const qs = currentScheduleId ? `?baseScheduleId=${encodeURIComponent(currentScheduleId)}` : '';
-      const res = await fetch(`${API_BASE_URL}/scenarios${qs}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('aps_token') ?? ''}`,
-        },
+      // apiClient adds the signed-in user's token (the old code read a
+      // localStorage key that was never set, so every call returned 401).
+      const { data } = await apiClient.get('/scenarios', {
+        params: currentScheduleId ? { baseScheduleId: currentScheduleId } : undefined,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
       setScenarios(data.scenarios ?? []);
     } catch (e: any) {
-      setError(e.message ?? 'Failed to load scenarios');
+      setError(apiErrorMessage(e, 'Failed to load scenarios'));
     } finally {
       setLoading(false);
     }
@@ -100,28 +96,17 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
     }
     setCreating(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/scenarios`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('aps_token') ?? ''}`,
-        },
-        body: JSON.stringify({
-          baseScheduleId: currentScheduleId,
-          name: newName.trim(),
-          description: newDesc.trim() || undefined,
-        }),
+      await apiClient.post('/scenarios', {
+        baseScheduleId: currentScheduleId,
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
       setNewName('');
       setNewDesc('');
       showToast('Scenario created');
       await loadScenarios();
     } catch (e: any) {
-      showToast(e.message ?? 'Failed to create scenario', false);
+      showToast(apiErrorMessage(e, 'Failed to create scenario'), false);
     } finally {
       setCreating(false);
     }
@@ -131,20 +116,11 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
     if (!window.confirm(`Promote "${name}" to the live schedule? This will replace the current live schedule.`)) return;
     setPromoting(scenarioId);
     try {
-      const res = await fetch(`${API_BASE_URL}/scenarios/${encodeURIComponent(scenarioId)}/promote`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('aps_token') ?? ''}`,
-        },
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
+      await apiClient.post(`/scenarios/${encodeURIComponent(scenarioId)}/promote`);
       showToast(`"${name}" promoted to live schedule. Reload to see changes.`);
       await loadScenarios();
     } catch (e: any) {
-      showToast(e.message ?? 'Failed to promote scenario', false);
+      showToast(apiErrorMessage(e, 'Failed to promote scenario'), false);
     } finally {
       setPromoting(null);
     }
@@ -154,20 +130,11 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
     if (!window.confirm(`Delete scenario "${name}"?`)) return;
     setDeleting(scenarioId);
     try {
-      const res = await fetch(`${API_BASE_URL}/scenarios/${encodeURIComponent(scenarioId)}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('aps_token') ?? ''}`,
-        },
-      });
-      if (!res.ok && res.status !== 204) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
+      await apiClient.delete(`/scenarios/${encodeURIComponent(scenarioId)}`);
       showToast(`Scenario "${name}" deleted`);
       await loadScenarios();
     } catch (e: any) {
-      showToast(e.message ?? 'Failed to delete scenario', false);
+      showToast(apiErrorMessage(e, 'Failed to delete scenario'), false);
     } finally {
       setDeleting(null);
     }

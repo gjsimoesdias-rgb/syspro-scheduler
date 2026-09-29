@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense, lazy } from 'react';
-import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Keyboard, Lock, Unlock } from 'lucide-react';
@@ -55,7 +54,6 @@ import './App.css';
 // Token-based overrides: MUST come after App.css to win specificity battles.
 import './styles/aps-overrides.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 const App: React.FC = () => {
   const isDarkMode = useUiStore((s) => s.isDarkMode);

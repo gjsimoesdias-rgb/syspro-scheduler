@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL as API } from '../services/api';
 import './UserManagement.css';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 interface User {
   id: number;

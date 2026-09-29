@@ -2,12 +2,10 @@
  * CSV/Excel import service
  */
 
-import axios from 'axios';
 import Papa from 'papaparse';
-
-const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3000/api'
-});
+// Shared client: same-origin base URL + the signed-in user's token (the old
+// private axios instance sent no token, so bulk import always got 401).
+import { apiClient } from './api';
 
 export interface ImportJobData {
   jobId: string;
