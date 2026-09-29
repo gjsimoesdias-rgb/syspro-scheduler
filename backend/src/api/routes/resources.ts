@@ -5,6 +5,7 @@
 import { Router, Request, Response } from 'express';
 import SysproDatabaseService from '../../services/SysproDatabaseService';
 import { setLocal } from '../../utils/setLocal';
+import { requirePlanner } from '../middleware/requireAuth';
 
 const router = Router();
 
@@ -267,7 +268,7 @@ router.get('/definitions', async (req: Request, res: Response) => {
  * PUT /api/resources/definitions/:resourceId
  * Update resource quantity / assigned shift / activation
  */
-router.put('/definitions/:resourceId', async (req: Request, res: Response) => {
+router.put('/definitions/:resourceId', requirePlanner, async (req: Request, res: Response) => {
   try {
     const { resourceId } = req.params;
     const { shifts, definitions } = ensureDefinitionStores(req);
@@ -322,7 +323,7 @@ router.get('/shifts', (req: Request, res: Response) => {
  * POST /api/resources/shifts
  * Create a new shift template
  */
-router.post('/shifts', (req: Request, res: Response) => {
+router.post('/shifts', requirePlanner, (req: Request, res: Response) => {
   try {
     const { shifts } = ensureDefinitionStores(req);
     const name = String(req.body.name || '').trim();
@@ -366,7 +367,7 @@ router.post('/shifts', (req: Request, res: Response) => {
   }
 });
 
-router.put('/shifts/:shiftId', (req: Request, res: Response) => {
+router.put('/shifts/:shiftId', requirePlanner, (req: Request, res: Response) => {
   try {
     const { shiftId } = req.params;
     const { shifts } = ensureDefinitionStores(req);
@@ -411,7 +412,7 @@ router.put('/shifts/:shiftId', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/shifts/:shiftId', (req: Request, res: Response) => {
+router.delete('/shifts/:shiftId', requirePlanner, (req: Request, res: Response) => {
   try {
     const { shiftId } = req.params;
     const { shifts, definitions } = ensureDefinitionStores(req);
@@ -488,7 +489,7 @@ router.get('/alternatives/groups', (req: Request, res: Response) => {
   res.json({ count: groups.length, groups });
 });
 
-router.post('/alternatives/groups', (req: Request, res: Response) => {
+router.post('/alternatives/groups', requirePlanner, (req: Request, res: Response) => {
   try {
     const groups = ensureAlternativeGroups(req);
     const workcentreId = String(req.body.workcentreId || '').trim();
@@ -517,7 +518,7 @@ router.post('/alternatives/groups', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/alternatives/groups/:groupId', (req: Request, res: Response) => {
+router.delete('/alternatives/groups/:groupId', requirePlanner, (req: Request, res: Response) => {
   const groups = ensureAlternativeGroups(req);
   const index = groups.findIndex((group) => group.groupId === req.params.groupId);
   if (index < 0) {

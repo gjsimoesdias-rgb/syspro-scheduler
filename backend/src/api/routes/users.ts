@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import UserService from '../../services/UserService';
+import UserService, { UserRecord } from '../../services/UserService';
 import { requireAuth, requireCompanyAdmin, AuthRequest } from '../middleware/requireAuth';
 import { validateBody } from '../middleware/validateBody';
 import { createUserSchema, updateUserSchema, changePasswordSchema } from '../validators/userValidators';
@@ -10,6 +10,39 @@ const getUsers = (req: AuthRequest): UserService => {
   const db = req.app.locals.schedulerDb;
   if (!db) throw new Error('Scheduler database not connected');
   return new UserService(db);
+};
+
+const isSuperAdmin = (req: AuthRequest): boolean => req.user?.role === 'super_admin';
+
+/**
+ * Which roles the caller may hand out. Only a super_admin can create or promote
+ * admins; a company_admin can manage planners and viewers in their own company.
+ */
+const assignableRoles = (req: AuthRequest): string[] =>
+  isSuperAdmin(req)
+    ? ['super_admin', 'company_admin', 'planner', 'viewer']
+    : ['planner', 'viewer'];
+
+/**
+ * A super_admin can manage anyone. A company_admin can manage themselves and the
+ * users in their own company, but never a super_admin or another company_admin.
+ */
+const canManage = (req: AuthRequest, target: UserRecord): boolean => {
+  if (isSuperAdmin(req)) return true;
+  if (target.id === Number(req.user?.sub)) return true; // own profile (role changes still checked)
+  return (
+    target.companyId != null &&
+    target.companyId === req.user?.companyId &&
+    !['super_admin', 'company_admin'].includes(target.role)
+  );
+};
+
+/** Load a user the caller is allowed to manage; null (→ 404) otherwise, so ids from other companies aren't revealed. */
+const loadManageable = async (req: AuthRequest): Promise<UserRecord | null> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const user = await getUsers(req).getUserById(id);
+  return user && canManage(req, user) ? user : null;
 };
 
 // GET /api/users — list users for current company (or all for super_admin)
@@ -25,7 +58,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 // GET /api/users/:id
 router.get('/:id', requireAuth, requireCompanyAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await getUsers(req).getUserById(Number(req.params.id));
+    const user = await loadManageable(req);
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
     res.json(user);
   } catch (err: any) {
@@ -37,6 +70,10 @@ router.get('/:id', requireAuth, requireCompanyAdmin, async (req: AuthRequest, re
 router.post('/', requireAuth, requireCompanyAdmin, validateBody(createUserSchema), async (req: AuthRequest, res: Response) => {
   try {
     const { username, email, password, role, fullName, companyId } = req.body;
+    const newRole = String(role || 'planner');
+    if (!assignableRoles(req).includes(newRole)) {
+      res.status(403).json({ error: `You can't create a user with role '${newRole}'` }); return;
+    }
     // company admins can only add to their own company
     const targetCompanyId = req.user!.role === 'super_admin' ? (companyId || req.user!.companyId) : req.user!.companyId;
     if (!targetCompanyId) { res.status(400).json({ error: 'companyId required' }); return; }
@@ -46,7 +83,7 @@ router.post('/', requireAuth, requireCompanyAdmin, validateBody(createUserSchema
       username: String(username),
       email: String(email),
       password: String(password),
-      role: String(role || 'planner'),
+      role: newRole,
       fullName: fullName ? String(fullName) : undefined,
     });
     res.status(201).json(user);
@@ -59,8 +96,12 @@ router.post('/', requireAuth, requireCompanyAdmin, validateBody(createUserSchema
 router.put('/:id', requireAuth, requireCompanyAdmin, validateBody(updateUserSchema), async (req: AuthRequest, res: Response) => {
   try {
     const { username, email, password, role, fullName, isActive } = req.body;
-    // Users can only update themselves (non-admin), admins can update anyone in their company
-    const user = await getUsers(req).updateUser(Number(req.params.id), {
+    const target = await loadManageable(req);
+    if (!target) { res.status(404).json({ error: 'User not found' }); return; }
+    if (role !== undefined && role !== target.role && !assignableRoles(req).includes(String(role))) {
+      res.status(403).json({ error: `You can't assign role '${role}'` }); return;
+    }
+    const user = await getUsers(req).updateUser(target.id, {
       username, email, password, role, fullName, isActive
     });
     res.json(user);
@@ -75,7 +116,9 @@ router.delete('/:id', requireAuth, requireCompanyAdmin, async (req: AuthRequest,
     if (Number(req.params.id) === Number(req.user!.sub)) {
       res.status(400).json({ error: 'Cannot delete your own account' }); return;
     }
-    await getUsers(req).deleteUser(Number(req.params.id));
+    const target = await loadManageable(req);
+    if (!target) { res.status(404).json({ error: 'User not found' }); return; }
+    await getUsers(req).deleteUser(target.id);
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -22,7 +22,7 @@ import { setLocal } from '../../utils/setLocal';
 import { completeJobFamilies } from '../../utils/jobFamilies';
 import { stripCompletedOperations } from '../../utils/jobFilters';
 import { AuditLogService } from '../../services/AuditLogService';
-import { requireAuth, requireRole, AuthRequest } from '../middleware/requireAuth';
+import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
 
 const router = Router();
 
@@ -105,7 +105,7 @@ const applyAssignedShiftCalendars = (app: any, resources: any[]) => {
  * POST /api/schedule/generate
  * Generate new schedule
  */
-router.post('/generate', async (req: Request, res: Response) => {
+router.post('/generate', requirePlanner, async (req: Request, res: Response) => {
   const validation = validate(generateScheduleSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
 
@@ -486,7 +486,7 @@ router.post('/generate', async (req: Request, res: Response) => {
  * can pick the best strategy (the "optimization" feature of PlanetTogether /
  * Opcenter APS). Read-only — nothing is saved; the live schedule is untouched.
  */
-router.post('/optimize', async (req: Request, res: Response) => {
+router.post('/optimize', requirePlanner, async (req: Request, res: Response) => {
   const validation = validate(optimizeScheduleSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
 
@@ -717,7 +717,7 @@ router.get('/latest', async (req: Request, res: Response) => {
  * POST /api/schedule/save
  * Persist a schedule to DB (marks all others as not-latest)
  */
-router.post('/save', async (req: Request, res: Response) => {
+router.post('/save', requirePlanner, async (req: Request, res: Response) => {
   const validation = validate(saveScheduleSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
 
@@ -776,7 +776,7 @@ router.post('/save', async (req: Request, res: Response) => {
  * Restore a saved schedule version as the active (latest) schedule.
  * Promotes the chosen version to IsLatest=1 and records a structured audit entry.
  */
-router.post('/load-version/:scheduleId', async (req: Request, res: Response) => {
+router.post('/load-version/:scheduleId', requirePlanner, async (req: Request, res: Response) => {
   try {
     const { scheduleId } = req.params;
     const sysproDb = req.app.locals.sysproDb;
@@ -851,7 +851,7 @@ router.get('/setup-matrix', async (req: Request, res: Response) => {
  * POST /api/schedule/setup-matrix
  * Upsert one changeover row (unique on workcentre + from + to).
  */
-router.post('/setup-matrix', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post('/setup-matrix', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
   const validation = validate(setupMatrixRowSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
 
@@ -885,7 +885,7 @@ router.post('/setup-matrix', requireAuth, async (req: AuthRequest, res: Response
 /**
  * DELETE /api/schedule/setup-matrix/:setupId
  */
-router.delete('/setup-matrix/:setupId', requireAuth, async (req: AuthRequest, res: Response) => {
+router.delete('/setup-matrix/:setupId', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
   try {
     const schedulerDb = req.app.locals.schedulerDb;
     if (!schedulerDb) return res.status(503).json({ error: 'Scheduler database not connected' });
@@ -973,7 +973,7 @@ async function buildClassChangeoverSequences(
  * with setupMinutes = 0 is deleted so the matrix stays sparse. Global rows use
  * WorkcentreId '*' (see setupMatrixRowSchema default).
  */
-router.post('/setup-matrix/bulk', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post('/setup-matrix/bulk', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
   const validation = validate(setupMatrixBulkSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
   try {
@@ -1140,7 +1140,7 @@ router.get('/class-changeover', async (req: Request, res: Response) => {
  * setupMinutes = 0 deletes the cell (sparse). Charged during scheduling by
  * expanding to item pairs via each item's ProductClass.
  */
-router.post('/class-changeover/bulk', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post('/class-changeover/bulk', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
   const validation = validate(setupClassBulkSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
   try {
@@ -1553,7 +1553,7 @@ router.get('/:scheduleId', async (req: Request, res: Response) => {
  * Approve and release schedule — updates the DB record status to 'Approved'.
  * Requires planner, company_admin, or super_admin role.
  */
-router.post('/:scheduleId/approve', requireAuth, requireRole('super_admin', 'company_admin', 'planner'), async (req: Request, res: Response) => {
+router.post('/:scheduleId/approve', requireAuth, requirePlanner, async (req: Request, res: Response) => {
   try {
     const { scheduleId } = req.params;
 
@@ -1591,7 +1591,7 @@ router.post('/:scheduleId/approve', requireAuth, requireRole('super_admin', 'com
  * Export schedule to Syspro via APS compatibility layer.
  * Requires planner, company_admin, or super_admin role.
  */
-router.post('/:scheduleId/export-to-syspro', requireAuth, requireRole('super_admin', 'company_admin', 'planner'), async (req: Request, res: Response) => {
+router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async (req: Request, res: Response) => {
   try {
     const { scheduleId } = req.params;
     const { schedule } = req.body as { schedule?: any };
@@ -1661,7 +1661,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requireRole('super_adm
  * POST /api/schedule/:scheduleId/approve-override
  * Store a constraint override audit event
  */
-router.post('/:scheduleId/approve-override', async (req: Request, res: Response) => {
+router.post('/:scheduleId/approve-override', requirePlanner, async (req: Request, res: Response) => {
   const validation = validate(approveOverrideSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
 
@@ -1682,7 +1682,7 @@ router.post('/:scheduleId/approve-override', async (req: Request, res: Response)
     // Audit the approval
     const schedulerDb = req.app.locals.schedulerDb;
     if (schedulerDb) {
-      const actorId = (req as any).user?.userId ?? 'anonymous';
+      const actorId = (req as any).user?.username ?? String((req as any).user?.sub ?? 'anonymous');
       const traceId = (req as any).id as string | undefined;
       try {
         await new AuditLogService(schedulerDb).log({
@@ -1751,7 +1751,7 @@ router.get('/constraints/violations', async (req: Request, res: Response) => {
  * POST /api/schedule/pin
  * Pin (freeze) a single operation's time slot.
  */
-router.post('/pin', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post('/pin', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
   const pin = req.body as PinnedOperation;
   if (!pin?.jobId || !pin?.opId || !pin?.resourceId || !pin?.plannedStartDate || !pin?.plannedEndDate) {
     return res.status(400).json({ error: 'Missing required pin fields: jobId, opId, resourceId, plannedStartDate, plannedEndDate' });
@@ -1768,7 +1768,7 @@ router.post('/pin', requireAuth, async (req: AuthRequest, res: Response) => {
  * DELETE /api/schedule/pin/:jobId/:opId
  * Unpin (unfreeze) a single operation's time slot.
  */
-router.delete('/pin/:jobId/:opId', requireAuth, async (req: AuthRequest, res: Response) => {
+router.delete('/pin/:jobId/:opId', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
   const { jobId, opId } = req.params;
   const key = `${jobId}::${opId}`;
   const pins: Record<string, PinnedOperation> = { ...(req.app.locals.pinnedOperations || {}) };

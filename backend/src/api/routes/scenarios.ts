@@ -10,7 +10,7 @@
 
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { requireAuth, requireRole } from '../middleware/requireAuth';
+import { requireAuth, requirePlanner } from '../middleware/requireAuth';
 
 const router = Router();
 
@@ -47,7 +47,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
  * POST /api/scenarios
  * Clone a saved schedule into a new named scenario.
  */
-router.post('/', requireAuth, requireRole('Approver', 'super_admin'), async (req: Request, res: Response) => {
+router.post('/', requireAuth, requirePlanner, async (req: Request, res: Response) => {
   const { baseScheduleId, name, description } = req.body as {
     baseScheduleId: string;
     name: string;
@@ -120,7 +120,7 @@ router.get('/:scenarioId', requireAuth, async (req: Request, res: Response) => {
  * Promote scenario to live — copies its data to aps.SavedSchedules and
  * marks it IsLatest = 1. Requires Approver role.
  */
-router.post('/:scenarioId/promote', requireAuth, requireRole('Approver', 'super_admin'), async (req: Request, res: Response) => {
+router.post('/:scenarioId/promote', requireAuth, requirePlanner, async (req: Request, res: Response) => {
   const { scenarioId } = req.params;
   const sysproDb = req.app.locals.sysproDb;
   if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
@@ -176,7 +176,7 @@ router.post('/:scenarioId/promote', requireAuth, requireRole('Approver', 'super_
  * DELETE /api/scenarios/:scenarioId
  * Archive (soft-delete) a scenario.
  */
-router.delete('/:scenarioId', requireAuth, requireRole('Approver', 'super_admin'), async (req: Request, res: Response) => {
+router.delete('/:scenarioId', requireAuth, requirePlanner, async (req: Request, res: Response) => {
   const { scenarioId } = req.params;
   const sysproDb = req.app.locals.sysproDb;
   if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });

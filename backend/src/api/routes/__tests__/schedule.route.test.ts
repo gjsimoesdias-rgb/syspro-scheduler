@@ -20,12 +20,11 @@
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../../app';
+import { JWT_SECRET } from '../../../config/secrets';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const JWT_SECRET = process.env.JWT_SECRET ?? 'change_this_secret_in_production';
 
 function makeToken(role = 'Viewer', sub = 42): string {
   return jwt.sign({ sub, username: 'testuser', role, companyId: 1 }, JWT_SECRET, { expiresIn: '1h' });
@@ -69,7 +68,15 @@ describe('auth guard — /api/schedule', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/schedule/generate', () => {
-  const token = makeToken('Scheduler');
+  const token = makeToken('planner');
+
+  it('returns 403 for a read-only (viewer) role', async () => {
+    const res = await request(app)
+      .post('/api/schedule/generate')
+      .set('Authorization', `Bearer ${makeToken('viewer')}`)
+      .send({});
+    expect(res.status).toBe(403);
+  });
 
   beforeEach(() => {
     // Remove any previously set sysproDb so each test starts clean
@@ -233,7 +240,7 @@ describe('GET /api/schedule/latest', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/schedule/save', () => {
-  const token = makeToken('Scheduler');
+  const token = makeToken('planner');
 
   afterEach(() => {
     delete (app.locals as any).sysproDb;

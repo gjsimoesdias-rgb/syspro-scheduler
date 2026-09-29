@@ -36,6 +36,16 @@ export function requireRole(...roles: string[]) {
   };
 }
 
+/**
+ * Roles allowed to change plans: generate/save schedules, move/pin operations,
+ * edit changeovers, shifts and machines, approve and send to SYSPRO.
+ * 'Approver' is the Windows (NTLM) planning role from dbo.sch_ADUsers.
+ * 'viewer' and 'Reviewer' are read-only.
+ */
+export const PLANNING_ROLES = ['super_admin', 'company_admin', 'planner', 'Approver'];
+
+export const requirePlanner = requireRole(...PLANNING_ROLES);
+
 export function requireSuperAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
   if (!req.user || req.user.role !== 'super_admin') {
     res.status(403).json({ error: 'Super admin access required' });

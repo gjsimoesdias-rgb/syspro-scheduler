@@ -28,6 +28,11 @@ function resolveJwtSecret(): string {
   if (!isWeakSecret(current)) return current!.trim();
 
   const generated = crypto.randomBytes(48).toString('hex');
+  if (process.env.NODE_ENV === 'test') {
+    // Tests never touch backend/.env.
+    process.env.JWT_SECRET = generated;
+    return generated;
+  }
   const envPath = path.resolve(process.cwd(), '.env');
   try {
     const content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';

@@ -8,6 +8,7 @@ import { Job, Operation } from '../../types';
 import { setLocal } from '../../utils/setLocal';
 import { validateBody } from '../middleware/validateBody';
 import { bulkImportJobsSchema, bulkImportOperationsSchema } from '../validators/jobValidators';
+import { requirePlanner } from '../middleware/requireAuth';
 
 const router = Router();
 
@@ -184,7 +185,7 @@ router.get('/', async (req: Request, res: Response) => {
  * POST /api/jobs/bulk-import
  * Import jobs from CSV payload
  */
-router.post('/bulk-import', validateBody(bulkImportJobsSchema), async (req: Request, res: Response) => {
+router.post('/bulk-import', requirePlanner, validateBody(bulkImportJobsSchema), async (req: Request, res: Response) => {
   try {
     const payload: ImportedJobPayload[] = req.body.jobs;
     if (!payload.length) {
@@ -220,7 +221,7 @@ router.post('/bulk-import', validateBody(bulkImportJobsSchema), async (req: Requ
  * POST /api/jobs/operations/bulk-import
  * Import operations from CSV payload
  */
-router.post('/operations/bulk-import', validateBody(bulkImportOperationsSchema), async (req: Request, res: Response) => {
+router.post('/operations/bulk-import', requirePlanner, validateBody(bulkImportOperationsSchema), async (req: Request, res: Response) => {
   try {
     const payload: ImportedOperationPayload[] = req.body.operations;
     if (!payload.length) {
