@@ -53,6 +53,9 @@ import { computeMaterialPlans, RequirementLine } from './materialPlan';
  * only OperationStatus meant completed operations were never recognised and
  * got rescheduled.
  */
+/** SYSPRO char keys come back space-padded; compare jobs on the trimmed id. */
+const jobKey = (value: unknown): string => String(value ?? '').trim();
+
 export const deriveOperationStatus = (row: Record<string, any>): 'NotStarted' | 'InProgress' | 'Complete' => {
   if (String(row.OperCompleted ?? '').trim().toUpperCase() === 'Y') return 'Complete';
   const s = String(row.status ?? '').trim();
@@ -247,6 +250,18 @@ export class SysproDatabaseService {
 
   // ==================== JOBS & OPERATIONS ====================
 
+  /** Group operation rows (already ordered by job, sequence) by trimmed job id. */
+  private groupOperationsByJob(rows: any[]): Map<string, Operation[]> {
+    const byJob = new Map<string, Operation[]>();
+    for (const row of rows || []) {
+      const key = jobKey(row.jobId);
+      let list = byJob.get(key);
+      if (!list) byJob.set(key, (list = []));
+      list.push(this.mapRowToOperation(row));
+    }
+    return byJob;
+  }
+
   async getOpenJobs(): Promise<Job[]> {
     try {
       // If configured to use APS views, read from scheduler-owned cache
@@ -254,15 +269,15 @@ export class SysproDatabaseService {
         return this.getOpenJobsFromAPS();
       }
 
-      // Otherwise, read from Syspro source tables
-      const result = await this.sysproDb.query(SYSPRO_QUERIES.getOpenJobs);
-      const jobs: Job[] = [];
-
-      for (const row of result.recordset) {
-        const operations = await this.getOperationsByJob(row.jobId);
-        const job = this.mapRowToJob(row, operations);
-        jobs.push(job);
-      }
+      // Otherwise, read from Syspro source tables — two set-based queries
+      // (jobs + all their operations) instead of one query per job.
+      const [result, opsResult] = await Promise.all([
+        this.sysproDb.query(SYSPRO_QUERIES.getOpenJobs),
+        this.sysproDb.query(SYSPRO_QUERIES.getOperationsForOpenJobs),
+      ]);
+      const opsByJob = this.groupOperationsByJob(opsResult.recordset);
+      const jobs: Job[] = result.recordset.map((row: any) =>
+        this.mapRowToJob(row, opsByJob.get(jobKey(row.jobId)) || []));
 
       // Master/sub links can come back in a different format than the job
       // keys (padding/trim differences). Rewrite them to exact jobId strings
@@ -306,12 +321,28 @@ export class SysproDatabaseService {
         ORDER BY ISNULL(po.Priority, 5) ASC, po.DueDate ASC
       `);
 
-      const jobs: Job[] = [];
-      for (const row of result.recordset) {
-        const operations = await this.getOperationsByJobFromAPS(row.jobId);
-        const job = this.mapRowToJob(row, operations);
-        jobs.push(job);
-      }
+      const opsResult = await this.sysproDb.query(`
+        SELECT
+          po.ProductionOperationNumber as opId,
+          po.ProductionOrderNumber as jobId,
+          po.SequenceNumber as sequence,
+          po.WorkCentreCode as workcentreId,
+          po.WorkCentreName as workcentreName,
+          po.EstimatedRunTime as duration,
+          po.EstimatedSetUpTime as setupTime,
+          po.QueueTime as queueTime,
+          po.MovementTime as moveTime,
+          po.BatchSize as batchSize,
+          po.OperationStatus as status,
+          po.PrimaryResource as ScheduledMachine,
+          po.AlternateResource as IMachine,
+          po.*
+        FROM aps.VP_SourceProductionOperationsView po
+        ORDER BY po.ProductionOrderNumber ASC, po.SequenceNumber ASC
+      `);
+      const opsByJob = this.groupOperationsByJob(opsResult.recordset);
+      const jobs: Job[] = result.recordset.map((row: any) =>
+        this.mapRowToJob(row, opsByJob.get(jobKey(row.jobId)) || []));
 
       // Same normalisation as the direct-SYSPRO path — the compat layer
       // trims ParentOrdNumber, so links rarely match the padded job keys.
@@ -704,9 +735,19 @@ export class SysproDatabaseService {
     // Jobs with no WipJobAllMat lines (e.g. bulk-imported jobs not in SYSPRO)
     // fall back to the product BOM: qty per × job qty × (1 + scrap).
     const missing = jobs.filter((j) => !requirementsByJob.has(String(j.jobId).trim()));
+    // One BOM lookup per distinct item, not per job.
+    const bomByItem = new Map<string, Promise<BOMLine[]>>();
+    const bomFor = (job: Job) => {
+      const item = String((job as any).itemCode || job.jobId);
+      if (!bomByItem.has(item)) {
+        // No jobId: these jobs have no WipJobAllMat lines, so passing the job
+        // would query WipJobAllMat again and return nothing — go to the BOM.
+        bomByItem.set(item, this.getMaterialsByJob(item).catch(() => [] as BOMLine[]));
+      }
+      return bomByItem.get(item)!;
+    };
     for (const job of missing) {
-      const lines = await this.getMaterialsByJob(String((job as any).itemCode || job.jobId), String(job.jobId))
-        .catch(() => [] as BOMLine[]);
+      const lines = await bomFor(job);
       if (!lines.length) continue;
       const qty = Math.max(1, Number((job as any).quantity) || 1);
       requirementsByJob.set(
@@ -759,21 +800,14 @@ export class SysproDatabaseService {
 
   // ==================== SETUP SEQUENCES ====================
 
-  private async getSetupSequences(worcentreId: string): Promise<SetupSequence[]> {
-    try {
-      const result = await this.sysproDb.queryWithParams(
-        SYSPRO_QUERIES.getSetupSequences,
-        { worcentreId }
-      );
-      return result.recordset.map((row: any) => ({
-        fromItemCode: row.fromItemCode,
-        toItemCode: row.toItemCode,
-        setupTimeMinutes: row.setupTimeMinutes
-      }));
-    } catch (error) {
-      logger.warn({ err: error, worcentreId }, 'Error fetching setup sequences, falling back empty');
-      return [];
-    }
+  /**
+   * Item-to-item setup sequences. SYSPRO has no such table; changeovers come
+   * from the scheduler's own matrices (ConstraintManager / changeover matrix).
+   * The old per-workcentre `WHERE 1=0` query cost one round trip per workcentre
+   * and always returned nothing, so it is no longer called.
+   */
+  private async getSetupSequences(_worcentreId: string): Promise<SetupSequence[]> {
+    return [];
   }
 }
 

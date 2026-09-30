@@ -201,6 +201,54 @@ export const SYSPRO_QUERIES = {
       ORDER BY CAST(l.Operation as int) ASC
     END
   `,
+  /** Every operation of every open job in one round trip (replaces the per-job
+   *  getOperationsByJob loop — one query instead of N+1). Same columns. */
+  getOperationsForOpenJobs: `
+    IF COL_LENGTH('WipJobAllLab', 'WorkCentreDesc') IS NOT NULL
+    BEGIN
+      SELECT 
+        CONCAT(l.Job, '-OP', CAST(CAST(l.Operation as int) as varchar(20))) as opId,
+        l.Job as jobId,
+        CAST(l.Operation as int) as sequence,
+        ISNULL(l.WorkCentre, ISNULL(l.IMachine, 'WC-UNKNOWN')) as workcentreId,
+        ISNULL(NULLIF(l.WorkCentreDesc, ''), ISNULL(l.WorkCentre, 'Unknown')) as workcentreName,
+        (ISNULL(l.IExpUnitRunTim, 0) * ISNULL(NULLIF(l.ParentQtyPlanned, 0), ISNULL(wm.QtyToMake, 1))) as duration,
+        ISNULL(l.IExpSetUpTime, 0) as setupTime,
+        ISNULL(l.QueueTime, 0) as queueTime,
+        ISNULL(l.MovementTime, 0) as moveTime,
+        ISNULL(NULLIF(l.IQuantity, 0), 1) as batchSize,
+        ISNULL(NULLIF(LTRIM(RTRIM(l.OperationStatus)), ''), 'NotStarted') as status,
+        l.ScheduledMachine,
+        l.IMachine,
+        l.*
+      FROM WipJobAllLab l
+      JOIN WipMaster wm ON wm.Job = l.Job
+      WHERE ISNULL(wm.Complete, 'N') <> 'Y'
+      ORDER BY l.Job ASC, CAST(l.Operation as int) ASC
+    END
+    ELSE
+    BEGIN
+      SELECT 
+        CONCAT(l.Job, '-OP', CAST(CAST(l.Operation as int) as varchar(20))) as opId,
+        l.Job as jobId,
+        CAST(l.Operation as int) as sequence,
+        ISNULL(l.WorkCentre, ISNULL(l.IMachine, 'WC-UNKNOWN')) as workcentreId,
+        ISNULL(l.WorkCentre, ISNULL(l.IMachine, 'Unknown')) as workcentreName,
+        (ISNULL(l.IExpUnitRunTim, 0) * ISNULL(NULLIF(l.ParentQtyPlanned, 0), ISNULL(wm.QtyToMake, 1))) as duration,
+        ISNULL(l.IExpSetUpTime, 0) as setupTime,
+        ISNULL(l.QueueTime, 0) as queueTime,
+        ISNULL(l.MovementTime, 0) as moveTime,
+        ISNULL(NULLIF(l.IQuantity, 0), 1) as batchSize,
+        ISNULL(NULLIF(LTRIM(RTRIM(l.OperationStatus)), ''), 'NotStarted') as status,
+        l.ScheduledMachine,
+        l.IMachine,
+        l.*
+      FROM WipJobAllLab l
+      JOIN WipMaster wm ON wm.Job = l.Job
+      WHERE ISNULL(wm.Complete, 'N') <> 'Y'
+      ORDER BY l.Job ASC, CAST(l.Operation as int) ASC
+    END
+  `,
 
   getOperationResources: `
     SELECT DISTINCT
