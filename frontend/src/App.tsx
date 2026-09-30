@@ -734,7 +734,9 @@ const App: React.FC = () => {
   }, [schedule, scheduleLoading, dbStatus.sysproConnected, scheduleSource, activeVersion]);
 
   useEffect(() => {
-    if (scheduleSource === 'session') {
+    // 'restored' = a saved plan opened from the Versions tab (or loaded at
+    // start-up): keep it on the board instead of rebuilding from SYSPRO dates.
+    if (scheduleSource === 'session' || scheduleSource === 'restored') {
       return;
     }
 
@@ -763,7 +765,21 @@ const App: React.FC = () => {
     if (scheduleSource !== 'none') {
       setScheduleSource('none');
     }
-  }, [openJobs, scheduleSource, buildScheduleFromSyspro, activePlanningInterval]);
+
+    // Nothing scheduled in SYSPRO yet: show the saved master plan instead of
+    // an empty board (once jobs are loaded, so the board has its context).
+    if (openJobs.length > 0 && dbStatus.sysproConnected) {
+      scheduleService.loadLatest()
+        .then(({ schedule: master }) => {
+          const st = useScheduleStore.getState();
+          if (master && st.scheduleSource === 'none' && !st.activeVersion) {
+            setSchedule(convertScheduleDates(master));
+            setScheduleSource('restored');
+          }
+        })
+        .catch(() => { /* no saved plan yet */ });
+    }
+  }, [openJobs, scheduleSource, buildScheduleFromSyspro, activePlanningInterval, dbStatus.sysproConnected]);
 
   useEffect(() => {
     if (!isGeneratingSchedule) {

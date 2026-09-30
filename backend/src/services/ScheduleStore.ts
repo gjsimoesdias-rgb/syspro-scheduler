@@ -34,8 +34,11 @@ export const metricsSnapshot = (schedule: any): string | null => {
   return JSON.stringify(out);
 };
 
-const defaultName = (d = new Date()) =>
-  `Plan ${d.toISOString().slice(0, 16).replace('T', ' ')}`;
+// Server local time (the plant's clock), not UTC.
+const defaultName = (d = new Date()) => {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `Plan ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 const countOps = (schedule: any): number =>
   (schedule?.jobSchedules ?? []).reduce(
