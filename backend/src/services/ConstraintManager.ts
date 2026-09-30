@@ -366,7 +366,8 @@ export class ConstraintManager {
     byWC.forEach((ops) => {
       for (let i = 0; i < ops.length; i++) {
         for (let j = 0; j < ops.length; j++) {
-          if (i === j) continue;
+          // Same item is not a changeover (setup-once-per-group decides that).
+          if (i === j || ops[i].itemCode === ops[j].itemCode) continue;
           const key = `${ops[i].itemCode}->${ops[j].itemCode}`;
           if (!this.setupSequenceMatrix.has(key)) {
             this.setupSequenceMatrix.set(key, ops[j].setupTime);

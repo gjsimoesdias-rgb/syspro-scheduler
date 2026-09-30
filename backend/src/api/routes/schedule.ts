@@ -189,7 +189,7 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
     // nothing left to do are skipped entirely. (This setting existed in the
     // Settings panel but was never applied until 2026-07-08.)
     let includeCompletedOps = false;
-    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; enforceMaterial: boolean } | undefined;
+    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; enforceMaterial: boolean; setupOncePerGroup: boolean } | undefined;
     try {
       const schedulerDb = req.app.locals.schedulerDb;
       const companyId = (req as any).user?.companyId;
@@ -206,6 +206,8 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
             // even if their components are short (shortages still surface as
             // warnings in the Constraints tab). Defaults to true.
             enforceMaterial: rules.enforceMaterialConstraints !== false,
+            // Settings → Setup → "Apply to the first job in the autoscheduling group only".
+            setupOncePerGroup: rules.setupFirstJobOnly === true,
           };
         }
       }
@@ -523,7 +525,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
 
     // Same completed-op / rule-toggle policy as /generate for a fair comparison.
     let includeCompletedOps = false;
-    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean } | undefined;
+    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; setupOncePerGroup: boolean } | undefined;
     try {
       const schedulerDb = req.app.locals.schedulerDb;
       const companyId = (req as any).user?.companyId;
@@ -536,6 +538,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
             useQueueTime: rulesCfg.useQueueTime !== false,
             useSetupTime: rulesCfg.useSetupTime !== false,
             useMoveTime: rulesCfg.useMoveTime !== false,
+            setupOncePerGroup: rulesCfg.setupFirstJobOnly === true,
           };
         }
       }

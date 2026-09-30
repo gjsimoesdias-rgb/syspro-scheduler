@@ -133,15 +133,22 @@ function Slider({ value, min, max, step, onChange }: { value: number; min: numbe
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="sp-row"><span className="sp-row-label">{label}</span><div className="sp-row-ctrl">{children}</div></div>;
+/** Shown next to settings that are saved but not yet used by the scheduler. */
+const NOT_APPLIED_TIP = 'Saved, but the scheduler does not use this setting yet';
+function NotApplied() {
+  return <span className="sp-na" title={NOT_APPLIED_TIP}>not applied yet</span>;
 }
 
-function CheckRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Row({ label, children, notApplied }: { label: string; children: React.ReactNode; notApplied?: boolean }) {
+  return <div className="sp-row"><span className="sp-row-label">{label}{notApplied && <NotApplied />}</span><div className="sp-row-ctrl">{children}</div></div>;
+}
+
+function CheckRow({ label, checked, onChange, notApplied }: { label: string; checked: boolean; onChange: (v: boolean) => void; notApplied?: boolean }) {
   return (
     <label className="sp-check-row">
       <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
       {label}
+      {notApplied && <NotApplied />}
     </label>
   );
 }
@@ -415,7 +422,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
         {routingTab === 'DEFAULT' && r && (
           <>
             <GroupBox title="General">
-              <Row label="Float resources">
+              <Row label="Float resources" notApplied>
                 {(['off', 'on', 'specific'] as const).map(v => (
                   <label key={v} style={{ marginRight: 12 }}>
                     <input type="radio" checked={r.floatResources === v} onChange={() => setR('floatResources', v)} disabled={!canEditCompany} />
@@ -423,10 +430,10 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
                   </label>
                 ))}
               </Row>
-              <CheckRow label="Split tasks" checked={r.splitTasks} onChange={v => setR('splitTasks', v)} />
+              <CheckRow notApplied label="Split tasks" checked={r.splitTasks} onChange={v => setR('splitTasks', v)} />
               {r.splitTasks && <>
-                <CheckRow label="Split Task Consumption (Min)" checked={r.splitTaskConsumptionMin} onChange={v => setR('splitTaskConsumptionMin', v)} />
-                <CheckRow label="Split Task Interruption (Max)" checked={r.splitTaskInterruptionMax} onChange={v => setR('splitTaskInterruptionMax', v)} />
+                <CheckRow notApplied label="Split Task Consumption (Min)" checked={r.splitTaskConsumptionMin} onChange={v => setR('splitTaskConsumptionMin', v)} />
+                <CheckRow notApplied label="Split Task Interruption (Max)" checked={r.splitTaskInterruptionMax} onChange={v => setR('splitTaskInterruptionMax', v)} />
               </>}
             </GroupBox>
             <GroupBox title="Material">
@@ -447,38 +454,38 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
         {routingTab === 'ROUTING' && r && (
           <>
             <GroupBox title="General">
-              <CheckRow label="Hide completed operations" checked={r.hideCompletedOperations ?? true} onChange={v => setR('hideCompletedOperations', v)} />
-              <CheckRow label="Schedule where status is complete" checked={r.scheduleWhereStatusComplete ?? true} onChange={v => setR('scheduleWhereStatusComplete', v)} />
+              <CheckRow notApplied label="Hide completed operations" checked={r.hideCompletedOperations ?? true} onChange={v => setR('hideCompletedOperations', v)} />
+              <CheckRow notApplied label="Schedule where status is complete" checked={r.scheduleWhereStatusComplete ?? true} onChange={v => setR('scheduleWhereStatusComplete', v)} />
             </GroupBox>
             <GroupBox title="Queue">
               <CheckRow label="Use queue time" checked={r.useQueueTime} onChange={v => setR('useQueueTime', v)} />
               {r.useQueueTime && <>
-                <CheckRow label="Apply as hours instead of days" checked={r.queueAsHours} onChange={v => setR('queueAsHours', v)} />
-                <CheckRow label="Apply to non working time" checked={r.queueToNonWorkingTime} onChange={v => setR('queueToNonWorkingTime', v)} />
-                <CheckRow label="Auto schedule to next day" checked={r.autoScheduleNextDay} onChange={v => setR('autoScheduleNextDay', v)} />
-                <CheckRow label="Apply after previous" checked={r.applyQueueAfterPrevious} onChange={v => setR('applyQueueAfterPrevious', v)} />
+                <CheckRow notApplied label="Apply as hours instead of days" checked={r.queueAsHours} onChange={v => setR('queueAsHours', v)} />
+                <CheckRow notApplied label="Apply to non working time" checked={r.queueToNonWorkingTime} onChange={v => setR('queueToNonWorkingTime', v)} />
+                <CheckRow notApplied label="Auto schedule to next day" checked={r.autoScheduleNextDay} onChange={v => setR('autoScheduleNextDay', v)} />
+                <CheckRow notApplied label="Apply after previous" checked={r.applyQueueAfterPrevious} onChange={v => setR('applyQueueAfterPrevious', v)} />
               </>}
             </GroupBox>
             <GroupBox title="Setup">
               <CheckRow label="Use setup time" checked={r.useSetupTime} onChange={v => setR('useSetupTime', v)} />
               {r.useSetupTime && <>
-                <CheckRow label="Apply to the first job in the autoscheduling group only" checked={r.setupFirstJobOnly} onChange={v => setR('setupFirstJobOnly', v)} />
-                <CheckRow label="Skip if operation has quantity reported" checked={r.skipSetupIfQtyReported} onChange={v => setR('skipSetupIfQtyReported', v)} />
-                <CheckRow label="Apply even when no run or open quantity" checked={r.setupApplyEvenNoQty} onChange={v => setR('setupApplyEvenNoQty', v)} />
+                <CheckRow label="Setup once per group — same item back-to-back skips setup; same-item jobs due within 7 days run together" checked={r.setupFirstJobOnly} onChange={v => setR('setupFirstJobOnly', v)} />
+                <CheckRow notApplied label="Skip if operation has quantity reported" checked={r.skipSetupIfQtyReported} onChange={v => setR('skipSetupIfQtyReported', v)} />
+                <CheckRow notApplied label="Apply even when no run or open quantity" checked={r.setupApplyEvenNoQty} onChange={v => setR('setupApplyEvenNoQty', v)} />
               </>}
             </GroupBox>
             <GroupBox title="Move">
               <CheckRow label="Use move time" checked={r.useMoveTime} onChange={v => setR('useMoveTime', v)} />
               {r.useMoveTime && <>
-                <CheckRow label="Apply as hours instead of days" checked={r.moveAsHours} onChange={v => setR('moveAsHours', v)} />
-                <CheckRow label="Apply to non working time" checked={r.moveToNonWorkingTime} onChange={v => setR('moveToNonWorkingTime', v)} />
-                <CheckRow label="Auto schedule to next day" checked={r.moveAutoNextDay} onChange={v => setR('moveAutoNextDay', v)} />
-                <CheckRow label="Apply after previous" checked={r.moveAfterPrevious} onChange={v => setR('moveAfterPrevious', v)} />
+                <CheckRow notApplied label="Apply as hours instead of days" checked={r.moveAsHours} onChange={v => setR('moveAsHours', v)} />
+                <CheckRow notApplied label="Apply to non working time" checked={r.moveToNonWorkingTime} onChange={v => setR('moveToNonWorkingTime', v)} />
+                <CheckRow notApplied label="Auto schedule to next day" checked={r.moveAutoNextDay} onChange={v => setR('moveAutoNextDay', v)} />
+                <CheckRow notApplied label="Apply after previous" checked={r.moveAfterPrevious} onChange={v => setR('moveAfterPrevious', v)} />
               </>}
             </GroupBox>
             <GroupBox title="Transfer/Overlap">
-              <CheckRow label="Use transfer" checked={r.useTransfer} onChange={v => setR('useTransfer', v)} />
-              {r.useTransfer && <Row label="Apply to">
+              <CheckRow notApplied label="Use transfer" checked={r.useTransfer} onChange={v => setR('useTransfer', v)} />
+              {r.useTransfer && <Row label="Apply to" notApplied>
                 <select value={r.transferApplyTo} onChange={e => setR('transferApplyTo', e.target.value)}>
                   <option value="next-operation">Next operation</option>
                   <option value="all">All operations</option>
@@ -502,7 +509,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
               <label><input type="radio" checked={r.schedulingMethod === 'forward'} onChange={() => setR('schedulingMethod', 'forward')} /> Forward</label>
               <label style={{ marginLeft: 16 }}><input type="radio" checked={r.schedulingMethod === 'backward'} onChange={() => setR('schedulingMethod', 'backward')} /> Backward</label>
             </Row>
-            <Row label="Forward from">
+            <Row label="Forward from" notApplied>
               {(['interval-start', 'job-start', 'today'] as const).map(v => (
                 <label key={v} style={{ marginRight: 10 }}>
                   <input type="radio" checked={r.forwardFrom === v} onChange={() => setR('forwardFrom', v)} disabled={r.schedulingMethod !== 'forward'} />
@@ -514,8 +521,8 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
               <label><input type="radio" checked={r.sequenceBy === 'grid-grouping'} onChange={() => setR('sequenceBy', 'grid-grouping')} /> Grid grouping</label>
               <label style={{ marginLeft: 16 }}><input type="radio" checked={r.sequenceBy === 'priority-index'} onChange={() => setR('sequenceBy', 'priority-index')} /> Priority index</label>
             </Row>
-            <CheckRow label="Link jobs" checked={r.linkJobs} onChange={v => setR('linkJobs', v)} />
-            <Row label="Machine balancing">
+            <CheckRow notApplied label="Link jobs" checked={r.linkJobs} onChange={v => setR('linkJobs', v)} />
+            <Row label="Machine balancing" notApplied>
               <select value={r.machineBalancing} onChange={e => setR('machineBalancing', e.target.value)}>
                 <option value="schedule-critical">Schedule (Critical)</option>
                 <option value="schedule-primary">Schedule (Primary)</option>

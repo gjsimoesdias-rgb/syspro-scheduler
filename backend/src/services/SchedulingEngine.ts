@@ -83,6 +83,17 @@ export interface SchedulingContext {
      * can see them). Defaults to true — short jobs are blocked.
      */
     enforceMaterial?: boolean;
+    /**
+     * Setup once per group (Settings → Setup → "Apply to the first job in the
+     * autoscheduling group only"). When true, an operation that follows the
+     * same stock code on its line gets no setup (an explicit changeover-matrix
+     * entry for that pair still applies), and jobs for the same item are
+     * grouped behind the first one when their due dates are close
+     * (campaignWindowDays). Default false.
+     */
+    setupOncePerGroup?: boolean;
+    /** Due-date window for grouping same-item jobs (days). Default 7. */
+    campaignWindowDays?: number;
   };
 }
 
@@ -145,6 +156,37 @@ export function overlapIndex(slots: OperationSlot[]): (start: Date, end: Date) =
     }
     return out;
   };
+}
+
+/**
+ * Campaign grouping for setup-once-per-group: keep the rule's order, but pull
+ * each later job for the same item up behind the first one when its due date
+ * is within `windowDays` of that first job's due date. Jobs without an item
+ * code are left where they are.
+ */
+export function groupSameItemJobs(jobs: Job[], windowDays: number): Job[] {
+  const windowMs = Math.max(0, windowDays) * 86_400_000;
+  const used = new Set<number>();
+  const out: Job[] = [];
+  for (let i = 0; i < jobs.length; i++) {
+    if (used.has(i)) continue;
+    const lead = jobs[i];
+    used.add(i);
+    out.push(lead);
+    const item = String(lead.itemCode || '').trim();
+    if (!item) continue;
+    const leadDue = lead.dueDate ? new Date(lead.dueDate).getTime() : NaN;
+    for (let k = i + 1; k < jobs.length; k++) {
+      if (used.has(k)) continue;
+      const other = jobs[k];
+      if (String(other.itemCode || '').trim() !== item) continue;
+      const due = other.dueDate ? new Date(other.dueDate).getTime() : NaN;
+      if (Number.isFinite(leadDue) && Number.isFinite(due) && due - leadDue > windowMs) continue;
+      used.add(k);
+      out.push(other);
+    }
+  }
+  return out;
 }
 
 export class SchedulingEngine {
@@ -451,7 +493,10 @@ export class SchedulingEngine {
       this.beyondHorizon.clear();
 
       // Step 1: Sort jobs by rule and due date
-      const prioritizedJobs = this.prioritizeJobs(context.jobs, context.schedulingRule || 'priority');
+      const ordered = this.prioritizeJobs(context.jobs, context.schedulingRule || 'priority');
+      const prioritizedJobs = context.ruleToggles?.setupOncePerGroup
+        ? groupSameItemJobs(ordered, context.ruleToggles.campaignWindowDays ?? 7)
+        : ordered;
 
       // Step 2: Initialize capacity loads
       this.initializeLoads(context);
@@ -1202,7 +1247,15 @@ export class SchedulingEngine {
     context: SchedulingContext
   ): Operation {
     if (!this.constraintManager || context.ruleToggles?.useSetupTime === false) return operation;
-    if (!prevItemCode || prevItemCode === job.itemCode) return operation;
+    if (!prevItemCode) return operation;
+    if (prevItemCode === job.itemCode) {
+      // Same item back-to-back: no changeover when setup-once-per-group is on,
+      // unless the matrix has an explicit same-item entry.
+      if (!context.ruleToggles?.setupOncePerGroup) return operation;
+      const explicit = this.constraintManager.getSequenceSetupTime(prevItemCode, job.itemCode, operation.workcentreId);
+      const setup = explicit ?? 0;
+      return setup !== operation.setupTime ? { ...operation, setupTime: setup } : operation;
+    }
     const seqDuration = this.constraintManager.calculateOperationDuration(operation, prevItemCode, job.itemCode);
     const adjustedSetup = Math.max(0, seqDuration - operation.duration - (operation.queueTime || 0));
     return adjustedSetup !== operation.setupTime ? { ...operation, setupTime: adjustedSetup } : operation;
