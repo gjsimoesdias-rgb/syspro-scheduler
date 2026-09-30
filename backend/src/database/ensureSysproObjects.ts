@@ -58,6 +58,55 @@ const STATEMENTS: Array<{ label: string; sql: string }> = [
             CREATE INDEX IX_aps_Scenarios_Base ON aps.Scenarios (BaseScheduleId);
           END`,
   },
+  {
+    // Plan versions (phase 5): the IsLatest row is the Master plan, other
+    // 'Plan' rows are its history, 'WhatIf' rows are what-if versions.
+    label: 'aps.SavedSchedules version columns',
+    sql: `IF COL_LENGTH('aps.SavedSchedules', 'VersionKind') IS NULL
+            ALTER TABLE aps.SavedSchedules ADD VersionKind NVARCHAR(10) NOT NULL
+              CONSTRAINT DF_aps_SavedSchedules_VersionKind DEFAULT ('Plan');
+          IF COL_LENGTH('aps.SavedSchedules', 'VersionName') IS NULL
+            ALTER TABLE aps.SavedSchedules ADD VersionName NVARCHAR(120) NULL;
+          IF COL_LENGTH('aps.SavedSchedules', 'BasedOnId') IS NULL
+            ALTER TABLE aps.SavedSchedules ADD BasedOnId NVARCHAR(80) NULL;
+          IF COL_LENGTH('aps.SavedSchedules', 'CreatedBy') IS NULL
+            ALTER TABLE aps.SavedSchedules ADD CreatedBy NVARCHAR(100) NULL;
+          IF COL_LENGTH('aps.SavedSchedules', 'MetricsJson') IS NULL
+            ALTER TABLE aps.SavedSchedules ADD MetricsJson NVARCHAR(MAX) NULL;`,
+  },
+  {
+    // One-time: old Draft scenarios become what-if versions (kept in
+    // aps.Scenarios too, so nothing is lost if this is rolled back).
+    label: 'migrate aps.Scenarios to what-if versions',
+    sql: `IF OBJECT_ID('aps.Scenarios', 'U') IS NOT NULL
+            EXEC sp_executesql N'
+              INSERT INTO aps.SavedSchedules
+                (ScheduleID, ScheduleData, Status, SavedAt, IsLatest, VersionKind, VersionName, BasedOnId, CreatedBy)
+              SELECT s.ScenarioId, s.ScheduleData, ''Draft'', GETDATE(), 0, ''WhatIf'', s.Name, s.BaseScheduleId, s.CreatedBy
+              FROM aps.Scenarios s
+              WHERE s.Status = ''Draft''
+                AND NOT EXISTS (SELECT 1 FROM aps.SavedSchedules v WHERE v.ScheduleID = s.ScenarioId)';`,
+  },
+  {
+    // Per-job publish status (phase 5): what was last sent to SYSPRO per job,
+    // so publishing can be incremental and each job shows pending/published/error.
+    label: 'aps.JobPublishStatus',
+    sql: `IF OBJECT_ID('aps.JobPublishStatus', 'U') IS NULL
+          BEGIN
+            CREATE TABLE aps.JobPublishStatus (
+              JobId          NVARCHAR(30)  NOT NULL CONSTRAINT PK_aps_JobPublishStatus PRIMARY KEY,
+              ScheduleId     NVARCHAR(80)  NULL,
+              Status         NVARCHAR(12)  NOT NULL,          -- Published | Error | Unpublished
+              PlannedStart   DATETIME      NULL,
+              PlannedEnd     DATETIME      NULL,
+              Fingerprint    NVARCHAR(64)  NULL,              -- hash of the op dates last sent
+              PublishedAt    DATETIME      NULL,
+              PublishedBy    NVARCHAR(100) NULL,
+              LastError      NVARCHAR(1000) NULL,
+              UpdatedAt      DATETIME      NOT NULL CONSTRAINT DF_aps_JobPublishStatus_UpdatedAt DEFAULT (GETDATE())
+            );
+          END`,
+  },
 ];
 
 /**

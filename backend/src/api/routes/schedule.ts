@@ -24,7 +24,7 @@ import { completeJobFamilies } from '../../utils/jobFamilies';
 import { stripCompletedOperations } from '../../utils/jobFilters';
 import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
-import { saveAsLatest, promoteToLatest } from '../../services/ScheduleStore';
+import { saveAsLatest, promoteToLatest, saveIntoWhatIf } from '../../services/ScheduleStore';
 
 const router = Router();
 
@@ -467,11 +467,25 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
     }
 
     // Auto-save to DB so the schedule survives page reloads (atomic — see ScheduleStore).
-    try {
-      const { jobCount } = await saveAsLatest(sysproDb, schedule, { status: 'Draft', generatedAt: new Date() });
-      req.log.info({ jobCount }, 'Schedule auto-saved to DB');
-    } catch (saveErr) {
-      req.log.warn({ err: saveErr }, 'Could not auto-save schedule to DB (non-blocking)');
+    // With a versionId the run goes into that what-if and the master is untouched.
+    const targetVersionId = typeof req.body?.versionId === 'string' ? req.body.versionId : undefined;
+    if (targetVersionId) {
+      try {
+        await saveIntoWhatIf(sysproDb, targetVersionId, schedule);
+        schedule.scheduleId = targetVersionId;
+        req.log.info({ versionId: targetVersionId }, 'Schedule saved into what-if version');
+      } catch (saveErr: any) {
+        return res.status(saveErr?.status || 500).json({ error: saveErr?.message || 'Could not save into the what-if version' });
+      }
+    } else {
+      try {
+        const { jobCount } = await saveAsLatest(sysproDb, schedule, {
+          status: 'Draft', generatedAt: new Date(), createdBy: (req as any).user?.username,
+        });
+        req.log.info({ jobCount }, 'Schedule auto-saved to DB');
+      } catch (saveErr) {
+        req.log.warn({ err: saveErr }, 'Could not auto-save schedule to DB (non-blocking)');
+      }
     }
 
     res.json({

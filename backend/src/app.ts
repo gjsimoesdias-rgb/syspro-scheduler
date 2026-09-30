@@ -20,6 +20,7 @@ import appSettingsRoutes from './api/routes/appSettings';
 import auditRoutes from './api/routes/audit';
 import eventsRoutes from './api/routes/events';
 import scenariosRoutes from './api/routes/scenarios';
+import versionsRoutes from './api/routes/versions';
 import shopfloorRoutes from './api/routes/shopfloor';
 import rateLimit from 'express-rate-limit';
 import environment from './config/environment';
@@ -127,6 +128,7 @@ app.use('/api/licenses', requireAuth, licenseRoutes);
 app.use('/api/settings', requireAuth, appSettingsRoutes);
 app.use('/api/audit', requireAuth, auditRoutes);
 app.use('/api/scenarios', requireAuth, scenariosRoutes);
+app.use('/api/versions', requireAuth, versionsRoutes);
 
 // Serve the React frontend whenever a `frontend/build/` directory is
 // present. We deliberately don't require NODE_ENV=production any more —

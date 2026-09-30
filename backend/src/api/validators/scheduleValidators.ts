@@ -52,6 +52,8 @@ export const generateScheduleSchema = z.object({
   lineGroupOverrides: z.record(z.string(), z.string()).optional(),
   /** Frozen zone (firm time fence) in days. 0/omitted = off. */
   freezeHorizonDays: z.number().min(0).max(365).optional(),
+  /** Save the result into this what-if version instead of replacing the master. */
+  versionId: z.string().min(1).max(80).optional(),
 });
 
 export type GenerateScheduleBody = z.infer<typeof generateScheduleSchema>;
