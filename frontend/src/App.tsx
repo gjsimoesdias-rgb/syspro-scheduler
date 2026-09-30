@@ -322,7 +322,11 @@ const App: React.FC = () => {
         case 'lockedOps': return (job.operations || []).filter((o) => pinnedOps.has(`${job.jobId}::${o.opId}`)).length;
         case 'publishState': return publishByJob.get(String(job.jobId).trim()) ?? '';
         case 'validForScheduling': return job.operations?.length ? 'Yes' : 'No operations';
-        default: return formatJobColumnValue(job, key);
+        default: {
+          // Numbers go out raw (not "1,960") so Excel can sum them.
+          const raw = (job as Record<string, unknown>)[key];
+          return typeof raw === 'number' ? raw : formatJobColumnValue(job, key);
+        }
       }
     };
     const cols = orderedVisibleColumns;
@@ -806,6 +810,21 @@ const App: React.FC = () => {
       return;
     }
 
+    // The saved master plan is the board's source of truth (it has real
+    // KPIs, resource loads and violations). The SYSPRO-dates view below is
+    // only a placeholder until it loads, or the fallback when none exists.
+    if (openJobs.length > 0 && dbStatus.sysproConnected) {
+      scheduleService.loadLatest()
+        .then(({ schedule: master }) => {
+          const st = useScheduleStore.getState();
+          if (master && (st.scheduleSource === 'none' || st.scheduleSource === 'syspro') && !st.activeVersion) {
+            setSchedule(convertScheduleDates(master));
+            setScheduleSource('restored');
+          }
+        })
+        .catch(() => { /* no saved plan yet */ });
+    }
+
     const sysproSchedule = buildScheduleFromSyspro(openJobs);
     if (sysproSchedule) {
       setSchedule(sysproSchedule);
@@ -830,20 +849,6 @@ const App: React.FC = () => {
     setSchedule(null);
     if (scheduleSource !== 'none') {
       setScheduleSource('none');
-    }
-
-    // Nothing scheduled in SYSPRO yet: show the saved master plan instead of
-    // an empty board (once jobs are loaded, so the board has its context).
-    if (openJobs.length > 0 && dbStatus.sysproConnected) {
-      scheduleService.loadLatest()
-        .then(({ schedule: master }) => {
-          const st = useScheduleStore.getState();
-          if (master && st.scheduleSource === 'none' && !st.activeVersion) {
-            setSchedule(convertScheduleDates(master));
-            setScheduleSource('restored');
-          }
-        })
-        .catch(() => { /* no saved plan yet */ });
     }
   }, [openJobs, scheduleSource, buildScheduleFromSyspro, activePlanningInterval, dbStatus.sysproConnected]);
 

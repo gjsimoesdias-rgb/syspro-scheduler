@@ -65,6 +65,12 @@ const StockPanel: React.FC<StockPanelProps> = ({ isDarkMode }) => {
     return sortAsc ? cmp : -cmp;
   });
 
+  // 7,900 stock rows rendered at once froze the tab. Show 300 at a time;
+  // search/filters narrow the list, "Show more" extends it.
+  const [rowLimit, setRowLimit] = React.useState(300);
+  React.useEffect(() => { setRowLimit(300); }, [search, warehouseFilter, lowStockOnly]);
+  const shown = sorted.slice(0, rowLimit);
+
   const SortArrow = ({ col }: { col: keyof StockItem }) =>
     sortKey === col ? <span className="sort-arrow">{sortAsc ? ' ↑' : ' ↓'}</span> : null;
 
@@ -131,7 +137,7 @@ const StockPanel: React.FC<StockPanelProps> = ({ isDarkMode }) => {
             {sorted.length === 0 && !loading && (
               <tr><td colSpan={11} className="inv-empty">No items found</td></tr>
             )}
-            {sorted.map((item, i) => (
+            {shown.map((item, i) => (
               <tr key={`${item.StockCode}-${item.Warehouse}-${i}`} className={stockStatus(item)}>
                 <td className="code">{item.StockCode}</td>
                 <td>{item.Description}</td>
@@ -149,6 +155,12 @@ const StockPanel: React.FC<StockPanelProps> = ({ isDarkMode }) => {
           </tbody>
         </table>
       </div>
+      {sorted.length > shown.length && (
+        <div className="inv-more">
+          Showing {shown.length} of {sorted.length} — search or filter to narrow, or{' '}
+          <button className="inv-refresh-btn" onClick={() => setRowLimit((n) => n + 1000)}>show 1,000 more</button>
+        </div>
+      )}
     </div>
   );
 };

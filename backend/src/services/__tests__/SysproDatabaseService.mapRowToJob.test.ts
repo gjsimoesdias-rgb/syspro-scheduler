@@ -109,3 +109,11 @@ describe('mapRowToJob — core field mapping', () => {
     expect(job.operations).toBe(ops);
   });
 });
+
+describe('mapRowToJob — duplicated MasterJob column', () => {
+  it('reads the link from an mssql array and ignores empty arrays', () => {
+    const svc = makeService();
+    expect(svc.mapRowToJob(baseRow({ masterJobId: null, MasterJob: ['', null] }), []).masterJobId).toBeNull();
+    expect(svc.mapRowToJob(baseRow({ masterJobId: null, MasterJob: ['', '000000000038413'] }), []).masterJobId).toBe('000000000038413');
+  });
+});

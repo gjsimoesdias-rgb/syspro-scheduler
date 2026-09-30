@@ -19,6 +19,12 @@ import { apiClient, apiErrorMessage } from '../services/api';
 import type { Job, Resource } from '../types';
 import './OrderPromisePanel.css';
 
+/** 1200.37 → "20h 0m"; 45 → "45m". */
+const fmtMinutes = (m: number): string => {
+  const t = Math.round(Number(m) || 0);
+  return t >= 60 ? `${Math.floor(t / 60)}h ${t % 60}m` : `${t}m`;
+};
+
 interface OpRow {
   id: number;
   workcentreId: string;
@@ -507,9 +513,9 @@ const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
                     <td>{p.resourceName || p.resourceId}</td>
                     <td>{fmtDT(p.start)}</td>
                     <td>{fmtDT(p.end)}</td>
-                    <td className="num">{p.setupMinutes}m</td>
-                    <td className="num">{p.runMinutes}m</td>
-                    <td className="num">{p.waitMinutes}m</td>
+                    <td className="num">{fmtMinutes(p.setupMinutes)}</td>
+                    <td className="num">{fmtMinutes(p.runMinutes)}</td>
+                    <td className="num">{fmtMinutes(p.waitMinutes)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -6,6 +6,9 @@
 export function toCsv(headers: string[], rows: Array<Array<unknown>>): string {
   const cell = (v: unknown): string => {
     let s = v === null || v === undefined ? '' : v instanceof Date ? v.toISOString() : String(v);
+    // SYSPRO keys like 000000000038413: keep them as text so Excel doesn't
+    // turn them into 3.8413E+10. Digits only, so the ="..." form is safe.
+    if (/^0\d+$/.test(s)) return '"=""' + s + '"""';
     if (/^[=+\-@]/.test(s)) s = `'${s}`;
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };

@@ -171,3 +171,9 @@ describe('describeDependencyViolation', () => {
     expect(msg).toBeNull();
   });
 });
+
+describe('getMasterLinkValue — junk links', () => {
+  it('treats punctuation-only and all-zero links as no master', () => {
+    expect(buildParentMap([makeJob('A', { masterJobId: ',' }), makeJob('B', { masterJobId: '000000000000000' })]).size).toBe(0);
+  });
+});

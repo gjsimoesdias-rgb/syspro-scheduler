@@ -39,11 +39,16 @@ export const getMasterLinkValue = (job: Job): string => {
     ?? source.parentJob
     ?? source.ParentJobId
     ?? source.parentJobId;
-  const normalized = Array.isArray(raw) ? raw[0] : raw;
+  // A duplicated column (wm.* plus an alias) comes back from mssql as an array;
+  // take the first non-empty entry rather than blindly the first.
+  const normalized = Array.isArray(raw) ? raw.find((v) => String(v ?? '').trim()) : raw;
   const text = String(normalized || '').trim();
   // SYSPRO job numbers can be alphanumeric — return the id as-is. (Stripping
   // non-digits and padding turned "MST-1" into "000000000000001", which then
-  // never matched the master's jobId.)
+  // never matched the master's jobId.) Values with no letters/digits (",",
+  // "-") or all zeros are empty links, not a master called "," — the live
+  // data has 34 such rows, which formed one phantom family.
+  if (!/[A-Za-z0-9]/.test(text) || /^0+$/.test(text)) return '';
   return text;
 };
 

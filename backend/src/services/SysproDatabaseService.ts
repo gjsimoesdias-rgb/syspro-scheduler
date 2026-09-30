@@ -53,6 +53,16 @@ import { computeMaterialPlans, RequirementLine } from './materialPlan';
  * only OperationStatus meant completed operations were never recognised and
  * got rescheduled.
  */
+/** First non-blank value of a scalar or duplicated-column array; null when none has a letter/digit. */
+const firstLinkValue = (value: unknown): string | null => {
+  const values = Array.isArray(value) ? value : [value];
+  for (const v of values) {
+    const text = String(v ?? '').trim();
+    if (/[A-Za-z0-9]/.test(text) && !/^0+$/.test(text)) return text;
+  }
+  return null;
+};
+
 /** SYSPRO char keys come back space-padded; compare jobs on the trimmed id. */
 const jobKey = (value: unknown): string => String(value ?? '').trim();
 
@@ -170,7 +180,9 @@ export class SysproDatabaseService {
       estimatedMaterialCost: Number(row.estimatedMaterialCost) || 0,
       // SYSPRO master/sub-job hierarchy (WipMasterSub) — used by the engine
       // to enforce "sub-jobs finish before the master starts" precedence.
-      masterJobId: row.masterJobId ?? row.MasterJob ?? null,
+      // wm.* plus the MasterJob alias makes mssql return MasterJob as an array
+      // (['', null] -> String() = ","), so take the first real value.
+      masterJobId: firstLinkValue(row.masterJobId) ?? firstLinkValue(row.MasterJob),
       isMasterJob: row.IsMasterJob === true || row.IsMasterJob === 1,
       isSubJob: row.IsSubJob === true || row.IsSubJob === 1
     });

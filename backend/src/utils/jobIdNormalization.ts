@@ -62,7 +62,8 @@ export const resolveMasterLinks = (jobs: Job[]): MasterLinkResolution => {
 
   for (const job of jobs as LinkedJob[]) {
     const raw = String(job.masterJobId ?? '').trim();
-    if (!raw) {
+    // Punctuation-only / all-zero values (e.g. "," from a duplicated column) are no link.
+    if (!raw || !/[A-Za-z0-9]/.test(raw) || /^0+$/.test(raw)) {
       job.masterJobId = null;
       continue;
     }

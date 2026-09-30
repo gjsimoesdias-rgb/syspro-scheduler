@@ -49,11 +49,12 @@ const MAX_NODES = 500;
 /**
  * Both lookups are batched: one round trip per BOM level instead of two per
  * component. Codes arrive as @c0..@cN, go into a #codes temp table (visible to
- * the inner sp_executesql), and each row carries the parent/stock code so the
+ * the inner sp_executesql; COLLATE DATABASE_DEFAULT because tempdb's collation
+ * differs from SYSPRO's Latin1_General_BIN), and each row carries the parent/stock code so the
  * caller can split the result.
  */
 const codesPrelude = (n: number) =>
-  `CREATE TABLE #codes (sc NVARCHAR(50) PRIMARY KEY);
+  `CREATE TABLE #codes (sc NVARCHAR(50) COLLATE DATABASE_DEFAULT PRIMARY KEY);
   INSERT INTO #codes (sc) VALUES ${Array.from({ length: n }, (_, i) => `(@c${i})`).join(', ')};`;
 
 const STRUCTURE_BODY = `
