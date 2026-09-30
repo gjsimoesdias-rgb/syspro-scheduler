@@ -231,6 +231,7 @@ describe('AppStateStore.hydrateAppLocals', () => {
         'constraintOverrides',
         'alternativeGroups',
         'pinnedOperations',
+        'calendarExceptions',
       ])
     );
 

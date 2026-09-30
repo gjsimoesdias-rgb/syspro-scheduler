@@ -16,6 +16,7 @@ import environment from '../../config/environment';
 import { Job, ScheduleRequest, PinnedOperation } from '../../types';
 import { validate, generateScheduleSchema, saveScheduleSchema, approveOverrideSchema, setupMatrixRowSchema, setupMatrixBulkSchema, setupClassBulkSchema, ctpRequestSchema, optimizeScheduleSchema } from '../validators/scheduleValidators';
 import { computeCtp } from '../../services/CtpService';
+import { applyCalendarExceptions } from '../../utils/calendarExceptions';
 import { rankRuleResults, RULE_LABELS, ALL_RULES, type SchedulingRule, type RuleResult } from '../../services/RuleOptimizerService';
 import { buildBomTree } from '../../services/BomTreeService';
 import { setLocal } from '../../utils/setLocal';
@@ -113,7 +114,10 @@ const mergeImportedJobs = (app: any, jobs: Job[]): Job[] => {
   return merged;
 };
 
-const applyAssignedShiftCalendars = (app: any, resources: any[]) => {
+const applyAssignedShiftCalendars = (app: any, resources: any[]) =>
+  applyCalendarExceptions(applyShiftTemplates(app, resources), app.locals.calendarExceptions);
+
+const applyShiftTemplates = (app: any, resources: any[]) => {
   const definitions = app.locals.resourceDefinitions || {};
   const shifts = app.locals.shiftTemplates || [];
   const shiftById = new Map<string, any>(shifts.map((shift: any) => [String(shift.shiftId), shift]));

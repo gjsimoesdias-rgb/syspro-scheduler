@@ -33,6 +33,8 @@
  * placement breakdown the planner can inspect.
  */
 
+import { exceptionForDay, exceptionWindowMinutes } from '../utils/calendarExceptions';
+
 export interface CtpOperationInput {
   workcentreId: string;
   setupMinutes: number;
@@ -59,6 +61,7 @@ export interface CtpResourceInfo {
   name?: string;
   calendar?: {
     workingDays?: number[];
+    holidays?: Array<{ date: unknown; isWorking?: boolean; startTime?: string; endTime?: string }>;
     shifts?: Array<{ startTime?: string; endTime?: string; diversions?: ShiftDiversion[] }>;
   };
 }
@@ -122,7 +125,11 @@ export function windowsForDay(res: CtpResourceInfo, dayStart: number): BusyInter
   const workingDays = Array.isArray(cal?.workingDays) && cal!.workingDays!.length > 0
     ? cal!.workingDays!
     : [1, 2, 3, 4, 5];
-  if (!workingDays.includes(weekday)) return [];
+  const exception = exceptionForDay(cal, new Date(dayStart));
+  if (exception) {
+    const forced = exceptionWindowMinutes(exception);
+    if (forced) return forced.map(({ start, end }) => ({ start: dayStart + start * 60000, end: dayStart + end * 60000 }));
+  } else if (!workingDays.includes(weekday)) return [];
 
   const shifts = Array.isArray(cal?.shifts) && cal!.shifts!.length > 0
     ? cal!.shifts!

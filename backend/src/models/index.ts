@@ -2,6 +2,7 @@
  * Core scheduling models/DTOs
  */
 
+import { holidayKey, localDayKey } from '../utils/calendarExceptions';
 import {
   Job,
   Operation,
@@ -150,8 +151,7 @@ export class CalendarModel implements Calendar {
     const dayOfWeek = date.getDay();
     // Check if it's a holiday
     const isHoliday = this.holidays.some(
-      (h) =>
-        h.date.toDateString() === date.toDateString() && !h.isWorking
+      (h) => holidayKey(h.date) === localDayKey(date) && !h.isWorking && !h.startTime
     );
     if (isHoliday) return false;
     return this.workingDays.includes(dayOfWeek);

@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ISchedulingEngine } from './ISchedulingEngine';
 import type { SchedulingContext } from './SchedulingEngine';
 import { logger } from '../utils/logger';
+import { exceptionForDay, exceptionWindowMinutes } from '../utils/calendarExceptions';
 import type {
   Schedule,
   JobSchedule,
@@ -42,13 +43,6 @@ function calendarToAvailabilityWindows(
   const windows: number[][] = [];
   const MS_PER_DAY = 86_400_000;
 
-  // Build a Set of holiday dates that are non-working (YYYY-MM-DD strings)
-  const nonWorkingHolidays = new Set<string>(
-    (calendar.holidays ?? [])
-      .filter((h) => !h.isWorking)
-      .map((h) => new Date(h.date).toISOString().slice(0, 10)),
-  );
-
   // Determine shifts to use
   const shifts =
     calendar.shifts && calendar.shifts.length > 0
@@ -73,18 +67,23 @@ function calendarToAvailabilityWindows(
     const jsDay = cursor.getUTCDay(); // 0=Sunday … 6=Saturday
     const dateStr = cursor.toISOString().slice(0, 10);
 
-    const isWorkingDay =
-      calendar.workingDays.includes(jsDay) &&
-      !nonWorkingHolidays.has(dateStr);
+    // Holidays / short days / extra working days override the weekly pattern.
+    const exception = exceptionForDay(calendar, dateStr);
+    const forced = exception ? exceptionWindowMinutes(exception) : null;
+    const isWorkingDay = exception ? true : calendar.workingDays.includes(jsDay);
+    const dayShifts: Array<{ startMin: number; endMin: number }> = forced
+      ? forced.map((w) => ({ startMin: w.start, endMin: w.end }))
+      : shifts.map((sh) => {
+          const [startH, startM] = sh.startTime.split(':').map(Number);
+          const [endH, endM] = sh.endTime.split(':').map(Number);
+          return { startMin: startH * 60 + startM, endMin: endH * 60 + endM };
+        });
 
     if (isWorkingDay) {
-      for (const shift of shifts) {
-        const [startH, startM] = shift.startTime.split(':').map(Number);
-        const [endH, endM] = shift.endTime.split(':').map(Number);
-
+      for (const shift of dayShifts) {
         const dayEpoch = cursor.getTime() / 1000; // midnight UTC in seconds
-        const shiftStart = dayEpoch + startH * 3600 + startM * 60;
-        let shiftEnd = dayEpoch + endH * 3600 + endM * 60;
+        const shiftStart = dayEpoch + shift.startMin * 60;
+        let shiftEnd = dayEpoch + shift.endMin * 60;
 
         // Handle overnight shifts (e.g. 22:00–06:00)
         if (shiftEnd <= shiftStart) shiftEnd += 86_400;

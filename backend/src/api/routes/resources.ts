@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express';
 import SysproDatabaseService from '../../services/SysproDatabaseService';
 import { setLocal } from '../../utils/setLocal';
 import { requirePlanner } from '../middleware/requireAuth';
+import { CalendarException, normaliseException } from '../../utils/calendarExceptions';
 
 const router = Router();
 
@@ -451,6 +452,58 @@ router.delete('/shifts/:shiftId', requirePlanner, (req: Request, res: Response) 
   } catch (error) {
     res.status(500).json({ error: (error as any).message || 'Failed to delete shift' });
   }
+});
+
+/**
+ * Calendar exceptions — holidays, shutdowns, short days, extra working days.
+ * GET    /api/resources/calendar-exceptions
+ * POST   /api/resources/calendar-exceptions        { date, name, scope?, isWorking?, startTime?, endTime? }
+ * PUT    /api/resources/calendar-exceptions/:id
+ * DELETE /api/resources/calendar-exceptions/:id
+ */
+const getExceptions = (req: Request): CalendarException[] => {
+  const locals = req.app.locals as any;
+  if (!Array.isArray(locals.calendarExceptions)) locals.calendarExceptions = [];
+  return locals.calendarExceptions as CalendarException[];
+};
+const sortExceptions = (list: CalendarException[]) =>
+  list.sort((a, b) => a.date.localeCompare(b.date) || a.scope.localeCompare(b.scope));
+
+router.get('/calendar-exceptions', (req: Request, res: Response) => {
+  res.json({ exceptions: sortExceptions([...getExceptions(req)]) });
+});
+
+router.post('/calendar-exceptions', requirePlanner, (req: Request, res: Response) => {
+  const result = normaliseException({ ...req.body, id: undefined });
+  if (typeof result === 'string') return res.status(400).json({ error: result });
+  const list = getExceptions(req);
+  if (list.some((e) => e.date === result.date && e.scope === result.scope)) {
+    return res.status(409).json({ error: `There is already an exception on ${result.date} for ${result.scope === 'plant' ? 'the whole plant' : result.scope}` });
+  }
+  list.push(result);
+  setLocal(req.app.locals, 'calendarExceptions', sortExceptions(list));
+  res.status(201).json({ exception: result });
+});
+
+router.put('/calendar-exceptions/:id', requirePlanner, (req: Request, res: Response) => {
+  const list = getExceptions(req);
+  const index = list.findIndex((e) => e.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: 'Calendar exception not found' });
+  const result = normaliseException({ ...req.body, id: req.params.id });
+  if (typeof result === 'string') return res.status(400).json({ error: result });
+  if (list.some((e, i) => i !== index && e.date === result.date && e.scope === result.scope)) {
+    return res.status(409).json({ error: `There is already an exception on ${result.date} for that scope` });
+  }
+  list[index] = result;
+  setLocal(req.app.locals, 'calendarExceptions', sortExceptions(list));
+  res.json({ exception: result });
+});
+
+router.delete('/calendar-exceptions/:id', requirePlanner, (req: Request, res: Response) => {
+  const list = getExceptions(req);
+  const next = list.filter((e) => e.id !== req.params.id);
+  setLocal(req.app.locals, 'calendarExceptions', next);
+  res.json({ deleted: next.length !== list.length });
 });
 
 /**

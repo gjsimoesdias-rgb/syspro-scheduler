@@ -279,9 +279,13 @@ export interface Shift {
 
 export interface Holiday {
   holidayId: string;
-  date: Date;
+  /** Date, or a YYYY-MM-DD local plant day (calendar exceptions). */
+  date: Date | string;
   name: string;
   isWorking: boolean;
+  /** Short day / overtime window; when set only this window is workable. */
+  startTime?: string;
+  endTime?: string;
 }
 
 export interface ShiftProfile {

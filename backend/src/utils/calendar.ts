@@ -3,6 +3,7 @@
  */
 
 import { Calendar, Holiday } from '../types';
+import { exceptionForDay, exceptionWindowMinutes, holidayKey } from './calendarExceptions';
 
 export class CalendarUtils {
   /**
@@ -11,18 +12,12 @@ export class CalendarUtils {
   static isWorkingDay(date: Date, calendar: Calendar): boolean {
     const dayOfWeek = date.getDay();
 
-    // Check if it's a non-working day
-    if (!calendar.workingDays.includes(dayOfWeek)) {
-      return false;
+    const exception = exceptionForDay(calendar, date);
+    if (exception) {
+      const forced = exceptionWindowMinutes(exception);
+      return forced === null || forced.length > 0;
     }
-
-    // Check if it's a holiday
-    const isHoliday = calendar.holidays.some(
-      (h) =>
-        h.date.toDateString() === date.toDateString() && !h.isWorking
-    );
-
-    return !isHoliday;
+    return calendar.workingDays.includes(dayOfWeek);
   }
 
   /**
@@ -83,9 +78,12 @@ export class CalendarUtils {
     endDate: Date,
     calendar: Calendar
   ): Holiday[] {
-    return calendar.holidays.filter(
-      (h) => h.date >= startDate && h.date <= endDate && !h.isWorking
-    );
+    const from = holidayKey(startDate);
+    const to = holidayKey(endDate);
+    return calendar.holidays.filter((h) => {
+      const key = holidayKey(h.date);
+      return key >= from && key <= to && !h.isWorking;
+    });
   }
 }
 

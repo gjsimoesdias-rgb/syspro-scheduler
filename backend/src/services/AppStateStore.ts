@@ -24,7 +24,8 @@ export type AppStateKey =
   | 'shiftTemplates'
   | 'constraintOverrides'
   | 'alternativeGroups'
-  | 'pinnedOperations';
+  | 'pinnedOperations'
+  | 'calendarExceptions';
 
 export class AppStateStore {
   constructor(private db: DatabaseConnection) {}
@@ -114,6 +115,7 @@ export class AppStateStore {
       'constraintOverrides',
       'alternativeGroups',
       'pinnedOperations',
+      'calendarExceptions',
     ];
     let restored = 0;
     for (const key of keys) {

@@ -3,6 +3,7 @@
  * Implements job, operation, and resource scheduling with constraints
  */
 
+import { localDayKey, exceptionForDay, exceptionWindowMinutes } from '../utils/calendarExceptions';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Job,
@@ -114,10 +115,7 @@ interface OperationSlot {
   itemCode?: string;
 }
 
-/** Local calendar day key (YYYY-MM-DD). toISOString() would give the UTC day, which in
- *  Brisbane (UTC+10) files everything before 10:00 under the previous day. */
-export const localDayKey = (d: Date): string =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export { localDayKey };
 
 export class SchedulingEngine {
   private resourceLoads: Map<string, OperationSlot[]> = new Map();
@@ -162,7 +160,18 @@ export class SchedulingEngine {
       ? calendar.workingDays
       : [1, 2, 3, 4, 5];
 
-    if (!workingDays.includes(weekday)) {
+    // Holidays, short days and extra working days override the weekly pattern.
+    const exception = exceptionForDay(calendar, day);
+    if (exception) {
+      const forced = exceptionWindowMinutes(exception);
+      if (forced) {
+        return forced.map(({ start, end }) => {
+          const s = new Date(day); s.setMinutes(start, 0, 0);
+          const e = new Date(day); e.setMinutes(end, 0, 0);
+          return { start: s, end: e };
+        });
+      }
+    } else if (!workingDays.includes(weekday)) {
       return [];
     }
 
