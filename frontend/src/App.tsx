@@ -2766,7 +2766,7 @@ const App: React.FC = () => {
           onUndo={handleUndo}
           onRedo={handleRedo}
           onOpenUserGuide={openUserGuide}
-          onCreateWhatIf={createWhatIfScenario}
+          onCreateWhatIf={() => setContentTab('history')}
           onClearWhatIf={clearWhatIfScenario}
           onOpenConnectionModal={() => setShowConnectionModal(true)}
           onOpenSettingsModal={() => setShowSettingsModal(true)}

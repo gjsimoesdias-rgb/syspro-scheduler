@@ -94,6 +94,8 @@ export interface OperationSlot {
   end: Date;         // machine-booked end (= runEnd)
   resourceId: string;
   isOvertime: boolean;
+  /** Minutes of the booking inside Overtime shift windows (0 when none). */
+  overtimeMinutes?: number;
   duration: number;  // machine-booked minutes (setup+run)
   // Phase breakdown (minutes)
   setupTime: number;
@@ -168,6 +170,8 @@ export class SchedulingEngine {
   private materialViolationsSeen: Set<string> = new Set();
   /** Ops whose slot search stopped at MAX_SLOT_ITERATIONS (explained in the violation). */
   private searchCapHit: Set<string> = new Set();
+  /** Ops whose earliest free slot would end after the planning horizon. */
+  private beyondHorizon: Set<string> = new Set();
   /**
    * Per-workcentre overtime budget, populated in initializeLoads from
    * workcentre.maxOvertimePerDay (with env default fallback). Read on each
@@ -186,10 +190,10 @@ export class SchedulingEngine {
    * same day thousands of times and rebuilding it was the engine's top cost.
    * Callers treat the result as read-only. Cleared at the start of each run.
    */
-  private windowCache = new WeakMap<object, Map<number, Array<{ start: Date; end: Date }>>>();
+  private windowCache = new WeakMap<object, Map<number, Array<{ start: Date; end: Date; overtime?: boolean }>>>();
   private static readonly NO_CALENDAR = {};
 
-  private getProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date }> {
+  private getProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date; overtime?: boolean }> {
     const cacheKey = calendar && typeof calendar === 'object' ? calendar : SchedulingEngine.NO_CALENDAR;
     let byDay = this.windowCache.get(cacheKey);
     if (!byDay) this.windowCache.set(cacheKey, (byDay = new Map()));
@@ -201,7 +205,7 @@ export class SchedulingEngine {
     return windows;
   }
 
-  private computeProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date }> {
+  private computeProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date; overtime?: boolean }> {
     const day = new Date(date);
     day.setHours(0, 0, 0, 0);
 
@@ -229,7 +233,7 @@ export class SchedulingEngine {
       ? calendar.shifts
       : [{ startTime: '08:00', endTime: '16:00', diversions: [] }];
 
-    const windows: Array<{ start: Date; end: Date }> = [];
+    const windows: Array<{ start: Date; end: Date; overtime?: boolean }> = [];
 
     for (const shift of shifts) {
       const diversions = Array.isArray((shift as any)?.diversions) ? (shift as any).diversions : [];
@@ -243,7 +247,7 @@ export class SchedulingEngine {
           start.setMinutes(startMinutes, 0, 0);
           const end = new Date(day);
           end.setMinutes(endMinutes, 0, 0);
-          windows.push({ start, end });
+          windows.push({ start, end, overtime: /overtime/i.test(String(diversion.type || '')) });
         }
       } else {
         const startMinutes = this.timeToMinutes((shift as any)?.startTime || '08:00');
@@ -330,7 +334,7 @@ export class SchedulingEngine {
       }
 
       remainingMs -= availableMs;
-      cursor = new Date(window.end.getTime() + 60 * 1000);
+      cursor = new Date(window.end.getTime()); // back-to-back windows (e.g. Production then Overtime) join without a lost minute
     }
 
     return null;
@@ -444,6 +448,7 @@ export class SchedulingEngine {
       this.constraints = [];
       this.materialViolationsSeen.clear();
       this.searchCapHit.clear();
+      this.beyondHorizon.clear();
 
       // Step 1: Sort jobs by rule and due date
       const prioritizedJobs = this.prioritizeJobs(context.jobs, context.schedulingRule || 'priority');
@@ -899,9 +904,13 @@ export class SchedulingEngine {
             affectedOperationId: operation.opId,
             description: this.searchCapHit.has(operation.opId)
               ? `Could not find a slot for operation ${operation.opId} (seq ${operation.sequence}): search stopped after ${MAX_SLOT_ITERATIONS} attempts — the line is booked almost solid over the horizon`
+              : this.beyondHorizon.has(operation.opId)
+              ? `Operation ${operation.opId} (seq ${operation.sequence}) needs ${(((operation.setupTime || 0) + (operation.duration || 0)) / 60).toFixed(1)} h of machine time and would finish after the planning horizon ends`
               : `Could not find available slot for operation ${operation.opId} (seq ${operation.sequence})`,
             suggestedAction: this.searchCapHit.has(operation.opId)
               ? 'Extend the horizon, add shift time on this line, or move lower-priority jobs out'
+              : this.beyondHorizon.has(operation.opId)
+              ? 'Extend the planning horizon (week range) so the operation can finish inside it'
               : 'Increase resource capacity or delay non-critical jobs'
           });
           // Break the chain — can't schedule subsequent ops without predecessor completion
@@ -1306,7 +1315,7 @@ export class SchedulingEngine {
         if (slot.isOvertime) {
           const day = localDayKey(slot.start);
           const key = `${slot.workcentreId}|${day}`;
-          const otHours = slot.duration / 60;
+          const otHours = (slot.overtimeMinutes ?? 0) / 60;
           const existing = this.overtimeUsage.get(key) ?? 0;
           const budget = this.overtimeBudget.get(slot.workcentreId) ?? environment.maxOvertimePerDay;
           if (existing + otHours > budget) {
@@ -1435,6 +1444,7 @@ export class SchedulingEngine {
 
       const runEnd = this.addMinutesAcrossProductiveWindows(runStart, runMinutes, resourceCalendar);
       if (!runEnd || runEnd > maxSearchDate) {
+        this.beyondHorizon.add(operation.opId);
         break;
       }
 
@@ -1451,11 +1461,12 @@ export class SchedulingEngine {
         // non-overtime — placing it on a day with no shift is already a
         // calendar violation and would have been rejected upstream; emitting
         // a spurious "overtime" flag here would just noise the metrics.
-        const dayWindows = this.getProductiveWindowsForDay(resourceCalendar, setupStart);
-        const primaryWindow = dayWindows[0];
-        const isOvertime = primaryWindow
-          ? (setupStart >= primaryWindow.end || runEnd > primaryWindow.end)
-          : false;
+        // Overtime = the part of the booking that falls in "Overtime" shift
+        // windows. (It used to be "runs past the first window of the start
+        // day", so every multi-day operation counted as overtime in full and
+        // was rejected against the 3 h/day budget — long jobs never scheduled.)
+        const overtimeMinutes = this.overtimeMinutesIn(resourceCalendar, setupStart, runEnd);
+        const isOvertime = overtimeMinutes > 0;
 
         return {
           opId: operation.opId,
@@ -1465,6 +1476,7 @@ export class SchedulingEngine {
           end: runEnd,
           resourceId: resource.resourceId,
           isOvertime,
+          overtimeMinutes,
           duration: bookedMinutes,
           setupTime: setupMinutes,
           runTime: runMinutes,
@@ -1565,7 +1577,7 @@ export class SchedulingEngine {
         if (slot.isOvertime) {
           const day = localDayKey(slot.start);
           const key = `${slot.workcentreId}|${day}`;
-          const otHours = slot.duration / 60;
+          const otHours = (slot.overtimeMinutes ?? 0) / 60;
           const existing = this.overtimeUsage.get(key) ?? 0;
           const budget = this.overtimeBudget.get(slot.workcentreId) ?? environment.maxOvertimePerDay;
           if (existing + otHours > budget) {
@@ -1682,11 +1694,12 @@ export class SchedulingEngine {
         // When no productive window exists for the day the slot has already
         // been rejected by the working-window gate above, so emitting a
         // spurious overtime flag here would only add noise.
-        const dayWindows = this.getProductiveWindowsForDay(resourceCalendar, setupStart);
-        const primaryWindow = dayWindows[0];
-        const isOvertime = primaryWindow
-          ? (setupStart >= primaryWindow.end || runEnd > primaryWindow.end)
-          : false;
+        // Overtime = the part of the booking that falls in "Overtime" shift
+        // windows. (It used to be "runs past the first window of the start
+        // day", so every multi-day operation counted as overtime in full and
+        // was rejected against the 3 h/day budget — long jobs never scheduled.)
+        const overtimeMinutes = this.overtimeMinutesIn(resourceCalendar, setupStart, runEnd);
+        const isOvertime = overtimeMinutes > 0;
 
         return {
           opId: operation.opId,
@@ -1696,6 +1709,7 @@ export class SchedulingEngine {
           end: runEnd,
           resourceId: resource.resourceId,
           isOvertime,
+          overtimeMinutes,
           duration: bookedMinutes,
           setupTime: setupMinutes,
           runTime: runMinutes,
@@ -1736,8 +1750,7 @@ export class SchedulingEngine {
     if (slot.isOvertime) {
       const day = localDayKey(slot.capacityStart);
       const key = `${slot.workcentreId}|${day}`;
-      const otHours =
-        (slot.capacityEnd.getTime() - slot.capacityStart.getTime()) / 3600000;
+      const otHours = (slot.overtimeMinutes ?? 0) / 60;
       const total = (this.overtimeUsage.get(key) || 0) + otHours;
       this.overtimeUsage.set(key, total);
 
@@ -1830,22 +1843,27 @@ export class SchedulingEngine {
       const slots = this.resourceLoads.get(resource.resourceId) || [];
       const dayLoads = new Map<string, { regular: number; overtime: number }>();
 
-      slots.forEach((slot) => {
-        const dayKey = slot.capacityStart.toDateString();
-        if (!dayLoads.has(dayKey)) {
-          dayLoads.set(dayKey, { regular: 0, overtime: 0 });
-        }
-        const load = dayLoads.get(dayKey)!;
-        const occupiedHours = (slot.capacityEnd.getTime() - slot.capacityStart.getTime()) / 3600000;
-        if (slot.isOvertime) {
-          load.overtime += occupiedHours;
-        } else {
-          load.regular += occupiedHours;
-        }
-      });
-
       const calendar = (resource as any)?.calendar
         || (context.workcentres.get((resource as any).worcentreId) as any)?.calendar;
+
+      // Spread each booking over the days it actually runs (a 50 h operation
+      // used to be credited in full to its start day).
+      slots.forEach((slot) => {
+        const byDay = this.occupiedMinutesByDay(calendar, slot.capacityStart, slot.capacityEnd);
+        if (byDay.size === 0) {
+          byDay.set(localDayKey(slot.capacityStart), {
+            regular: (slot.capacityEnd.getTime() - slot.capacityStart.getTime()) / 60000, overtime: 0,
+          });
+        }
+        byDay.forEach((mins, key) => {
+          const [y, m, d] = key.split('-').map(Number);
+          const dayKey = new Date(y, m - 1, d).toDateString();
+          if (!dayLoads.has(dayKey)) dayLoads.set(dayKey, { regular: 0, overtime: 0 });
+          const load = dayLoads.get(dayKey)!;
+          load.regular += mins.regular / 60;
+          load.overtime += mins.overtime / 60;
+        });
+      });
       dayLoads.forEach((load, dayKey) => {
         const date = new Date(dayKey);
         // Utilization against that day's actual shift hours (was a hardcoded 8 h).
@@ -1862,6 +1880,38 @@ export class SchedulingEngine {
     });
 
     return loads;
+  }
+
+  /**
+   * Productive minutes a booking [from, to) actually occupies, per local day,
+   * split into regular and overtime (windows from "Overtime" diversions).
+   * A multi-day operation is spread over the days it runs, and the gaps
+   * between shifts are not counted.
+   */
+  private occupiedMinutesByDay(calendar: any, from: Date, to: Date): Map<string, { regular: number; overtime: number }> {
+    const out = new Map<string, { regular: number; overtime: number }>();
+    if (!(to > from)) return out;
+    const day = new Date(from);
+    day.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 400 && day < to; i++) {
+      for (const w of this.getProductiveWindowsForDay(calendar, day)) {
+        const ms = Math.min(w.end.getTime(), to.getTime()) - Math.max(w.start.getTime(), from.getTime());
+        if (ms <= 0) continue;
+        const key = localDayKey(day);
+        const entry = out.get(key) ?? { regular: 0, overtime: 0 };
+        if (w.overtime) entry.overtime += ms / 60000; else entry.regular += ms / 60000;
+        out.set(key, entry);
+      }
+      day.setDate(day.getDate() + 1);
+    }
+    return out;
+  }
+
+  /** Minutes of a booking that fall in overtime windows. */
+  private overtimeMinutesIn(calendar: any, from: Date, to: Date): number {
+    let total = 0;
+    this.occupiedMinutesByDay(calendar, from, to).forEach((v) => { total += v.overtime; });
+    return total;
   }
 
   /** Shift hours available on one day for a calendar (sum of productive windows). */

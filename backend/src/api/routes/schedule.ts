@@ -668,6 +668,9 @@ router.get('/latest', async (req: Request, res: Response) => {
 
     const row = result.recordset[0];
     const schedule = JSON.parse(row.ScheduleData);
+    // The row's Status is authoritative (approve/export update the row, not
+    // the JSON), so the board doesn't show an exported plan as "Draft".
+    if (row.Status) schedule.status = row.Status;
 
     res.json({
       schedule,

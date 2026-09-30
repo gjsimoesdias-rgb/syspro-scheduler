@@ -144,7 +144,6 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
           <button className="btn btn-sm" onClick={onLoadData} disabled={dataLoading}>Refresh</button>
           <button className="btn btn-sm" onClick={() => setShowSchemaModal(true)} title="Live database diagram — tables, views & relationships"><Database size={13} aria-hidden="true" /> Schema</button>
           <button className="btn btn-sm" onClick={toggleDarkMode}>{isDarkMode ? 'Light' : 'Dark'}</button>
-          {user && <button className="btn btn-sm" onClick={() => logout()} title={`Signed in as ${user.username}`}>Sign out</button>}
         </div>
       )}
 
@@ -209,7 +208,7 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
 
           <div className="aps-ribbon-group">
             <span className="aps-ribbon-title">WHAT-IF</span>
-            <button className="btn btn-sm" onClick={onCreateWhatIf} disabled={!schedule}><FlaskConical size={13} aria-hidden="true" /> New Scenario</button>
+            <button className="btn btn-sm" onClick={onCreateWhatIf}><FlaskConical size={13} aria-hidden="true" /> Plan versions</button>
             {whatIfSchedule && <button className="btn btn-sm" onClick={onClearWhatIf}><Trash2 size={13} aria-hidden="true" /> Clear Scenario</button>}
           </div>
 
@@ -256,7 +255,7 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
         <div className="aps-ribbon-group">
           <span className="aps-ribbon-title">EXPORT</span>
           <button className="btn btn-sm" onClick={() => onExport('csv')} disabled={loading || !schedule}>Production Jobs</button>
-          <button className="btn btn-sm" onClick={() => onExport('pdf')} disabled={loading || !schedule}>Schedule History</button>
+          <button className="btn btn-sm" onClick={() => onExport('pdf')} disabled={loading || !schedule}>Schedule report (PDF)</button>
           <button className="btn btn-sm" onClick={() => onExport('json')} disabled={loading || !schedule}>Order Ticket</button>
         </div>
       )}

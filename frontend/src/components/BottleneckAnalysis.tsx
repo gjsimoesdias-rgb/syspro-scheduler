@@ -15,16 +15,21 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ resourceLoads }
   // Calculate average utilization per resource
   const resourceUtilization = resourceLoads.reduce((acc, load) => {
     if (!acc[load.resourceId]) {
-      acc[load.resourceId] = { total: 0, count: 0 };
+      acc[load.resourceId] = { total: 0, count: 0, maxHours: 0 };
     }
     acc[load.resourceId].total += load.utilizationRate;
     acc[load.resourceId].count += 1;
+    acc[load.resourceId].maxHours = Math.max(
+      acc[load.resourceId].maxHours,
+      (Number(load.regularHours) || 0) + (Number(load.overtimeHours) || 0)
+    );
     return acc;
-  }, {} as Record<string, { total: number; count: number }>);
+  }, {} as Record<string, { total: number; count: number; maxHours: number }>);
 
   const avgUtilization = Object.entries(resourceUtilization).map(([resourceId, data]) => ({
     resourceId,
     avgUtilization: data.total / data.count,
+    maxHours: data.maxHours,
     severity: (data.total / data.count) > 90 ? 'critical' : (data.total / data.count) > 70 ? 'high' : 'normal'
   }));
 
@@ -100,7 +105,7 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ resourceLoads }
           <thead>
             <tr>
               <th>Resource ID</th>
-              <th>Avg Utilization</th>
+              <th title="Average over the days the resource has work">Avg utilization</th>
               <th>Max Daily Hours</th>
               <th>Status</th>
             </tr>
@@ -119,8 +124,9 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ resourceLoads }
                       }}
                     />
                   </div>
+                  <span className="util-pct">{item.avgUtilization.toFixed(0)}%</span>
                 </td>
-                <td>{(item.avgUtilization * 0.08).toFixed(1)}h</td>
+                <td>{item.maxHours.toFixed(1)}h</td>
                 <td>{getSeverityLabel(item.avgUtilization)}</td>
               </tr>
             ))}

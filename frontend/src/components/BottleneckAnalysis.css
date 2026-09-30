@@ -190,3 +190,5 @@
   height: 100%;
   transition: width 0.2s;
 }
+.bottleneck-analysis .util-pct { margin-left: 6px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.bottleneck-analysis td .util-bar { display: inline-block; width: 75%; vertical-align: middle; }
