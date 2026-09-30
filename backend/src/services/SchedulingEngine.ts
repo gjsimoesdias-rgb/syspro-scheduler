@@ -86,7 +86,7 @@ export interface SchedulingContext {
   };
 }
 
-interface OperationSlot {
+export interface OperationSlot {
   opId: string;
   jobId: string;
   workcentreId: string;
@@ -116,6 +116,34 @@ interface OperationSlot {
 }
 
 export { localDayKey };
+
+/**
+ * Slot search probes "which booked slots overlap [start, end)?" many times per
+ * operation. Filtering the whole list each time made placement O(n²) per line.
+ * Sort once by capacityStart and binary-search: only slots starting in
+ * [start − longest slot, end) can overlap.
+ */
+const MAX_SLOT_ITERATIONS = 20000;
+
+export function overlapIndex(slots: OperationSlot[]): (start: Date, end: Date) => OperationSlot[] {
+  const sorted = [...slots].sort((a, b) => a.capacityStart.getTime() - b.capacityStart.getTime());
+  const starts = sorted.map((s) => s.capacityStart.getTime());
+  let longest = 0;
+  for (const s of sorted) longest = Math.max(longest, s.capacityEnd.getTime() - s.capacityStart.getTime());
+  const lowerBound = (t: number) => {
+    let lo = 0, hi = starts.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (starts[mid] < t) lo = mid + 1; else hi = mid; }
+    return lo;
+  };
+  return (start: Date, end: Date) => {
+    const s = start.getTime(), e = end.getTime();
+    const out: OperationSlot[] = [];
+    for (let i = lowerBound(s - longest); i < sorted.length && starts[i] < e; i++) {
+      if (sorted[i].capacityEnd.getTime() > s) out.push(sorted[i]);
+    }
+    return out;
+  };
+}
 
 export class SchedulingEngine {
   private resourceLoads: Map<string, OperationSlot[]> = new Map();
@@ -151,7 +179,27 @@ export class SchedulingEngine {
     return Math.max(0, Math.min(1440, hours * 60 + minutes));
   }
 
+  /**
+   * Windows per (calendar, local day), memoised: the slot search asks for the
+   * same day thousands of times and rebuilding it was the engine's top cost.
+   * Callers treat the result as read-only. Cleared at the start of each run.
+   */
+  private windowCache = new WeakMap<object, Map<number, Array<{ start: Date; end: Date }>>>();
+  private static readonly NO_CALENDAR = {};
+
   private getProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date }> {
+    const cacheKey = calendar && typeof calendar === 'object' ? calendar : SchedulingEngine.NO_CALENDAR;
+    let byDay = this.windowCache.get(cacheKey);
+    if (!byDay) this.windowCache.set(cacheKey, (byDay = new Map()));
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    const dayMs = day.getTime();
+    let windows = byDay.get(dayMs);
+    if (!windows) byDay.set(dayMs, (windows = this.computeProductiveWindowsForDay(calendar, day)));
+    return windows;
+  }
+
+  private computeProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date }> {
     const day = new Date(date);
     day.setHours(0, 0, 0, 0);
 
@@ -390,6 +438,7 @@ export class SchedulingEngine {
       // Reset state
       this.resourceLoads.clear();
       this.workcentreLoads.clear();
+      this.windowCache = new WeakMap();
       this.constraints = [];
       this.materialViolationsSeen.clear();
 
@@ -1285,8 +1334,8 @@ export class SchedulingEngine {
     const bookedMinutes = setupMinutes + runMinutes;
     const capacityMs = bookedMinutes * 60 * 1000;
 
-    const resourceSlots = this.resourceLoads.get(resource.resourceId) || [];
-    const workcentreSlots = this.workcentreLoads.get(operation.workcentreId) || [];
+    const resourceSlots = overlapIndex(this.resourceLoads.get(resource.resourceId) || []);
+    const workcentreSlots = overlapIndex(this.workcentreLoads.get(operation.workcentreId) || []);
     const resourceCapacity = Math.max(1, context.resourceCapacities?.get(resource.resourceId) ?? 1);
     const workcentreCapacity = Math.max(1, context.workcentreCapacities?.get(operation.workcentreId) ?? 1);
 
@@ -1313,10 +1362,8 @@ export class SchedulingEngine {
 
     // Capacity conflict checking uses the capacityStart/capacityEnd of existing slots
     const findNextConflictEnd = (candidateStart: Date, candidateEnd: Date): Date | null => {
-      const hasOverlap = (slot: OperationSlot) =>
-        slot.capacityStart < candidateEnd && slot.capacityEnd > candidateStart;
-      const overlappingResource = resourceSlots.filter(hasOverlap);
-      const overlappingWorkcentre = workcentreSlots.filter(hasOverlap);
+      const overlappingResource = resourceSlots(candidateStart, candidateEnd);
+      const overlappingWorkcentre = workcentreSlots(candidateStart, candidateEnd);
 
       const resourceBlocked = overlappingResource.length >= resourceCapacity;
       const workcentreBlocked = overlappingWorkcentre.length >= workcentreCapacity;
@@ -1342,11 +1389,12 @@ export class SchedulingEngine {
       return nextEnd;
     };
 
-    const MAX_SLOT_ITERATIONS = 1500;
     let iterations = 0;
 
     while (searchDate <= maxSearchDate) {
       if (++iterations > MAX_SLOT_ITERATIONS) {
+        logger.warn({ opId: operation.opId, resourceId: resource.resourceId, iterations: MAX_SLOT_ITERATIONS },
+          'Slot search gave up after the iteration cap — operation left unscheduled');
         break;
       }
 
@@ -1541,8 +1589,8 @@ export class SchedulingEngine {
     const moveMinutes = operation.moveTime || 0;
     const bookedMinutes = setupMinutes + runMinutes;
 
-    const resourceSlots = this.resourceLoads.get(resource.resourceId) || [];
-    const workcentreSlots = this.workcentreLoads.get(operation.workcentreId) || [];
+    const resourceSlots = overlapIndex(this.resourceLoads.get(resource.resourceId) || []);
+    const workcentreSlots = overlapIndex(this.workcentreLoads.get(operation.workcentreId) || []);
     const resourceCapacity = Math.max(1, context.resourceCapacities?.get(resource.resourceId) ?? 1);
     const workcentreCapacity = Math.max(1, context.workcentreCapacities?.get(operation.workcentreId) ?? 1);
 
@@ -1554,10 +1602,8 @@ export class SchedulingEngine {
     const isInWorkingWindow = (start: Date, end: Date): boolean => this.fitsProductiveWindow(start, end, resourceCalendar);
 
     const findPreviousConflictStart = (candidateStart: Date, candidateEnd: Date): Date | null => {
-      const hasOverlap = (slot: OperationSlot) =>
-        slot.capacityStart < candidateEnd && slot.capacityEnd > candidateStart;
-      const overlappingResource = resourceSlots.filter(hasOverlap);
-      const overlappingWorkcentre = workcentreSlots.filter(hasOverlap);
+      const overlappingResource = resourceSlots(candidateStart, candidateEnd);
+      const overlappingWorkcentre = workcentreSlots(candidateStart, candidateEnd);
 
       const resourceBlocked = overlappingResource.length >= resourceCapacity;
       const workcentreBlocked = overlappingWorkcentre.length >= workcentreCapacity;
@@ -1583,11 +1629,12 @@ export class SchedulingEngine {
       return previousStart;
     };
 
-    const MAX_SLOT_ITERATIONS = 1500;
     let iterations = 0;
 
     while (searchDate >= minSearchDate) {
       if (++iterations > MAX_SLOT_ITERATIONS) {
+        logger.warn({ opId: operation.opId, resourceId: resource.resourceId, iterations: MAX_SLOT_ITERATIONS },
+          'Slot search gave up after the iteration cap — operation left unscheduled');
         break;
       }
 
