@@ -7,12 +7,8 @@
  */
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  BarChart2, Target, TrendingUp, FlaskConical, Users, AlertTriangle,
-  Zap, BookOpen, Factory, Package, Settings2, GitBranch,
-  ClipboardList, CalendarCheck, Timer, Wand2, Link2, Scale, Layers,
-} from 'lucide-react';
-import { useUiStore } from '../stores/uiStore';
+import { BarChart2, Target, BookOpen, Factory, Settings2, CalendarCheck, type LucideIcon } from 'lucide-react';
+import { useUiStore, type ContentTab } from '../stores/uiStore';
 import { useScheduleStore } from '../stores/scheduleStore';
 import type { Resource, Job, ConstraintViolation } from '../types';
 import type { GanttSettingsState } from './GanttSettings';
@@ -41,6 +37,32 @@ const OrderPromisePanel     = lazy(() => import('./OrderPromisePanel'));
 const ChangeoverMatrix      = lazy(() => import('./ChangeoverMatrix'));
 const OptimizerPanel        = lazy(() => import('./OptimizerPanel'));
 const BomTreeView           = lazy(() => import('./BomTreeView'));
+
+
+// ── Views ─────────────────────────────────────────────────────────────────
+// 19 feature tabs grouped into six views, like LYNQ's single planning screen.
+type ViewGroupId = 'plan' | 'analyse' | 'materials' | 'versions' | 'promise' | 'setup';
+const VIEW_GROUPS: Array<{ id: ViewGroupId; label: string; icon: LucideIcon; tabs: Array<{ id: ContentTab; label: string }> }> = [
+  { id: 'plan', label: 'Plan', icon: BarChart2, tabs: [
+    { id: 'gantt', label: 'Gantt' }, { id: 'jobtree', label: 'Job tree' },
+    { id: 'dispatch', label: 'Dispatch list' }, { id: 'constraints', label: 'Constraints' },
+  ] },
+  { id: 'analyse', label: 'Analyse', icon: Target, tabs: [
+    { id: 'kpi', label: 'KPIs' }, { id: 'capacity', label: 'Capacity' }, { id: 'bottleneck', label: 'Bottleneck' },
+    { id: 'leveling', label: 'Leveling' }, { id: 'pegging', label: 'Pegging' },
+  ] },
+  { id: 'materials', label: 'Materials', icon: Factory, tabs: [
+    { id: 'materials', label: 'Material plan' }, { id: 'inventory', label: 'Inventory' }, { id: 'bomtree', label: 'Structure' },
+  ] },
+  { id: 'versions', label: 'Versions', icon: BookOpen, tabs: [
+    { id: 'history', label: 'Plan versions' }, { id: 'optimize', label: 'Optimize rules' }, { id: 'whatif', label: 'Quick what-if' },
+  ] },
+  { id: 'promise', label: 'Promise', icon: CalendarCheck, tabs: [{ id: 'ctp', label: 'Capable to promise' }] },
+  { id: 'setup', label: 'Setup', icon: Settings2, tabs: [
+    { id: 'resources', label: 'Resources' }, { id: 'changeovers', label: 'Changeover matrix' },
+  ] },
+];
+const groupOfTab = (tab: ContentTab) => VIEW_GROUPS.find((g) => g.tabs.some((t) => t.id === tab)) ?? VIEW_GROUPS[0];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +137,14 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
   const contentTab   = useUiStore((s) => s.contentTab);
   const setContentTab = useUiStore((s) => s.setContentTab);
   const activeVersion = useScheduleStore((s) => s.activeVersion);
+  const activeGroup = groupOfTab(contentTab);
+  // Each view reopens on the sub-view last used in it.
+  const [lastTabByGroup, setLastTabByGroup] = useState<Partial<Record<ViewGroupId, ContentTab>>>({});
+  useEffect(() => {
+    if (activeGroup.tabs.some((t) => t.id === contentTab)) {
+      setLastTabByGroup((m) => (m[activeGroup.id] === contentTab ? m : { ...m, [activeGroup.id]: contentTab }));
+    }
+  }, [contentTab, activeGroup]);
 
   // Compare and Scenarios were folded into the Versions tab.
   useEffect(() => {
@@ -145,29 +175,42 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <section className="aps-gantt-panel">
-      {/* Tab bar */}
-      <div className="feature-tab-bar">
-        <button className={`feature-tab ${contentTab === 'gantt' ? 'active' : ''}`} onClick={() => setContentTab('gantt')}><BarChart2 size={13} aria-hidden="true" /> Gantt</button>
-        <button className={`feature-tab ${contentTab === 'jobtree' ? 'active' : ''}`} onClick={() => setContentTab('jobtree')}><GitBranch size={13} aria-hidden="true" /> Job Tree</button>
-        <button className={`feature-tab ${contentTab === 'kpi' ? 'active' : ''}`} onClick={() => setContentTab('kpi')}><Target size={13} aria-hidden="true" /> KPIs</button>
-        <button className={`feature-tab ${contentTab === 'capacity' ? 'active' : ''}`} onClick={() => setContentTab('capacity')}><TrendingUp size={13} aria-hidden="true" /> Capacity</button>
-        <button className={`feature-tab ${contentTab === 'whatif' ? 'active' : ''}`} onClick={() => setContentTab('whatif')}><FlaskConical size={13} aria-hidden="true" /> What-If</button>
-        <button className={`feature-tab ${contentTab === 'resources' ? 'active' : ''}`} onClick={() => setContentTab('resources')}><Users size={13} aria-hidden="true" /> Resources</button>
-        <button className={`feature-tab ${contentTab === 'constraints' ? 'active' : ''}`} onClick={() => setContentTab('constraints')}>
-          <AlertTriangle size={13} aria-hidden="true" /> Constraints {schedule?.constraintViolations?.length ? <span className="badge">{schedule.constraintViolations.length}</span> : null}
-        </button>
-        <button className={`feature-tab ${contentTab === 'bottleneck' ? 'active' : ''}`} onClick={() => setContentTab('bottleneck')}><Zap size={13} aria-hidden="true" /> Bottleneck</button>
-        <button className={`feature-tab ${contentTab === 'history' ? 'active' : ''}`} onClick={() => setContentTab('history')}><BookOpen size={13} aria-hidden="true" /> Versions{activeVersion ? <span className="badge" title={`What-if open: ${activeVersion.name}`}>what-if</span> : null}</button>
-        <button className={`feature-tab ${contentTab === 'materials' ? 'active' : ''}`} onClick={() => setContentTab('materials')}><Factory size={13} aria-hidden="true" /> Materials</button>
-        <button className={`feature-tab ${contentTab === 'inventory' ? 'active' : ''}`} onClick={() => setContentTab('inventory')}><Package size={13} aria-hidden="true" /> Inventory</button>
-        <button className={`feature-tab ${contentTab === 'dispatch' ? 'active' : ''}`} onClick={() => setContentTab('dispatch')}><ClipboardList size={13} aria-hidden="true" /> Dispatch</button>
-        <button className={`feature-tab ${contentTab === 'ctp' ? 'active' : ''}`} onClick={() => setContentTab('ctp')}><CalendarCheck size={13} aria-hidden="true" /> Promise</button>
-        <button className={`feature-tab ${contentTab === 'changeovers' ? 'active' : ''}`} onClick={() => setContentTab('changeovers')}><Timer size={13} aria-hidden="true" /> Changeover Matrix</button>
-        <button className={`feature-tab ${contentTab === 'optimize' ? 'active' : ''}`} onClick={() => setContentTab('optimize')}><Wand2 size={13} aria-hidden="true" /> Optimize</button>
-        <button className={`feature-tab ${contentTab === 'pegging' ? 'active' : ''}`} onClick={() => setContentTab('pegging')}><Link2 size={13} aria-hidden="true" /> Pegging</button>
-        <button className={`feature-tab ${contentTab === 'leveling' ? 'active' : ''}`} onClick={() => setContentTab('leveling')}><Scale size={13} aria-hidden="true" /> Leveling</button>
-        <button className={`feature-tab ${contentTab === 'bomtree' ? 'active' : ''}`} onClick={() => setContentTab('bomtree')}><Layers size={13} aria-hidden="true" /> Structure</button>
+      {/* Tab bar — six views (LYNQ-style) with their sub-views underneath. */}
+      <div className="feature-tab-bar feature-group-bar" role="tablist" aria-label="Views">
+        {VIEW_GROUPS.map((g) => {
+          const active = g.id === activeGroup.id;
+          const Icon = g.icon;
+          return (
+            <button
+              key={g.id}
+              role="tab"
+              aria-selected={active}
+              className={`feature-tab feature-group-tab ${active ? 'active' : ''}`}
+              onClick={() => setContentTab(lastTabByGroup[g.id] ?? g.tabs[0].id)}
+            >
+              <Icon size={14} aria-hidden="true" /> {g.label}
+              {g.id === 'versions' && activeVersion ? <span className="badge" title={`What-if open: ${activeVersion.name}`}>what-if</span> : null}
+              {g.id === 'plan' && schedule?.constraintViolations?.length ? <span className="badge" title="Constraint violations">{schedule.constraintViolations.length}</span> : null}
+            </button>
+          );
+        })}
       </div>
+      {activeGroup.tabs.length > 1 && (
+        <div className="feature-subtab-bar" role="tablist" aria-label={`${activeGroup.label} views`}>
+          {activeGroup.tabs.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={contentTab === t.id}
+              className={`feature-subtab ${contentTab === t.id ? 'active' : ''}`}
+              onClick={() => setContentTab(t.id)}
+            >
+              {t.label}
+              {t.id === 'constraints' && schedule?.constraintViolations?.length ? <span className="badge">{schedule.constraintViolations.length}</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Tab content */}
       <div className="feature-tab-content">

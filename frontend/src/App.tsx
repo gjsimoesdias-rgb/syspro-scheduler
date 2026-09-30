@@ -36,6 +36,7 @@ import { useSseEvents } from './hooks/useSseEvents';
 import { useJobsData } from './hooks/useJobsData';
 import { useScheduleGeneration } from './hooks/useScheduleGeneration';
 import { useColumnManager, DEFAULT_JOB_COLUMNS, DEFAULT_OPERATION_COLUMNS, type JobColumnDef } from './hooks/useColumnManager';
+import { toCsv, downloadCsv } from './utils/csvExport';
 import { convertScheduleDates } from './utils/scheduleDates';
 import { findEarliestSlotOrForce, findEarliestSlotWithRetry } from './utils/slotFinder';
 import {
@@ -177,6 +178,14 @@ const App: React.FC = () => {
   const setHighlightJobId = useScheduleStore((s) => s.setHighlightJobId);
   /** Externally-pinned ops ("jobId::opId" keys) — visible in both jobs table and Gantt */
   const pinnedOps = useScheduleStore((s) => s.pinnedOps);
+
+  // Per-job SYSPRO publish state of the master plan (Published / Pending / Error).
+  const [publishByJob, setPublishByJob] = useState<Map<string, string>>(new Map());
+  const refreshPublishState = useCallback(() => {
+    versionService.publishStatus()
+      .then((r) => setPublishByJob(new Map(r.jobs.map((j) => [String(j.jobId).trim(), j.state]))))
+      .catch(() => { /* optional column */ });
+  }, []);
   const togglePinnedOp = useScheduleStore((s) => s.togglePinnedOp);
   const setPinnedOps = useScheduleStore((s) => s.setPinnedOps);
   const setPinnedOpDetails = useScheduleStore((s) => s.setPinnedOpDetails);
@@ -298,9 +307,66 @@ const App: React.FC = () => {
     formatOperationColumnValue,
   } = useColumnManager({ openJobs, userId: user?.id !== undefined ? String(user.id) : undefined });
 
+  // SYSPRO column: reload after jobs reload (e.g. after Send to SYSPRO) or a new plan.
+  useEffect(() => { if (dbStatus.sysproConnected) refreshPublishState(); }, [openJobs, schedule?.scheduleId, dbStatus.sysproConnected, refreshPublishState]);
+
   // ─── Cell renderers for the jobs grid (use formatters from useColumnManager) ──
 
+  /** Export the jobs grid as shown (filtered rows, visible columns) for Excel. */
+  const exportJobsGrid = () => {
+    const text = (job: Job, key: string): unknown => {
+      switch (key) {
+        case 'scheduleStatus': return getJobScheduleStatus(job);
+        case 'materialStatus': return getJobMaterialStatus(job);
+        case 'lateness': return jobLatenessMap.get(job.jobId) ?? '';
+        case 'lockedOps': return (job.operations || []).filter((o) => pinnedOps.has(`${job.jobId}::${o.opId}`)).length;
+        case 'publishState': return publishByJob.get(String(job.jobId).trim()) ?? '';
+        case 'validForScheduling': return job.operations?.length ? 'Yes' : 'No operations';
+        default: return formatJobColumnValue(job, key);
+      }
+    };
+    const cols = orderedVisibleColumns;
+    const csv = toCsv(cols.map((c) => c.label), filteredJobs.map((job) => cols.map((c) => text(job, c.key))));
+    downloadCsv(`production-jobs-${format(new Date(), 'yyyyMMdd-HHmm')}.csv`, csv);
+    toast.success(`Exported ${filteredJobs.length} jobs`);
+  };
+
   const renderJobCellContent = (job: Job, column: JobColumnDef): React.ReactNode => {
+    if (column.key === 'validForScheduling') {
+      const reason = !job.operations?.length
+        ? 'No operations in SYSPRO'
+        : String((job as any).HoldFlag ?? '').toUpperCase() === 'Y' || job.status === 'OnHold'
+        ? 'Job is on hold'
+        : job.operations.every((o) => o.status === 'Complete')
+        ? 'All operations complete'
+        : null;
+      return reason
+        ? <span className="grid-flag grid-flag-bad" title={reason}>✕ {reason}</span>
+        : <span className="grid-flag grid-flag-ok" title="Can be scheduled">✓</span>;
+    }
+
+    if (column.key === 'lateness') {
+      const state = jobLatenessMap.get(job.jobId);
+      const due = job.dueDate ? new Date(job.dueDate) : null;
+      const pastDue = due && !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
+      if (state === 'late') return <span className="grid-flag grid-flag-bad" title="Planned to finish after the due date">Late</span>;
+      if (state === 'at-risk') return <span className="grid-flag grid-flag-warn" title="Finishes less than 8 h before the due date">At risk</span>;
+      if (!state && pastDue) return <span className="grid-flag grid-flag-bad" title="Due date has passed and the job is not scheduled">Past due</span>;
+      return state ? <span className="grid-flag grid-flag-ok">On time</span> : <span className="grid-flag">—</span>;
+    }
+
+    if (column.key === 'lockedOps') {
+      const n = (job.operations || []).filter((o) => pinnedOps.has(`${job.jobId}::${o.opId}`)).length;
+      return n ? <span className="grid-flag" title={`${n} operation(s) locked in place`}>🔒 {n}</span> : <span className="grid-flag">—</span>;
+    }
+
+    if (column.key === 'publishState') {
+      const st = publishByJob.get(String(job.jobId).trim());
+      const cls = st === 'Published' ? 'grid-flag-ok' : st === 'Error' ? 'grid-flag-bad' : st === 'Pending' ? 'grid-flag-warn' : '';
+      const tip = st === 'Published' ? 'SYSPRO has these dates' : st === 'Pending' ? 'Changed since the last Send to SYSPRO' : st === 'Error' ? 'Last send failed on this job' : 'Not in the master plan';
+      return <span className={`grid-flag ${cls}`} title={tip}>{st ?? '—'}</span>;
+    }
+
     if (column.key === 'scheduleStatus') {
       const sts = getJobScheduleStatus(job);
       const labelMap: Record<string, string> = {
@@ -2778,6 +2844,9 @@ const App: React.FC = () => {
                       )}
                       <button className="job-filter-select" onClick={() => setShowColumnPicker((s) => !s)}>
                         Columns ({visibleJobColumns.length}/{allJobColumns.length})
+                      </button>
+                      <button className="job-filter-select" onClick={exportJobsGrid} title="Export the visible columns of the filtered jobs to Excel (CSV)">
+                        Export
                       </button>
                       <span className="job-count-badge">
                         {jobPaneMode === 'production'

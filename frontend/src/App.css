@@ -2612,3 +2612,9 @@
   margin-bottom: 0;
 }
 
+
+/* Status flags in the production-jobs grid (phase 6) */
+.grid-flag { font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.grid-flag-ok { color: var(--status-success, #15803d); }
+.grid-flag-warn { color: var(--status-warning, #b45309); }
+.grid-flag-bad { color: var(--status-error, #dc2626); }

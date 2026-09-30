@@ -941,3 +941,18 @@ textarea:disabled {
 /* Materials cell -> opens BOM/material breakdown modal */
 .materials-cell-clickable { cursor: pointer; }
 .materials-cell-clickable:hover { text-decoration: underline; filter: brightness(1.15); }
+
+/* --- Grouped views (phase 6): six views, sub-views underneath --- */
+.feature-group-bar { gap: 6px; }
+.feature-group-tab { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 6px 14px; }
+.feature-subtab-bar {
+  display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 8px 0;
+  background: var(--bg-surface); border-bottom: 1px solid var(--border-default);
+}
+.feature-subtab {
+  border: none; background: transparent; color: var(--text-secondary);
+  font-size: 12px; font-weight: 600; padding: 5px 10px; cursor: pointer;
+  border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 4px;
+}
+.feature-subtab:hover { color: var(--text-primary); }
+.feature-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
