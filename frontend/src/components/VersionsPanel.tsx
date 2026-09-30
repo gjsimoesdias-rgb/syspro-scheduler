@@ -45,6 +45,7 @@ const VersionsPanel: React.FC = () => {
     master: null, whatIfs: [], history: [],
   });
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [purgeDays, setPurgeDays] = useState(90);
@@ -54,9 +55,13 @@ const VersionsPanel: React.FC = () => {
     setLoading(true);
     try {
       setData(await versionService.list(50));
+      setLoadError(null);
       versionService.publishStatus().then(setPublish).catch(() => setPublish(null));
     } catch (err) {
-      toast.error(apiErrorMessage(err, 'Could not load versions'));
+      const status = (err as any)?.response?.status;
+      setLoadError(status === 404
+        ? 'The server running on port 3000 is an older build without plan versions. Stop it and run START_SCHEDULER.cmd again.'
+        : apiErrorMessage(err, 'Could not load versions'));
     } finally {
       setLoading(false);
     }
@@ -297,7 +302,10 @@ const VersionsPanel: React.FC = () => {
             <tr className="vp-section"><td colSpan={9}>History — earlier master plans</td></tr>
           )}
           {data.history.map(row)}
-          {!loading && all.length === 0 && (
+          {loadError && (
+            <tr><td colSpan={9} className="vp-empty vp-error">{loadError}</td></tr>
+          )}
+          {!loading && !loadError && all.length === 0 && (
             <tr><td colSpan={9} className="vp-empty">No saved plans yet — generate a schedule first.</td></tr>
           )}
         </tbody>

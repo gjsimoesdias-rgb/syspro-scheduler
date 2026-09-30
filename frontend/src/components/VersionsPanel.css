@@ -40,3 +40,4 @@
 .vp-pub-pending { color: var(--status-warning, #b45309); }
 .vp-pub-error { color: var(--status-error, #dc2626); }
 .vp-pub-errline { flex-basis: 100%; color: var(--status-error, #dc2626); font-size: 11px; }
+.vp-error { color: var(--status-error, #dc2626); }

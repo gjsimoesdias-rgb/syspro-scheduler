@@ -25,6 +25,12 @@ if errorlevel 1 goto :fail
 
 echo.
 echo [4/4] Starting server on http://localhost:3000 ...
+rem Stop any scheduler still running on port 3000 (an old server keeps the port
+rem and the new build never starts - the UI then talks to stale code).
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /R /C:":3000 .*LISTENING"') do (
+  echo Stopping old server (PID %%p^)...
+  taskkill /PID %%p /F >nul 2>nul
+)
 cd backend
 call npm start
 goto :end
