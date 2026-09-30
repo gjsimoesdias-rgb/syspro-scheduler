@@ -56,6 +56,7 @@ export function useScheduleGeneration({
   const setGenerationStatusText = useScheduleStore((s) => s.setGenerationStatusText);
   const scheduleVersions = useScheduleStore((s) => s.scheduleVersions);
   const undoRedoManager = useScheduleStore((s) => s.undoRedoManager);
+  const activeVersion = useScheduleStore((s) => s.activeVersion);
 
   const getHorizonBounds = (override?: { start: string; end: string }) => {
     const startValue = override?.start ?? schedulingHorizonStart;
@@ -123,6 +124,8 @@ export function useScheduleGeneration({
           ...(configOverride?.freezeHorizonDays && configOverride.freezeHorizonDays > 0
             ? { freezeHorizonDays: configOverride.freezeHorizonDays }
             : {}),
+          // An open what-if receives the run; the master plan stays as it is.
+          ...(activeVersion ? { versionId: activeVersion.versionId } : {}),
         },
         { timeout: 300000 } as any
       );
@@ -137,7 +140,9 @@ export function useScheduleGeneration({
       undoRedoManager.addState(newSchedule, `Generated schedule - ${newSchedule.jobSchedules.length} jobs`);
       addVersion(newSchedule, `Generated v${scheduleVersions.length + 1}`);
 
-      toast.success(`✓ Schedule generated with ${newSchedule.jobSchedules.length} jobs`);
+      toast.success(activeVersion
+        ? `✓ What-if "${activeVersion.name}" regenerated with ${newSchedule.jobSchedules.length} jobs`
+        : `✓ Schedule generated with ${newSchedule.jobSchedules.length} jobs`);
     } catch (error: any) {
       console.error('Error generating schedule:', error);
       toast.error(apiErrorMessage(error, 'Failed to generate schedule'));
@@ -150,6 +155,10 @@ export function useScheduleGeneration({
   const exportToSyspro = async () => {
     if (!schedule) {
       toast.error('No schedule to export');
+      return;
+    }
+    if (activeVersion) {
+      toast.error(`"${activeVersion.name}" is a what-if. Commit it to the master plan (Versions tab) before sending to SYSPRO.`);
       return;
     }
     const jobCount = schedule.jobSchedules.filter((j) => j.operationSchedules?.length).length;

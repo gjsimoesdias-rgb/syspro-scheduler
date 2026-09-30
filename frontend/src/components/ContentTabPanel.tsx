@@ -5,11 +5,11 @@
  * tab content.  Reads schedule + UI preferences from Zustand stores and
  * receives data + action callbacks as props.
  */
-import React, { lazy, Suspense, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   BarChart2, Target, TrendingUp, FlaskConical, Users, AlertTriangle,
-  GitCompare, Zap, BookOpen, Factory, Package, Leaf, Settings2, GitBranch,
+  Zap, BookOpen, Factory, Package, Settings2, GitBranch,
   ClipboardList, CalendarCheck, Timer, Wand2, Link2, Scale, Layers,
 } from 'lucide-react';
 import { useUiStore } from '../stores/uiStore';
@@ -30,13 +30,12 @@ const ConstraintViolations  = lazy(() => import('./ConstraintViolations'));
 const DraggableGantt        = lazy(() => import('./DraggableGantt'));
 const ScheduleComparison    = lazy(() => import('./ScheduleComparison'));
 const BottleneckAnalysis    = lazy(() => import('./BottleneckAnalysis'));
-const ScheduleVersionHistory = lazy(() => import('./ScheduleVersionHistory'));
 const AuditLogFeed          = lazy(() => import('./AuditLogFeed'));
 const MaterialVisibility    = lazy(() => import('./MaterialVisibility'));
 const ConstraintOverride    = lazy(() => import('./ConstraintOverride'));
 const ResourceLeveling      = lazy(() => import('./ResourceLeveling'));
 const InventoryDashboard    = lazy(() => import('./InventoryDashboard'));
-const ScenariosPanel        = lazy(() => import('./ScenariosPanel'));
+const VersionsPanel         = lazy(() => import('./VersionsPanel'));
 const DispatchListView      = lazy(() => import('./DispatchListView'));
 const OrderPromisePanel     = lazy(() => import('./OrderPromisePanel'));
 const ChangeoverMatrix      = lazy(() => import('./ChangeoverMatrix'));
@@ -115,6 +114,12 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
   // ── Store reads ─────────────────────────────────────────────────────────
   const contentTab   = useUiStore((s) => s.contentTab);
   const setContentTab = useUiStore((s) => s.setContentTab);
+  const activeVersion = useScheduleStore((s) => s.activeVersion);
+
+  // Compare and Scenarios were folded into the Versions tab.
+  useEffect(() => {
+    if (contentTab === 'compare' || contentTab === 'scenarios') setContentTab('history');
+  }, [contentTab, setContentTab]);
   const isDarkMode   = useUiStore((s) => s.isDarkMode);
   const ganttPrefs   = useUiStore((s) => s.ganttPrefs);
   const setGanttPrefs = useUiStore((s) => s.setGanttPrefs);
@@ -151,12 +156,10 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
         <button className={`feature-tab ${contentTab === 'constraints' ? 'active' : ''}`} onClick={() => setContentTab('constraints')}>
           <AlertTriangle size={13} aria-hidden="true" /> Constraints {schedule?.constraintViolations?.length ? <span className="badge">{schedule.constraintViolations.length}</span> : null}
         </button>
-        <button className={`feature-tab ${contentTab === 'compare' ? 'active' : ''}`} onClick={() => setContentTab('compare')}><GitCompare size={13} aria-hidden="true" /> Compare</button>
         <button className={`feature-tab ${contentTab === 'bottleneck' ? 'active' : ''}`} onClick={() => setContentTab('bottleneck')}><Zap size={13} aria-hidden="true" /> Bottleneck</button>
-        <button className={`feature-tab ${contentTab === 'history' ? 'active' : ''}`} onClick={() => setContentTab('history')}><BookOpen size={13} aria-hidden="true" /> History</button>
+        <button className={`feature-tab ${contentTab === 'history' ? 'active' : ''}`} onClick={() => setContentTab('history')}><BookOpen size={13} aria-hidden="true" /> Versions{activeVersion ? <span className="badge" title={`What-if open: ${activeVersion.name}`}>what-if</span> : null}</button>
         <button className={`feature-tab ${contentTab === 'materials' ? 'active' : ''}`} onClick={() => setContentTab('materials')}><Factory size={13} aria-hidden="true" /> Materials</button>
         <button className={`feature-tab ${contentTab === 'inventory' ? 'active' : ''}`} onClick={() => setContentTab('inventory')}><Package size={13} aria-hidden="true" /> Inventory</button>
-        <button className={`feature-tab ${contentTab === 'scenarios' ? 'active' : ''}`} onClick={() => setContentTab('scenarios')}><Leaf size={13} aria-hidden="true" /> Scenarios</button>
         <button className={`feature-tab ${contentTab === 'dispatch' ? 'active' : ''}`} onClick={() => setContentTab('dispatch')}><ClipboardList size={13} aria-hidden="true" /> Dispatch</button>
         <button className={`feature-tab ${contentTab === 'ctp' ? 'active' : ''}`} onClick={() => setContentTab('ctp')}><CalendarCheck size={13} aria-hidden="true" /> Promise</button>
         <button className={`feature-tab ${contentTab === 'changeovers' ? 'active' : ''}`} onClick={() => setContentTab('changeovers')}><Timer size={13} aria-hidden="true" /> Changeover Matrix</button>
@@ -297,12 +300,8 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
 
           {contentTab === 'history' && (
             <div style={{ display: 'flex', gap: '1rem', height: '100%', overflow: 'hidden' }}>
-              <div style={{ flex: '0 0 44%', overflowY: 'auto', borderRight: '1px solid var(--border-color, #e5e7eb)', paddingRight: '1rem' }}>
-                <ScheduleVersionHistory
-                  versions={scheduleVersions}
-                  currentSchedule={schedule}
-                  onLoadVersion={(versionId) => onRestoreVersion(versionId)}
-                />
+              <div style={{ flex: '0 0 68%', overflowY: 'auto', borderRight: '1px solid var(--border-color, #e5e7eb)', paddingRight: '1rem' }}>
+                <VersionsPanel />
               </div>
               <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <AuditLogFeed />
@@ -355,9 +354,6 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
             <InventoryDashboard isDarkMode={isDarkMode} />
           )}
 
-          {contentTab === 'scenarios' && (
-            <ScenariosPanel currentScheduleId={schedule?.scheduleId ?? null} />
-          )}
 
           {contentTab === 'settings' && (
             <SettingsPanel ganttPrefs={ganttPrefs} onGanttPrefsChange={setGanttPrefs} />

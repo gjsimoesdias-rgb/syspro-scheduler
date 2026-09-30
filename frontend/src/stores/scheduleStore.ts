@@ -69,6 +69,13 @@ interface ScheduleStoreState {
   // Source annotation (e.g. 'syspro', 'manual', 'restored')
   scheduleSource: string;
   setScheduleSource: (v: string) => void;
+
+  /**
+   * The what-if version open on the board (null = the master plan). While set,
+   * generate runs into it and edits save into it — the master is untouched.
+   */
+  activeVersion: { versionId: string; name: string } | null;
+  setActiveVersion: (v: { versionId: string; name: string } | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,4 +124,7 @@ export const useScheduleStore = create<ScheduleStoreState>()((set, get) => ({
 
   scheduleSource: '',
   setScheduleSource: (v) => set({ scheduleSource: v }),
+
+  activeVersion: null,
+  setActiveVersion: (v) => set({ activeVersion: v }),
 }));

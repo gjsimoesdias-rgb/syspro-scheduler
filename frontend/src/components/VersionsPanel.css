@@ -1,0 +1,35 @@
+.versions-panel { padding: 16px 20px; font-size: 12px; color: var(--text-primary); }
+.vp-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
+.vp-header h3 { margin: 0 0 4px; font-size: 16px; }
+.vp-desc { margin: 0; color: var(--text-secondary); max-width: 760px; line-height: 1.45; }
+.vp-header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.vp-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 6px;
+  padding: 8px 12px; margin-bottom: 12px;
+}
+.vp-banner-actions { display: inline-flex; gap: 6px; margin-left: auto; }
+.vp-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+.vp-table th {
+  text-align: left; font-size: 10px; text-transform: uppercase; color: var(--text-secondary);
+  padding: 6px 8px; border-bottom: 2px solid var(--border-default);
+}
+.vp-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+.vp-num { text-align: right; font-variant-numeric: tabular-nums; }
+.vp-row-open td { background: var(--accent-soft); }
+.vp-kind {
+  display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  padding: 1px 6px; border-radius: 3px; margin-right: 6px; border: 1px solid var(--border-default);
+}
+.vp-kind-master { background: var(--accent); color: #fff; border-color: var(--accent); }
+.vp-kind-whatif { color: var(--accent); border-color: var(--accent); }
+.vp-kind-history { color: var(--text-secondary); }
+.vp-open-tag { margin-left: 6px; font-size: 10px; color: var(--accent); font-weight: 600; }
+.vp-by { color: var(--text-secondary); }
+.vp-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.vp-section td { font-weight: 700; color: var(--text-secondary); background: var(--bg-surface-2, transparent); padding-top: 12px; }
+.vp-empty { text-align: center; color: var(--text-secondary); padding: 20px; }
+.vp-compare h4 { margin: 4px 0 6px; font-size: 13px; }
+.vp-best { font-weight: 700; color: var(--status-success, #16a34a); }
+.vp-retention { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.vp-retention input { width: 70px; padding: 3px 6px; border: 1px solid var(--border-default); border-radius: 3px; }

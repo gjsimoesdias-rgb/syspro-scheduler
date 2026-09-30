@@ -29,7 +29,7 @@ import exportService from './services/exportService';
 import { createShortcutManager } from './services/keyboardShortcuts';
 import BulkImportService from './services/bulkImportService';
 import { Schedule, ConstraintViolation, Job, Resource, Operation, OperationSchedule, JobSchedule } from './types';
-import { scheduleService, apiClient, resourceService, pinService, settingsService, type PinnedOperationDto, apiErrorMessage } from './services/api';
+import { scheduleService, versionService, apiClient, resourceService, pinService, settingsService, type PinnedOperationDto, apiErrorMessage } from './services/api';
 import { getUserGuideHtml } from './userGuideHtml';
 import ScheduleSetupModal, { ScheduleConfig } from './components/ScheduleSetupModal';
 import { useSseEvents } from './hooks/useSseEvents';
@@ -63,6 +63,7 @@ const App: React.FC = () => {
   const setSchedule = useScheduleStore((s) => s.setSchedule);
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const scheduleSource = useScheduleStore((s) => s.scheduleSource);
+  const activeVersion = useScheduleStore((s) => s.activeVersion);
   const setScheduleSource = useScheduleStore((s) => s.setScheduleSource);
   // loading is provided by useScheduleGeneration (wired below after addVersion)
   const isGeneratingSchedule = useScheduleStore((s) => s.isGeneratingSchedule);
@@ -720,13 +721,17 @@ const App: React.FC = () => {
     }
 
     const timeoutId = window.setTimeout(() => {
-      scheduleService.save(schedule).catch((error) => {
+      // An open what-if saves into itself; only the master goes to /schedule/save.
+      const save = activeVersion
+        ? versionService.saveInto(activeVersion.versionId, schedule)
+        : scheduleService.save(schedule);
+      save.catch((error) => {
         console.warn('Could not persist schedule:', error);
       });
     }, 600);
 
     return () => window.clearTimeout(timeoutId);
-  }, [schedule, scheduleLoading, dbStatus.sysproConnected, scheduleSource]);
+  }, [schedule, scheduleLoading, dbStatus.sysproConnected, scheduleSource, activeVersion]);
 
   useEffect(() => {
     if (scheduleSource === 'session') {

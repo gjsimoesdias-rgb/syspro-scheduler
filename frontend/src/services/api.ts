@@ -204,6 +204,40 @@ export const scheduleService = {
   }
 };
 
+/** Plan versions (backend /api/versions): master + what-ifs + history. */
+export interface VersionSummary {
+  versionId: string;
+  kind: 'Master' | 'History' | 'WhatIf';
+  name: string;
+  status: string;
+  jobCount: number | null;
+  operationCount: number | null;
+  horizonStart: string | null;
+  horizonEnd: string | null;
+  savedAt: string;
+  createdBy: string | null;
+  basedOnId: string | null;
+  metrics: Record<string, any> | null;
+}
+
+export const versionService = {
+  list: async (historyLimit = 30): Promise<{ master: VersionSummary | null; whatIfs: VersionSummary[]; history: VersionSummary[] }> =>
+    (await apiClient.get('/versions', { params: { historyLimit } })).data,
+  get: async (id: string): Promise<{ version: VersionSummary; schedule: Schedule }> =>
+    (await apiClient.get(`/versions/${encodeURIComponent(id)}`)).data,
+  createWhatIf: async (name: string, fromId?: string): Promise<VersionSummary> =>
+    (await apiClient.post('/versions/whatif', { name, ...(fromId ? { fromId } : {}) })).data.version,
+  saveInto: async (id: string, schedule: Schedule): Promise<void> => {
+    await apiClient.put(`/versions/${encodeURIComponent(id)}/schedule`, { schedule });
+  },
+  commit: async (id: string): Promise<void> => { await apiClient.post(`/versions/${encodeURIComponent(id)}/commit`); },
+  revert: async (id: string): Promise<void> => { await apiClient.post(`/versions/${encodeURIComponent(id)}/revert`); },
+  rename: async (id: string, name: string): Promise<void> => { await apiClient.patch(`/versions/${encodeURIComponent(id)}`, { name }); },
+  remove: async (id: string): Promise<void> => { await apiClient.delete(`/versions/${encodeURIComponent(id)}`); },
+  purge: async (olderThanDays: number, keepAtLeast = 20): Promise<number> =>
+    (await apiClient.post('/versions/purge', { olderThanDays, keepAtLeast })).data.deleted,
+};
+
 export const jobService = {
   getAll: async (): Promise<{ items: Job[]; warning?: string }> => {
     const response = await apiClient.get('/jobs');
