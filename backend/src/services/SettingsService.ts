@@ -82,6 +82,8 @@ export const DEFAULT_COMPANY_SETTINGS = {
       // When false, autoschedule places jobs even if their components are short
       // in SYSPRO (shortages still show as warnings in the Constraints tab).
       enforceMaterialConstraints: true,
+      // Operations start inside the planning window but may finish after it.
+      allowFinishAfterHorizon: false,
     },
     tracking: {
       showExecutionInJobPanels: true,

@@ -1252,6 +1252,7 @@ const App: React.FC = () => {
 
     for (const v of violations) {
       if (!PLACEMENT_TYPES.has(v.type)) continue;
+      if (v.severity === 'Info') continue; // notes (e.g. finishes after the window), not drops
       opCount++;
       const info = v.affectedOperationId ? opMap.get(v.affectedOperationId) : undefined;
       const wc = info?.wc || 'work centre';

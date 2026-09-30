@@ -87,6 +87,7 @@ interface CompanySettings {
       machineBalancing: string;
       asap: boolean;
       enforceMaterialConstraints: boolean;
+      allowFinishAfterHorizon?: boolean;
     };
     tracking: {
       showExecutionInJobPanels: boolean;
@@ -437,6 +438,9 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
                 <CheckRow notApplied label="Split Task Consumption (Min)" checked={r.splitTaskConsumptionMin} onChange={v => setR('splitTaskConsumptionMin', v)} />
                 <CheckRow notApplied label="Split Task Interruption (Max)" checked={r.splitTaskInterruptionMax} onChange={v => setR('splitTaskInterruptionMax', v)} />
               </>}
+            </GroupBox>
+            <GroupBox title="Planning window">
+              <CheckRow label="Let operations finish after the planning window (they must still start inside it) — otherwise an operation longer than the window is never scheduled" checked={r.allowFinishAfterHorizon ?? false} onChange={v => setR('allowFinishAfterHorizon', v)} />
             </GroupBox>
             <GroupBox title="Material">
               <CheckRow

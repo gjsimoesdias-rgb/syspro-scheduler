@@ -55,4 +55,18 @@ describe('multi-day operations', () => {
     expect(s.jobSchedules[0].operationSchedules).toHaveLength(0);
     expect(s.constraintViolations[0].description).toMatch(/would finish after the planning horizon/);
   });
+
+  it('with allowFinishAfterHorizon the long operation is scheduled past the window, with an Info note', async () => {
+    const ctx = ctxFor(cal(DAY24), 31493);
+    ctx.ruleToggles = { allowFinishAfterHorizon: true };
+    const s = await new SchedulingEngine().schedule(ctx);
+    const ops = s.jobSchedules[0].operationSchedules;
+    expect(ops).toHaveLength(1);
+    expect(new Date(ops[0].plannedStartDate) <= ctx.planningHorizonEnd).toBe(true);
+    expect(new Date(ops[0].plannedEndDate) > ctx.planningHorizonEnd).toBe(true);
+    const notes = s.constraintViolations.filter((v: any) => v.severity === 'Info');
+    expect(notes).toHaveLength(1);
+    expect(notes[0].description).toMatch(/finishes after the planning window/);
+    expect(s.constraintViolations.filter((v: any) => v.type === 'CapacityExceeded')).toHaveLength(0);
+  });
 });

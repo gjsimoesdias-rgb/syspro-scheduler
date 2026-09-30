@@ -110,6 +110,12 @@ export interface SchedulingContext {
     useSysproTransfer?: boolean;
     /** Apply SYSPRO IWaitTime: elapsed wait after an op before the next starts. Default false. */
     useWaitTime?: boolean;
+    /**
+     * Operations must start inside the planning window but may finish after
+     * it (up to a year). Otherwise an operation longer than the window can
+     * never be scheduled. Each such op gets an Info note. Default false.
+     */
+    allowFinishAfterHorizon?: boolean;
   };
 }
 
@@ -366,7 +372,7 @@ export class SchedulingEngine {
     let remainingMs = requiredMinutes * 60 * 1000;
     let cursor = new Date(start);
 
-    for (let i = 0; i < 120 && remainingMs > 0; i++) {
+    for (let i = 0; i < 2000 && remainingMs > 0; i++) { // long ops on multi-break calendars need many windows
       const productiveStart = this.nextProductiveStart(cursor, calendar);
       if (!productiveStart) {
         return null;
@@ -457,7 +463,7 @@ export class SchedulingEngine {
     let remainingMs = requiredMinutes * 60 * 1000;
     let cursor = new Date(end);
 
-    for (let i = 0; i < 120 && remainingMs > 0; i++) {
+    for (let i = 0; i < 2000 && remainingMs > 0; i++) { // long ops on multi-break calendars need many windows
       const productiveEnd = this.previousProductiveEnd(cursor, calendar);
       if (!productiveEnd) {
         return null;
@@ -987,6 +993,17 @@ export class SchedulingEngine {
           if (!operation.isSubcontract) this.lastItemPerResource.set(operationSlot.resourceId, job.itemCode);
 
           // Next operation can only start after the move time from this operation has elapsed
+          if (operationSlot.end > context.planningHorizonEnd && !isPinned) {
+            this.constraints.push({
+              violationId: uuidv4(),
+              type: 'ScheduleDateViolation',
+              severity: 'Info',
+              affectedJobId: job.jobId,
+              affectedOperationId: operation.opId,
+              description: `Operation ${operation.opId} (seq ${operation.sequence}) finishes after the planning window (${operationSlot.end.toISOString().slice(0, 10)})`,
+              suggestedAction: 'Extend the planning window to see its full effect on this line',
+            });
+          }
           predecessorEnd = operationSlot.moveEnd;
           previousWorkcentreId = operation.workcentreId;
           previousSlot = operationSlot;
@@ -1474,6 +1491,10 @@ export class SchedulingEngine {
     }
 
     const resourceCalendar = (resource as any)?.calendar || (workcentre as any)?.calendar;
+    // Starts must fall inside the window; ends may run past it when allowed.
+    const endLimit = context.ruleToggles?.allowFinishAfterHorizon
+      ? new Date(maxSearchDate.getTime() + 366 * 86_400_000)
+      : maxSearchDate;
 
     const isInWorkingWindow = (start: Date, end: Date): boolean => {
       return this.fitsProductiveWindow(start, end, resourceCalendar);
@@ -1550,7 +1571,7 @@ export class SchedulingEngine {
       }
 
       const runEnd = this.addMinutesAcrossProductiveWindows(runStart, runMinutes, resourceCalendar);
-      if (!runEnd || runEnd > maxSearchDate) {
+      if (!runEnd || runEnd > endLimit) {
         this.beyondHorizon.add(operation.opId);
         break;
       }
