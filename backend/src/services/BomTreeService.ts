@@ -46,9 +46,19 @@ export interface BomTreeResult {
 const MAX_DEPTH = 10;
 const MAX_NODES = 500;
 
-const STRUCTURE_SQL = `
+/**
+ * Both lookups are batched: one round trip per BOM level instead of two per
+ * component. Codes arrive as @c0..@cN, go into a #codes temp table (visible to
+ * the inner sp_executesql), and each row carries the parent/stock code so the
+ * caller can split the result.
+ */
+const codesPrelude = (n: number) =>
+  `CREATE TABLE #codes (sc NVARCHAR(50) PRIMARY KEY);
+  INSERT INTO #codes (sc) VALUES ${Array.from({ length: n }, (_, i) => `(@c${i})`).join(', ')};`;
+
+const STRUCTURE_BODY = `
   IF OBJECT_ID('BomStructure', 'U') IS NULL
-    SELECT TOP 0 CAST('' AS nvarchar(50)) AS component, CAST(1 AS float) AS qtyPer,
+    SELECT TOP 0 CAST('' AS nvarchar(50)) AS parent, CAST('' AS nvarchar(50)) AS component, CAST(1 AS float) AS qtyPer,
                  CAST('' AS nvarchar(100)) AS description, CAST(0 AS int) AS hasRouting;
   ELSE
   BEGIN
@@ -57,7 +67,7 @@ const STRUCTURE_SQL = `
       WHEN COL_LENGTH('BomStructure', 'StockCode') IS NOT NULL THEN N'StockCode'
       ELSE NULL END;
     IF @parentCol IS NULL
-      SELECT TOP 0 CAST('' AS nvarchar(50)) AS component, CAST(1 AS float) AS qtyPer,
+      SELECT TOP 0 CAST('' AS nvarchar(50)) AS parent, CAST('' AS nvarchar(50)) AS component, CAST(1 AS float) AS qtyPer,
                    CAST('' AS nvarchar(100)) AS description, CAST(0 AS int) AS hasRouting;
     ELSE
     BEGIN
@@ -77,18 +87,18 @@ const STRUCTURE_SQL = `
           THEN N'CASE WHEN EXISTS (SELECT 1 FROM BomOperations bo WHERE bo.StockCode = bs.Component) THEN 1 ELSE 0 END'
         ELSE N'CAST(0 AS int)' END;
       DECLARE @sql NVARCHAR(MAX) = N'
-        SELECT DISTINCT bs.Component AS component, ' + @qtyExpr + N' AS qtyPer,
+        SELECT DISTINCT bs.' + @parentCol + N' AS parent, bs.Component AS component, ' + @qtyExpr + N' AS qtyPer,
                ' + @descExpr + N' AS description, ' + @routingExpr + N' AS hasRouting
         FROM BomStructure bs ' + @joinExpr + N'
-        WHERE bs.' + @parentCol + N' = @sc
-        ORDER BY bs.Component';
-      EXEC sp_executesql @sql, N'@sc NVARCHAR(50)', @sc = @sc;
+        WHERE bs.' + @parentCol + N' IN (SELECT sc FROM #codes)
+        ORDER BY parent, component';
+      EXEC sp_executesql @sql;
     END
   END`;
 
-const ROUTING_SQL = `
+const ROUTING_BODY = `
   IF OBJECT_ID('BomOperations', 'U') IS NULL
-    SELECT TOP 0 CAST('' AS nvarchar(50)) AS operation, CAST('' AS nvarchar(50)) AS workcentreId,
+    SELECT TOP 0 CAST('' AS nvarchar(50)) AS stockCode, CAST('' AS nvarchar(50)) AS operation, CAST('' AS nvarchar(50)) AS workcentreId,
                  CAST(0 AS float) AS setupHours, CAST(0 AS float) AS unitRunHours;
   ELSE
   BEGIN
@@ -101,15 +111,18 @@ const ROUTING_SQL = `
       WHEN COL_LENGTH('BomOperations', 'RunTime') IS NOT NULL THEN N'ISNULL(bo.RunTime, 0)'
       ELSE N'CAST(0 AS float)' END;
     DECLARE @sql NVARCHAR(MAX) = N'
-      SELECT bo.Operation AS operation, bo.WorkCentre AS workcentreId,
+      SELECT bo.StockCode AS stockCode, bo.Operation AS operation, bo.WorkCentre AS workcentreId,
              ' + @setupExpr + N' AS setupHours,
              ' + @runExpr + N' AS unitRunHours
       FROM BomOperations bo
-      WHERE bo.StockCode = @sc
-        AND bo.Route = (SELECT MIN(Route) FROM BomOperations WHERE StockCode = @sc)
-      ORDER BY TRY_CAST(bo.Operation AS int), bo.Operation';
-    EXEC sp_executesql @sql, N'@sc NVARCHAR(50)', @sc = @sc;
+      WHERE bo.StockCode IN (SELECT sc FROM #codes)
+        AND bo.Route = (SELECT MIN(b2.Route) FROM BomOperations b2 WHERE b2.StockCode = bo.StockCode)
+      ORDER BY bo.StockCode, TRY_CAST(bo.Operation AS int), bo.Operation';
+    EXEC sp_executesql @sql;
   END`;
+
+/** Codes per round trip — well under SQL Server's 2100-parameter limit. */
+const BATCH = 400;
 
 const ROOT_DESC_SQL = `
   IF OBJECT_ID('InvMaster', 'U') IS NOT NULL AND COL_LENGTH('InvMaster', 'Description') IS NOT NULL
@@ -119,34 +132,67 @@ const ROOT_DESC_SQL = `
   ELSE
     SELECT TOP 0 CAST('' AS nvarchar(100)) AS description;`;
 
+type ChildRow = { component: string; qtyPer: number; description: string; hasRouting: number };
+
 export async function buildBomTree(sysproDb: any, stockCode: string): Promise<BomTreeResult> {
   const warnings: string[] = [];
   let nodeCount = 0;
+  const key = (v: unknown) => String(v ?? '').trim();
 
-  const getOps = async (code: string): Promise<BomRoutingOp[]> => {
-    const r = await sysproDb.queryWithParams(ROUTING_SQL, { sc: code });
-    return (r.recordset || []).map((row: any) => ({
-      operation: String(row.operation ?? '').trim(),
-      workcentreId: String(row.workcentreId ?? '').trim(),
-      setupMinutes: Math.round((Number(row.setupHours) || 0) * 60),
-      unitRunMinutes: Math.round((Number(row.unitRunHours) || 0) * 60),
-    })).filter((op: BomRoutingOp) => op.workcentreId);
+  const opsByCode = new Map<string, BomRoutingOp[]>();
+  const childrenByCode = new Map<string, ChildRow[]>();
+
+  /** Fetch structure + routing for every uncached code, BATCH codes per round trip. */
+  const fetchLevel = async (codes: string[]) => {
+    const todo = codes.filter((c) => !childrenByCode.has(c));
+    for (let i = 0; i < todo.length; i += BATCH) {
+      const chunk = todo.slice(i, i + BATCH);
+      const params = Object.fromEntries(chunk.map((c, n) => [`c${n}`, c]));
+      const prelude = codesPrelude(chunk.length);
+      const [kids, ops] = await Promise.all([
+        sysproDb.queryWithParams(`${prelude}\n${STRUCTURE_BODY}`, params),
+        sysproDb.queryWithParams(`${prelude}\n${ROUTING_BODY}`, params),
+      ]);
+      for (const c of chunk) { childrenByCode.set(c, []); opsByCode.set(c, []); }
+      for (const row of kids.recordset || []) {
+        childrenByCode.get(key(row.parent))?.push(row);
+      }
+      for (const row of ops.recordset || []) {
+        const op: BomRoutingOp = {
+          operation: key(row.operation),
+          workcentreId: key(row.workcentreId),
+          setupMinutes: Math.round((Number(row.setupHours) || 0) * 60),
+          unitRunMinutes: Math.round((Number(row.unitRunHours) || 0) * 60),
+        };
+        if (op.workcentreId) opsByCode.get(key(row.stockCode))?.push(op);
+      }
+    }
   };
 
-  const getChildren = async (code: string) => {
-    const r = await sysproDb.queryWithParams(STRUCTURE_SQL, { sc: code });
-    return (r.recordset || []) as Array<{ component: string; qtyPer: number; description: string; hasRouting: number }>;
-  };
+  // Breadth-first prefetch: one batched round trip per level (was 2 per node).
+  let frontier = [key(stockCode)];
+  const seen = new Set(frontier);
+  for (let level = 0; level <= MAX_DEPTH && frontier.length && seen.size <= MAX_NODES; level++) {
+    await fetchLevel(frontier);
+    const next: string[] = [];
+    for (const code of frontier) {
+      for (const child of childrenByCode.get(code) || []) {
+        const c = key(child.component);
+        if (!seen.has(c)) { seen.add(c); next.push(c); }
+      }
+    }
+    frontier = next;
+  }
 
-  const build = async (
+  const build = (
     code: string,
     description: string,
     qtyPer: number,
     level: number,
     ancestors: Set<string>
-  ): Promise<BomTreeNode> => {
+  ): BomTreeNode => {
     nodeCount++;
-    const operations = await getOps(code);
+    const operations = opsByCode.get(code) || [];
     const node: BomTreeNode = {
       stockCode: code,
       description,
@@ -162,29 +208,30 @@ export async function buildBomTree(sysproDb: any, stockCode: string): Promise<Bo
       node.truncated = true;
       return node;
     }
+    const kids = childrenByCode.get(code);
     if (level >= MAX_DEPTH) {
-      const kids = await getChildren(code);
-      if (kids.length) {
+      if (kids?.length) {
         warnings.push(`Structure deeper than ${MAX_DEPTH} levels under ${code} — deeper levels not shown.`);
         node.truncated = true;
       }
       return node;
     }
-    if (nodeCount >= MAX_NODES) {
+    if (nodeCount >= MAX_NODES || !kids) {
+      // !kids: prefetch stopped at the node cap before reaching this code.
       node.truncated = true;
       return node;
     }
 
     ancestors.add(code);
-    for (const child of await getChildren(code)) {
+    for (const child of kids) {
       if (nodeCount >= MAX_NODES) {
         node.truncated = true;
         break;
       }
       node.children.push(
-        await build(
-          String(child.component).trim(),
-          String(child.description ?? '').trim(),
+        build(
+          key(child.component),
+          key(child.description),
           Number(child.qtyPer) || 1,
           level + 1,
           ancestors
@@ -198,10 +245,10 @@ export async function buildBomTree(sysproDb: any, stockCode: string): Promise<Bo
   let rootDescription = '';
   try {
     const d = await sysproDb.queryWithParams(ROOT_DESC_SQL, { sc: stockCode });
-    rootDescription = String(d.recordset?.[0]?.description ?? '').trim();
+    rootDescription = key(d.recordset?.[0]?.description);
   } catch { /* cosmetic only */ }
 
-  const root = await build(stockCode, rootDescription, 1, 0, new Set<string>());
+  const root = build(key(stockCode), rootDescription, 1, 0, new Set<string>());
 
   if (nodeCount >= MAX_NODES) {
     warnings.push(`Tree capped at ${MAX_NODES} components — some branches are truncated.`);
