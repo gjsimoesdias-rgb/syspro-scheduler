@@ -10,6 +10,8 @@ import { logger } from '../utils/logger';
 
 export interface ExportResult {
   success: boolean;
+  /** False when the LYNQ compatibility layer isn't installed: only WipMaster/WipJobAllLab were written. */
+  lynqLayer?: boolean;
   schedulesWritten: number;
   operationsWritten: number;
   logsCreated: number;
@@ -79,6 +81,26 @@ export class APSDatabaseService {
     };
   }
 
+  /** True when every object the LYNQ export steps call exists in this company DB. */
+  private async lynqLayerPresent(): Promise<boolean> {
+    try {
+      // Names go in as parameters (keeps them out of the SQL text).
+      const names = {
+        o1: 'aps.RefreshLynqCompatProductionCache', o2: 'aps.Lynq_VP_BPL_CreateWIBPL',
+        o3: 'aps.Lynq_VP_BPL_LogSchedulingInfo', o4: 'aps.SchedulerRecordSummary', o5: 'aps.SourceProductionOrders',
+      };
+      const r = await this.sysproDb.queryWithParams(
+        `SELECT CASE WHEN OBJECT_ID(@o1) IS NOT NULL AND OBJECT_ID(@o2) IS NOT NULL AND OBJECT_ID(@o3) IS NOT NULL
+                       AND OBJECT_ID(@o4) IS NOT NULL AND OBJECT_ID(@o5) IS NOT NULL
+                THEN 1 ELSE 0 END AS present`,
+        names
+      );
+      return Number(r.recordset?.[0]?.present) === 1;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Refresh the APS cache tables with latest data from Syspro WipMaster and WipJobAllLab
    * This ensures the VP_SourceProductionOrders/Operations views have current data
@@ -126,10 +148,21 @@ export class APSDatabaseService {
     };
 
     try {
+      // The LYNQ compatibility layer (create_aps_lynq_compat_objects.sql) is
+      // optional: without it we still write the schedule back to SYSPRO
+      // (steps 4-5) and skip the LYNQ work-order / summary steps.
+      const lynq = await this.lynqLayerPresent();
+      result.lynqLayer = lynq;
+      if (!lynq) {
+        logger.warn('LYNQ compatibility objects not installed — writing WipMaster/WipJobAllLab only');
+      }
+
       // Step 1: Refresh cache to ensure APS tables have latest Syspro data
       // (outside the transaction — idempotent and potentially slow)
-      logger.info('Export step 1: refreshing APS cache');
-      await this.refreshApsCache();
+      if (lynq) {
+        logger.info('Export step 1: refreshing APS cache');
+        await this.refreshApsCache();
+      }
 
       // Steps 2-5 are atomic. Either every write lands in SYSPRO or none do.
       const txResult = await this.sysproDb.withTransaction(async (db) => {
@@ -140,6 +173,7 @@ export class APSDatabaseService {
           errorMessages: [] as string[]
         };
 
+        if (lynq) {
         logger.info('Export step 2: populating scheduler record summary');
         await this.populateSchedulerRecordSummary(db, schedule);
 
@@ -154,6 +188,11 @@ export class APSDatabaseService {
             // Throw to trigger rollback — no partial exports allowed.
             throw new Error(`Failed to write job ${jobSchedule.jobId}: ${writeResult.error}`);
           }
+        }
+        } else {
+          innerResult.schedulesWritten = toWrite.jobSchedules.length;
+          innerResult.operationsWritten = toWrite.jobSchedules.reduce(
+            (n, j) => n + (j.operationSchedules?.length || 0), 0);
         }
 
         logger.info('Export step 4: writing operation changes to WipJobAllLab');

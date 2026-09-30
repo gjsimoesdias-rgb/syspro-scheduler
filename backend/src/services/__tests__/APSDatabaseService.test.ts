@@ -40,6 +40,7 @@ interface CapturedCall {
  * preserved across the refresh → transaction boundary.
  */
 class FakeSysproDb {
+  lynqPresent = true;
   calls: CapturedCall[] = [];
 
   private responses: Array<[(sql: string) => boolean, Recordset]> = [];
@@ -62,6 +63,8 @@ class FakeSysproDb {
     for (const [match, rows] of this.responses) {
       if (match(sql)) return rows;
     }
+    // LYNQ compatibility layer present unless a test says otherwise.
+    if (sql.includes('OBJECT_ID(@o1)')) return [{ present: this.lynqPresent ? 1 : 0 }] as any;
     return [];
   }
 
@@ -412,5 +415,21 @@ describe('APSDatabaseService.cleanupClosedOperations', () => {
     const result = await svc.cleanupClosedOperations(0);
 
     expect(result.rowsDeleted).toBe(0);
+  });
+});
+
+describe('APSDatabaseService.exportSchedule — without the LYNQ compatibility layer', () => {
+  it('skips the LYNQ steps and still writes WipMaster / WipJobAllLab', async () => {
+    const db = new FakeSysproDb().whenSql((q) => /rowsAffected/.test(q), [{ rowsAffected: 1 }]);
+    db.lynqPresent = false;
+    const svc = new APSDatabaseService(db as any);
+    const result = await svc.exportSchedule(makeSchedule([makeJobSchedule('J01', [makeOp('OP10')])]));
+    const sqls = db.calls.map((c) => c.sql);
+    expect(result.lynqLayer).toBe(false);
+    expect(result.success).toBe(true);
+    expect(sqls.some((q) => q.includes('RefreshLynqCompatProductionCache') && q.includes('EXEC'))).toBe(false);
+    expect(sqls.some((q) => q.includes('Lynq_VP_BPL_CreateWIBPL'))).toBe(false);
+    expect(sqls.some((q) => /UPDATE WipJobAllLab/.test(q))).toBe(true);
+    expect(sqls.some((q) => /UPDATE WipMaster/.test(q))).toBe(true);
   });
 });

@@ -39,6 +39,7 @@ const VersionsPanel: React.FC = () => {
   const activeVersion = useScheduleStore((s) => s.activeVersion);
   const setActiveVersion = useScheduleStore((s) => s.setActiveVersion);
   const setSchedule = useScheduleStore((s) => s.setSchedule);
+  const boardScheduleId = useScheduleStore((s) => s.schedule?.scheduleId ?? null);
   const setScheduleSource = useScheduleStore((s) => s.setScheduleSource);
 
   const [data, setData] = useState<{ master: VersionSummary | null; whatIfs: VersionSummary[]; history: VersionSummary[] }>({
@@ -175,7 +176,11 @@ const VersionsPanel: React.FC = () => {
 
   const row = (v: VersionSummary) => {
     const m = v.metrics || {};
-    const isOpen = v.kind === 'WhatIf' ? activeVersion?.versionId === v.versionId : v.kind === 'Master' && !activeVersion;
+    // "On board" only when the board really shows this plan (after a reload the
+    // board is rebuilt from SYSPRO dates, not the saved master).
+    const isOpen = v.kind === 'WhatIf'
+      ? activeVersion?.versionId === v.versionId
+      : v.kind === 'Master' && !activeVersion && boardScheduleId === v.versionId;
     return (
       <tr key={v.versionId} className={isOpen ? 'vp-row-open' : undefined}>
         <td><input type="checkbox" aria-label={`Compare ${v.name}`} checked={selected.includes(v.versionId)} onChange={() => toggle(v.versionId)} /></td>
