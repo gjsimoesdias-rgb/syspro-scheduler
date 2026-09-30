@@ -518,16 +518,18 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     return { machine: util, group: util };
   }, [schedule, workcentres, totalDays, workcentreCalendars, timelineStart, timelineEnd]);
 
-  // Job due dates map
+  // Job due dates (SYSPRO JobDeliveryDate via the loaded jobs). This used to
+  // fall back to the planned end, which made every bar look on time in the
+  // lateness colour mode. Jobs without a due date get no lateness colour.
   const jobDueDates = useMemo(() => {
     const map: Record<string, Date> = {};
-    if (!schedule) return map;
-    // We don't have direct job due dates in schedule, use end date as proxy
-    for (const js of schedule.jobSchedules) {
-      map[js.jobId] = new Date(js.plannedEndDate);
+    for (const j of (jobs ?? [])) {
+      if (!j.dueDate) continue;
+      const d = new Date(j.dueDate as unknown as string);
+      if (!Number.isNaN(d.getTime())) map[j.jobId] = d;
     }
     return map;
-  }, [schedule]);
+  }, [jobs]);
 
   const toggleLock = useCallback((jobId: string, opId: string) => {
     const key = `${jobId}::${opId}`;
@@ -1076,7 +1078,9 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       return wcColorById[op.workcentreId] || '#4f8bff';
     }
     if (colorMode === 'lateness') {
-      const lateness = getLateness(new Date(op.plannedEndDate), jobDueDates[op.jobId]);
+      const due = jobDueDates[op.jobId];
+      if (!due) return '#94a3b8'; // no due date — neutral grey, not 'at risk'
+      const lateness = getLateness(new Date(op.plannedEndDate), due);
       return getLatenessColor(lateness);
     }
     if (colorMode === 'status') {
@@ -1495,6 +1499,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                           itemCode={itemCode}
                           itemDesc={itemDesc}
                           qty={qty}
+                          dueDate={jobDueDates[op.jobId]}
                           opStatus={op.opStatus}
                           displaySegments={displaySegments}
                           calculatePosition={calculatePosition}

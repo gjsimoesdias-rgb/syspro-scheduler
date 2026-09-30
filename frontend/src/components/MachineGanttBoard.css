@@ -638,6 +638,21 @@
 .gantt-tt-row.phase-run span { color: #93c5fd; }
 .gantt-tt-row.phase-queue span { color: #fde68a; }
 .gantt-tt-row.phase-move span { color: #c4b5fd; }
+.gantt-tt-row.gantt-tt-late strong { color: #fca5a5; }
+.gantt-tt-row.gantt-tt-ontime strong { color: #86efac; }
+
+/* Bar ends after the job due date: red marker on the right edge. */
+.machine-op-bar.gantt-bar--late::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  bottom: -1px;
+  width: 4px;
+  background: var(--danger, #dc2626);
+  border-radius: 0 3px 3px 0;
+  pointer-events: none;
+}
 
 .gantt-tt-desc span:last-child {
   max-width: 180px;

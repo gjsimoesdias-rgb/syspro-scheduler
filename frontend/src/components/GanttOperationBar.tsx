@@ -53,6 +53,9 @@ export interface GanttOperationBarProps {
   itemDesc?: string;
   qty?: string;
 
+  /** The job's due date — shown in the tooltip; bars ending after it get a red marker */
+  dueDate?: Date;
+
   /** Operation-level status from SYSPRO WipJobAllLab — drives the status strip colour */
   opStatus?: 'NotStarted' | 'InProgress' | 'Complete';
 
@@ -134,6 +137,7 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
   itemCode,
   itemDesc,
   qty,
+  dueDate,
   opStatus,
   depRole,
   masterJobId,
@@ -156,6 +160,16 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
   const runFill = `linear-gradient(180deg, ${lighten(opColor, 0.30)} 0%, ${opColor} 72%)`;
   const setupFill = `repeating-linear-gradient(-45deg, rgba(255,255,255,0.30) 0 3px, transparent 3px 6px), linear-gradient(180deg, ${lighten(opColor, 0.42)}, ${lighten(opColor, 0.18)})`;
 
+  // Lateness of this operation's end against the job's due date.
+  const lateMin = dueDate ? Math.round((displayEnd.getTime() - dueDate.getTime()) / 60000) : null;
+  const isLate = lateMin !== null && lateMin > 0;
+  const fmtSpan = (min: number): string => {
+    const m = Math.abs(min);
+    const d = Math.floor(m / 1440);
+    const h = Math.floor((m % 1440) / 60);
+    return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m % 60}m` : `${m % 60}m`;
+  };
+
   const tooltipContent = (
     <div className="gantt-tooltip-content">
       <div className="gantt-tt-row"><span>Job</span><strong>{jobLabel}</strong></div>
@@ -175,15 +189,25 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
         </div>
       )}
       <div className="gantt-tt-divider" />
-      <div className="gantt-tt-row phase-setup"><span>⚙ Setup</span><strong>{setupMin}m</strong></div>
-      <div className="gantt-tt-row phase-run"><span>▶ Run</span><strong>{runMin}m</strong></div>
-      <div className="gantt-tt-row phase-queue"><span>Queue</span><strong>{queueMin}m</strong></div>
-      <div className="gantt-tt-row phase-move"><span>Move</span><strong>{moveMin}m</strong></div>
+      <div className="gantt-tt-row phase-setup"><span>⚙ Setup</span><strong>{Math.round(setupMin)}m</strong></div>
+      <div className="gantt-tt-row phase-run"><span>▶ Run</span><strong>{Math.round(runMin)}m</strong></div>
+      <div className="gantt-tt-row phase-queue"><span>Queue</span><strong>{Math.round(queueMin)}m</strong></div>
+      <div className="gantt-tt-row phase-move"><span>Move</span><strong>{Math.round(moveMin)}m</strong></div>
       <div className="gantt-tt-divider" />
       <div className="gantt-tt-row"><span>Start</span><strong>{format(displayStart, 'dd/MM HH:mm')}</strong></div>
       <div className="gantt-tt-row"><span>End</span><strong>{format(displayEnd, 'dd/MM HH:mm')}</strong></div>
       <div className="gantt-tt-row"><span>Split</span><strong>{displaySegments.length} segment(s)</strong></div>
       <div className="gantt-tt-row"><span>Total</span><strong>{durationH}h</strong></div>
+      {dueDate && (
+        <>
+          <div className="gantt-tt-divider" />
+          <div className="gantt-tt-row"><span>Due</span><strong>{format(dueDate, 'dd/MM HH:mm')}</strong></div>
+          <div className={`gantt-tt-row ${isLate ? 'gantt-tt-late' : 'gantt-tt-ontime'}`}>
+            <span>{isLate ? 'Late' : 'Slack'}</span>
+            <strong>{isLate ? `${fmtSpan(lateMin!)} after due` : `${fmtSpan(lateMin!)} before due`}</strong>
+          </div>
+        </>
+      )}
       {isLocked && <div className="gantt-tt-locked"><Lock size={11} aria-hidden="true" /> LOCKED</div>}
     </div>
   );
@@ -195,6 +219,7 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
     isViolated ? 'gantt-bar--violation' : '',
     isFocused ? 'gantt-bar--violation-focus' : '',
     isSelected ? 'selected' : '',
+    isLate ? 'gantt-bar--late' : '',
   ].filter(Boolean).join(' ');
 
   return (
