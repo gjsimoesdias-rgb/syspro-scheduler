@@ -67,6 +67,8 @@ export const DEFAULT_COMPANY_SETTINGS = {
       moveAfterPrevious: false,
       useTransfer: true,
       transferApplyTo: 'next-operation',
+      // Overlap: next op may start after this % of the previous run (100 = no overlap).
+      overlapPercent: 100,
       // auto scheduling
       schedulingMethod: 'forward',
       forwardFrom: 'today',

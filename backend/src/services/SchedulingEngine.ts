@@ -94,6 +94,15 @@ export interface SchedulingContext {
     setupOncePerGroup?: boolean;
     /** Due-date window for grouping same-item jobs (days). Default 7. */
     campaignWindowDays?: number;
+    /**
+     * Operation overlap (Settings → Transfer/Overlap). A fraction in (0, 1):
+     * the next operation may start once this share of the previous
+     * operation's run has elapsed (plus move time), instead of waiting for
+     * it to finish. The next operation still cannot finish before the last
+     * transfer batch reaches it. Undefined or >= 1 → no overlap. Forward
+     * scheduling only.
+     */
+    overlapFraction?: number;
   };
 }
 
@@ -776,6 +785,11 @@ export class SchedulingEngine {
       predecessorEnd = earliestStartOverride;
     }
     let previousWorkcentreId: string | null = null;
+    // Previous operation's slot, for operation overlap (transfer batches).
+    let previousSlot: OperationSlot | null = null;
+    let previousWasSubcontract = false;
+    const overlapFraction = context.ruleToggles?.overlapFraction;
+    const useOverlap = overlapFraction !== undefined && overlapFraction > 0 && overlapFraction < 1;
 
     // Flow-line: once the first operation is placed on a resource that belongs to
     // a line group, all subsequent operations of this job must also use resources
@@ -824,7 +838,15 @@ export class SchedulingEngine {
         const queueLagMinutes = context.ruleToggles?.useQueueTime === false
           ? 0
           : Math.max(0, operation.queueTime || 0);
-        const earliestStart = new Date(predecessorEnd.getTime() + (interOpGapMinutes + queueLagMinutes) * 60 * 1000);
+        // Overlap: start once a share of the previous run is done, not at its end.
+        const overlapping = useOverlap && !!previousSlot && !previousWasSubcontract && !operation.isSubcontract;
+        let chainFromMs = predecessorEnd.getTime();
+        if (overlapping && previousSlot) {
+          const runMs = previousSlot.runEnd.getTime() - previousSlot.runStart.getTime();
+          const moveMs = Math.max(0, previousSlot.moveEnd.getTime() - previousSlot.runEnd.getTime());
+          chainFromMs = Math.min(chainFromMs, previousSlot.runStart.getTime() + overlapFraction! * runMs + moveMs);
+        }
+        const earliestStart = new Date(chainFromMs + (interOpGapMinutes + queueLagMinutes) * 60 * 1000);
 
         // Batch constraint check — warn if job quantity is below the operation's minimum batch size.
         if (this.constraintManager) {
@@ -894,6 +916,20 @@ export class SchedulingEngine {
             context,
             isFlowLine ? lockedLineGroupId : null
           );
+          // Overlap tail rule: the last transfer batch of the previous op
+          // arrives at its move end; this op still needs a share of its own
+          // run after that, so it cannot finish earlier. Push and retry.
+          if (overlapping && previousSlot) {
+            const ownRunMs = Math.max(0, (operation.duration || 0) * 60000);
+            const requiredEndMs = previousSlot.moveEnd.getTime() + overlapFraction! * ownRunMs;
+            let startMs = earliestStart.getTime();
+            for (let attempt = 0; attempt < 5 && operationSlot && operationSlot.runEnd.getTime() < requiredEndMs; attempt++) {
+              startMs += requiredEndMs - operationSlot.runEnd.getTime();
+              operationSlot = this.findBestOperationSlot(
+                operation, new Date(startMs), job, context, isFlowLine ? lockedLineGroupId : null
+              );
+            }
+          }
         }
 
         if (operationSlot) {
@@ -939,6 +975,8 @@ export class SchedulingEngine {
           // Next operation can only start after the move time from this operation has elapsed
           predecessorEnd = operationSlot.moveEnd;
           previousWorkcentreId = operation.workcentreId;
+          previousSlot = operationSlot;
+          previousWasSubcontract = !!operation.isSubcontract;
         } else {
           // Could not schedule this operation
           this.constraints.push({
@@ -964,8 +1002,9 @@ export class SchedulingEngine {
       }
 
       const plannedStart = operationSchedules.length > 0 ? operationSchedules[0].plannedStartDate : job.releaseDate;
-      const plannedEnd = operationSchedules.length > 0 
-        ? operationSchedules[operationSchedules.length - 1].plannedEndDate 
+      // Latest op end (with overlap the last op is not guaranteed to end last).
+      const plannedEnd = operationSchedules.length > 0
+        ? operationSchedules.reduce((m, o) => (o.plannedEndDate > m ? o.plannedEndDate : m), operationSchedules[0].plannedEndDate)
         : job.dueDate;
 
       const tardiness = Math.max(

@@ -77,6 +77,7 @@ interface CompanySettings {
       moveAfterPrevious: boolean;
       useTransfer: boolean;
       transferApplyTo: string;
+      overlapPercent?: number;
       schedulingMethod: string;
       forwardFrom: string;
       backwardFrom: string;
@@ -484,7 +485,11 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
               </>}
             </GroupBox>
             <GroupBox title="Transfer/Overlap">
-              <CheckRow notApplied label="Use transfer" checked={r.useTransfer} onChange={v => setR('useTransfer', v)} />
+              <CheckRow label="Use transfer (overlap operations)" checked={r.useTransfer} onChange={v => setR('useTransfer', v)} />
+              {r.useTransfer && <Row label="Start next operation after % of the previous run">
+                <Slider value={r.overlapPercent ?? 100} min={5} max={100} step={5} onChange={v => setR('overlapPercent', v)} />
+                <span className="sp-hint">{(r.overlapPercent ?? 100) >= 100 ? 'No overlap — the next operation waits for the previous one to finish' : `Next op starts once ${r.overlapPercent}% of the previous run is done (plus move time); it can't finish before the last batch arrives`}</span>
+              </Row>}
               {r.useTransfer && <Row label="Apply to" notApplied>
                 <select value={r.transferApplyTo} onChange={e => setR('transferApplyTo', e.target.value)}>
                   <option value="next-operation">Next operation</option>

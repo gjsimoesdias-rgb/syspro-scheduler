@@ -25,6 +25,17 @@ import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireA
 import { saveAsLatest, promoteToLatest, saveIntoWhatIf } from '../../services/ScheduleStore';
 import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordError, resetPublish, jobIdFromExportError } from '../../services/publishStatus';
 
+/**
+ * Operation overlap from Settings → Transfer/Overlap: "Use transfer" on and
+ * "Start next operation after N % of the run" below 100 → fraction N/100.
+ * Anything else → no overlap.
+ */
+function overlapFractionFrom(rules: any): number | undefined {
+  if (rules?.useTransfer !== true) return undefined;
+  const pct = Number(rules?.overlapPercent);
+  return Number.isFinite(pct) && pct > 0 && pct < 100 ? pct / 100 : undefined;
+}
+
 const router = Router();
 
 // Static sub-routes first: they must win over GET /:scheduleId.
@@ -189,7 +200,7 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
     // nothing left to do are skipped entirely. (This setting existed in the
     // Settings panel but was never applied until 2026-07-08.)
     let includeCompletedOps = false;
-    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; enforceMaterial: boolean; setupOncePerGroup: boolean } | undefined;
+    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; enforceMaterial: boolean; setupOncePerGroup: boolean; overlapFraction?: number } | undefined;
     try {
       const schedulerDb = req.app.locals.schedulerDb;
       const companyId = (req as any).user?.companyId;
@@ -208,6 +219,7 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
             enforceMaterial: rules.enforceMaterialConstraints !== false,
             // Settings → Setup → "Apply to the first job in the autoscheduling group only".
             setupOncePerGroup: rules.setupFirstJobOnly === true,
+            overlapFraction: overlapFractionFrom(rules),
           };
         }
       }
@@ -525,7 +537,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
 
     // Same completed-op / rule-toggle policy as /generate for a fair comparison.
     let includeCompletedOps = false;
-    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; setupOncePerGroup: boolean } | undefined;
+    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; setupOncePerGroup: boolean; overlapFraction?: number } | undefined;
     try {
       const schedulerDb = req.app.locals.schedulerDb;
       const companyId = (req as any).user?.companyId;
@@ -539,6 +551,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
             useSetupTime: rulesCfg.useSetupTime !== false,
             useMoveTime: rulesCfg.useMoveTime !== false,
             setupOncePerGroup: rulesCfg.setupFirstJobOnly === true,
+            overlapFraction: overlapFractionFrom(rulesCfg),
           };
         }
       }
