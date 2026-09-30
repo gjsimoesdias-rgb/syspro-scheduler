@@ -1084,9 +1084,9 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       return getLatenessColor(lateness);
     }
     if (colorMode === 'status') {
-      const jobSchedule = schedule?.jobSchedules.find(j => j.jobId === op.jobId);
-      if (jobSchedule?.status === 'ConstraintViolation') return '#ef4444';
-      if (jobSchedule?.status === 'Unschedulable') return '#6b7280';
+      const st = jobStatusById.get(op.jobId);
+      if (st === 'ConstraintViolation') return '#ef4444';
+      if (st === 'Unschedulable') return '#6b7280';
       return '#10b981';
     }
     if (colorMode === 'critical') {
