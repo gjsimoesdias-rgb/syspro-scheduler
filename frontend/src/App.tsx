@@ -383,6 +383,15 @@ const App: React.FC = () => {
         partial: 'partial-scheduled',
         'not-scheduled': 'not-scheduled'
       };
+      // A job with no operations in SYSPRO (no WipJobAllLab lines) can never be
+      // scheduled; say so rather than a bare "Not Scheduled".
+      if ((job.operations?.length ?? 0) === 0) {
+        return (
+          <span className="schedule-status not-scheduled" title="This job has no operations in SYSPRO (WipJobAllLab), so there is nothing to schedule. Add a routing to the job in SYSPRO.">
+            No routing ⓘ
+          </span>
+        );
+      }
       const reasonTip = sts !== 'scheduled' ? scheduleShortfall?.tipByJob.get(job.jobId) : undefined;
       return (
         <span className={`schedule-status ${classMap[sts]}`} title={reasonTip}>
