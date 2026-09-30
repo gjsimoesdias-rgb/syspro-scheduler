@@ -206,7 +206,7 @@ const ChangeoverMatrix: React.FC = () => {
             <h3>Changeover Matrix</h3>
             <p>
               Sequence-dependent setup time (minutes) between product classes. Every finished good
-              inherits its class's changeover; charged automatically during scheduling.
+              inherits its class&apos;s changeover; charged automatically during scheduling.
               From (rows) → To (columns).
             </p>
           </div>

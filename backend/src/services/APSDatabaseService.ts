@@ -484,7 +484,7 @@ export class APSDatabaseService {
    * Clean up old scheduling records (closed/completed operations).
    * Called periodically to maintain summary table.
    */
-  async cleanupClosedOperations(dayOffset: number = 0): Promise<{ rowsDeleted: number }> {
+  async cleanupClosedOperations(dayOffset = 0): Promise<{ rowsDeleted: number }> {
     try {
       const queryStr = `
         DECLARE @DeletedCount INT;

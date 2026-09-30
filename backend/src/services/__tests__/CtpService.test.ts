@@ -186,6 +186,7 @@ describe('computeCtp', () => {
 });
 
 describe('ConstraintManager workcentre-aware setup matrix', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ConstraintManager = require('../ConstraintManager').default;
 
   it('prefers workcentre-specific changeover over generic', () => {

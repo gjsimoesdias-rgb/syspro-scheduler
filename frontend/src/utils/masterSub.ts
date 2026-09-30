@@ -41,12 +41,10 @@ export const getMasterLinkValue = (job: Job): string => {
     ?? source.parentJobId;
   const normalized = Array.isArray(raw) ? raw[0] : raw;
   const text = String(normalized || '').trim();
-  if (!text) return '';
-
-  const digitsOnly = text.replace(/\D/g, '');
-  if (!digitsOnly) return '';
-
-  return text.length === digitsOnly.length ? text : digitsOnly.padStart(15, '0');
+  // SYSPRO job numbers can be alphanumeric — return the id as-is. (Stripping
+  // non-digits and padding turned "MST-1" into "000000000000001", which then
+  // never matched the master's jobId.)
+  return text;
 };
 
 /**

@@ -116,7 +116,7 @@ const SetupMatrixEditor: React.FC<Props> = ({ resources }) => {
           <h3>Changeover Matrix</h3>
           <p>
             Sequence-dependent setup times. When a resource switches from one item to another,
-            the engine charges the matrix value instead of the operation's default setup time.
+            the engine charges the matrix value instead of the operation&apos;s default setup time.
           </p>
         </div>
         <button className="btn btn-sm" onClick={load} disabled={loading} title="Reload">

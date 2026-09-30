@@ -188,7 +188,7 @@ const BomTreeView: React.FC = () => {
       <div className="bom-header">
         <h3><Layers size={15} aria-hidden="true" /> Structure &amp; Routings</h3>
         <p>
-          Browse the full multi-level bill of materials with each item's routing operations —
+          Browse the full multi-level bill of materials with each item&apos;s routing operations —
           read straight from SYSPRO structures and routings.
         </p>
       </div>
