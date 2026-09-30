@@ -70,3 +70,11 @@ describe('groupSameItemJobs', () => {
     expect(out.map((j) => j.jobId)).toEqual(['A1', 'A2', 'B1', 'A3']);
   });
 });
+
+describe('setup once per group — SYSPRO minor setup', () => {
+  it('the second same-item job uses the operation minor setup', async () => {
+    const withMinor = (j: any) => ({ ...j, operations: j.operations.map((o: any) => ({ ...o, minorSetupTime: 5 })) });
+    const r = await run([withMinor(job('A1', 'ITEM-A', 1)), withMinor(job('A2', 'ITEM-A', 2))], true);
+    expect(r.map((x: any) => x.op.setupTime)).toEqual([30, 5]);
+  });
+});

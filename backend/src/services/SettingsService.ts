@@ -69,6 +69,8 @@ export const DEFAULT_COMPANY_SETTINGS = {
       transferApplyTo: 'next-operation',
       // Overlap: next op may start after this % of the previous run (100 = no overlap).
       overlapPercent: 100,
+      // Use SYSPRO's per-operation transfer qty/% (TransferQtyOrPct) for overlap.
+      transferFromSyspro: false,
       // auto scheduling
       schedulingMethod: 'forward',
       forwardFrom: 'today',

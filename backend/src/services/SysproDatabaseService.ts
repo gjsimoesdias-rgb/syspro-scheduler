@@ -100,6 +100,25 @@ const mapDatabaseFields = (row: Record<string, any>): Record<string, unknown> =>
   return passthrough;
 };
 
+/**
+ * SYSPRO per-operation transfer (overlap): TransferQtyOrPct = 'P' → percent
+ * of the run, 'Q' → a quantity out of the operation quantity. Returns the
+ * share of this op's run after which the next op may start, or undefined
+ * when there is no usable transfer (blank, 0, or the whole quantity).
+ */
+export function sysproTransferFraction(row: Record<string, any>, opQty?: number): number | undefined {
+  const kind = String(row?.TransferQtyOrPct ?? '').trim().toUpperCase();
+  const value = Number(row?.TransferQtyPct);
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  let f: number | undefined;
+  if (kind === 'P') f = value / 100;
+  else if (kind === 'Q') {
+    const qty = Number(opQty) > 0 ? Number(opQty) : Number(row?.QtyToMake);
+    f = qty > 0 ? value / qty : undefined;
+  }
+  return f !== undefined && f > 0 && f < 1 ? f : undefined;
+}
+
 export class SysproDatabaseService {
   constructor(private sysproDb: DatabaseConnection) {}
 
@@ -217,7 +236,11 @@ export class SysproDatabaseService {
         ? unitRunHours * parentQty
         : (Number(row.duration) || 0);
     const durationMinutes = runHours * 60;
-    const setupMinutes = (Number(row.setupTime) || 0) * 60;
+    // Startup time (IExpStartupTime) is machine time before the run — booked with setup.
+    const setupMinutes = ((Number(row.setupTime) || 0) + (Number(row.IExpStartupTime) || 0)) * 60;
+    const waitMinutes = Math.max(0, (Number(row.IWaitTime) || 0) * 60);
+    const minorSetupMinutes = Math.max(0, (Number(row.MinorSetUp) || 0) * 60);
+    const transferFraction = sysproTransferFraction(row, parentQty);
     const queueMinutes = (Number(row.queueTime) || 0) * 60;
     const moveMinutes = (Number(row.moveTime) || 0) * 60;
 
@@ -250,6 +273,9 @@ export class SysproDatabaseService {
       ...subcontractFields(row),
       batchSize: Number(row.batchSize) || 1,
       qualifiedResourceIds: resourceIds,
+      waitTime: waitMinutes || undefined,
+      minorSetupTime: minorSetupMinutes || undefined,
+      transferFraction,
       plannedStartDate,
       plannedEndDate,
       assignedResourceId: scheduledMachine || iMachine || undefined,

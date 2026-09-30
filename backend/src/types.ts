@@ -58,6 +58,15 @@ export interface Operation {
   subcontractSupplier?: string;
   /** Elapsed time for a subcontract op, in minutes (converted from SYSPRO ElapsedTime). */
   elapsedMinutes?: number;
+  /** SYSPRO IWaitTime — elapsed wait after this op before the next may start (minutes). */
+  waitTime?: number;
+  /** SYSPRO MinorSetUp — reduced setup when the same item ran just before (minutes). */
+  minorSetupTime?: number;
+  /**
+   * SYSPRO TransferQtyOrPct / TransferQtyPct — share of this op's run after
+   * which the next op may start (0–1, exclusive). Undefined = no transfer.
+   */
+  transferFraction?: number;
   [key: string]: unknown;
 }
 

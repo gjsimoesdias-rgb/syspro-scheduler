@@ -200,7 +200,7 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
     // nothing left to do are skipped entirely. (This setting existed in the
     // Settings panel but was never applied until 2026-07-08.)
     let includeCompletedOps = false;
-    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; enforceMaterial: boolean; setupOncePerGroup: boolean; overlapFraction?: number } | undefined;
+    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; enforceMaterial: boolean; setupOncePerGroup: boolean; overlapFraction?: number; useSysproTransfer: boolean; useWaitTime: boolean } | undefined;
     try {
       const schedulerDb = req.app.locals.schedulerDb;
       const companyId = (req as any).user?.companyId;
@@ -220,6 +220,8 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
             // Settings → Setup → "Apply to the first job in the autoscheduling group only".
             setupOncePerGroup: rules.setupFirstJobOnly === true,
             overlapFraction: overlapFractionFrom(rules),
+            useSysproTransfer: rules.useTransfer === true && rules.transferFromSyspro === true,
+            useWaitTime: rules.useWaitTime === true,
           };
         }
       }
@@ -537,7 +539,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
 
     // Same completed-op / rule-toggle policy as /generate for a fair comparison.
     let includeCompletedOps = false;
-    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; setupOncePerGroup: boolean; overlapFraction?: number } | undefined;
+    let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; setupOncePerGroup: boolean; overlapFraction?: number; useSysproTransfer: boolean; useWaitTime: boolean } | undefined;
     try {
       const schedulerDb = req.app.locals.schedulerDb;
       const companyId = (req as any).user?.companyId;
@@ -552,6 +554,8 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
             useMoveTime: rulesCfg.useMoveTime !== false,
             setupOncePerGroup: rulesCfg.setupFirstJobOnly === true,
             overlapFraction: overlapFractionFrom(rulesCfg),
+            useSysproTransfer: rulesCfg.useTransfer === true && rulesCfg.transferFromSyspro === true,
+            useWaitTime: rulesCfg.useWaitTime === true,
           };
         }
       }

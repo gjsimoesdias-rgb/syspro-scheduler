@@ -103,6 +103,13 @@ export interface SchedulingContext {
      * scheduling only.
      */
     overlapFraction?: number;
+    /**
+     * Use SYSPRO's per-operation transfer (TransferQtyOrPct / TransferQtyPct)
+     * for overlap. An operation's own value wins over overlapFraction.
+     */
+    useSysproTransfer?: boolean;
+    /** Apply SYSPRO IWaitTime: elapsed wait after an op before the next starts. Default false. */
+    useWaitTime?: boolean;
   };
 }
 
@@ -788,8 +795,8 @@ export class SchedulingEngine {
     // Previous operation's slot, for operation overlap (transfer batches).
     let previousSlot: OperationSlot | null = null;
     let previousWasSubcontract = false;
-    const overlapFraction = context.ruleToggles?.overlapFraction;
-    const useOverlap = overlapFraction !== undefined && overlapFraction > 0 && overlapFraction < 1;
+    const globalOverlap = context.ruleToggles?.overlapFraction;
+    const validFraction = (f: unknown): f is number => typeof f === 'number' && f > 0 && f < 1;
 
     // Flow-line: once the first operation is placed on a resource that belongs to
     // a line group, all subsequent operations of this job must also use resources
@@ -839,14 +846,20 @@ export class SchedulingEngine {
           ? 0
           : Math.max(0, operation.queueTime || 0);
         // Overlap: start once a share of the previous run is done, not at its end.
-        const overlapping = useOverlap && !!previousSlot && !previousWasSubcontract && !operation.isSubcontract;
+        // The previous op's own SYSPRO transfer wins over the company %.
+        const prevOp = i > 0 ? sortedOps[i - 1] : undefined;
+        const prevTransfer = context.ruleToggles?.useSysproTransfer ? prevOp?.transferFraction : undefined;
+        const overlapFraction = validFraction(prevTransfer) ? prevTransfer : validFraction(globalOverlap) ? globalOverlap : undefined;
+        const overlapping = overlapFraction !== undefined && !!previousSlot && !previousWasSubcontract && !operation.isSubcontract;
         let chainFromMs = predecessorEnd.getTime();
         if (overlapping && previousSlot) {
           const runMs = previousSlot.runEnd.getTime() - previousSlot.runStart.getTime();
           const moveMs = Math.max(0, previousSlot.moveEnd.getTime() - previousSlot.runEnd.getTime());
           chainFromMs = Math.min(chainFromMs, previousSlot.runStart.getTime() + overlapFraction! * runMs + moveMs);
         }
-        const earliestStart = new Date(chainFromMs + (interOpGapMinutes + queueLagMinutes) * 60 * 1000);
+        // SYSPRO wait time after the previous op (elapsed, books no machine).
+        const waitMinutes = context.ruleToggles?.useWaitTime && prevOp ? Math.max(0, prevOp.waitTime || 0) : 0;
+        const earliestStart = new Date(chainFromMs + (interOpGapMinutes + queueLagMinutes + waitMinutes) * 60 * 1000);
 
         // Batch constraint check — warn if job quantity is below the operation's minimum batch size.
         if (this.constraintManager) {
@@ -921,7 +934,8 @@ export class SchedulingEngine {
           // run after that, so it cannot finish earlier. Push and retry.
           if (overlapping && previousSlot) {
             const ownRunMs = Math.max(0, (operation.duration || 0) * 60000);
-            const requiredEndMs = previousSlot.moveEnd.getTime() + overlapFraction! * ownRunMs;
+            const requiredEndMs = previousSlot.moveEnd.getTime() + overlapFraction! * ownRunMs
+              + waitMinutes * 60000;
             let startMs = earliestStart.getTime();
             for (let attempt = 0; attempt < 5 && operationSlot && operationSlot.runEnd.getTime() < requiredEndMs; attempt++) {
               startMs += requiredEndMs - operationSlot.runEnd.getTime();
@@ -1292,7 +1306,8 @@ export class SchedulingEngine {
       // unless the matrix has an explicit same-item entry.
       if (!context.ruleToggles?.setupOncePerGroup) return operation;
       const explicit = this.constraintManager.getSequenceSetupTime(prevItemCode, job.itemCode, operation.workcentreId);
-      const setup = explicit ?? 0;
+      // Matrix entry, else SYSPRO's minor setup, else none.
+      const setup = explicit ?? operation.minorSetupTime ?? 0;
       return setup !== operation.setupTime ? { ...operation, setupTime: setup } : operation;
     }
     const seqDuration = this.constraintManager.calculateOperationDuration(operation, prevItemCode, job.itemCode);

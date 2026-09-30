@@ -78,6 +78,7 @@ interface CompanySettings {
       useTransfer: boolean;
       transferApplyTo: string;
       overlapPercent?: number;
+      transferFromSyspro?: boolean;
       schedulingMethod: string;
       forwardFrom: string;
       backwardFrom: string;
@@ -470,10 +471,13 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
             <GroupBox title="Setup">
               <CheckRow label="Use setup time" checked={r.useSetupTime} onChange={v => setR('useSetupTime', v)} />
               {r.useSetupTime && <>
-                <CheckRow label="Setup once per group — same item back-to-back skips setup; same-item jobs due within 7 days run together" checked={r.setupFirstJobOnly} onChange={v => setR('setupFirstJobOnly', v)} />
+                <CheckRow label="Setup once per group — same item back-to-back uses SYSPRO minor setup (or none); same-item jobs due within 7 days run together" checked={r.setupFirstJobOnly} onChange={v => setR('setupFirstJobOnly', v)} />
                 <CheckRow notApplied label="Skip if operation has quantity reported" checked={r.skipSetupIfQtyReported} onChange={v => setR('skipSetupIfQtyReported', v)} />
                 <CheckRow notApplied label="Apply even when no run or open quantity" checked={r.setupApplyEvenNoQty} onChange={v => setR('setupApplyEvenNoQty', v)} />
               </>}
+            </GroupBox>
+            <GroupBox title="Wait">
+              <CheckRow label="Use wait time (SYSPRO IWaitTime — elapsed time after the operation before the next one starts)" checked={r.useWaitTime ?? false} onChange={v => setR('useWaitTime', v)} />
             </GroupBox>
             <GroupBox title="Move">
               <CheckRow label="Use move time" checked={r.useMoveTime} onChange={v => setR('useMoveTime', v)} />
@@ -486,6 +490,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
             </GroupBox>
             <GroupBox title="Transfer/Overlap">
               <CheckRow label="Use transfer (overlap operations)" checked={r.useTransfer} onChange={v => setR('useTransfer', v)} />
+              {r.useTransfer && <CheckRow label="Use SYSPRO transfer quantity / % per operation (overrides the % below where set)" checked={r.transferFromSyspro ?? false} onChange={v => setR('transferFromSyspro', v)} />}
               {r.useTransfer && <Row label="Start next operation after % of the previous run">
                 <Slider value={r.overlapPercent ?? 100} min={5} max={100} step={5} onChange={v => setR('overlapPercent', v)} />
                 <span className="sp-hint">{(r.overlapPercent ?? 100) >= 100 ? 'No overlap — the next operation waits for the previous one to finish' : `Next op starts once ${r.overlapPercent}% of the previous run is done (plus move time); it can't finish before the last batch arrives`}</span>

@@ -18,7 +18,7 @@ const res = (id: string, w: string) => [id, { resourceId: id, name: id, type: 'M
 const op = (seq: number, w: string, r: string, run: number) => ({ opId: `J1-OP${seq}`, jobId: 'J1', sequence: seq, workcentreId: w,
   workcentreName: w, duration: run, setupTime: 0, queueTime: 0, moveTime: 0, batchSize: 1, qualifiedResourceIds: [r], status: 'NotStarted' });
 
-const run = async (ops: any[], overlapFraction?: number) => {
+const run = async (ops: any[], overlapFraction?: number, extra: any = {}) => {
   const ctx: any = {
     jobs: [{ jobId: 'J1', itemCode: 'I', description: '', quantity: 1, releaseDate: start, dueDate: new Date(2026, 9, 30),
       priority: 5, status: 'Released', estimatedMaterialCost: 0, estimatedLaborCost: 0, operations: ops }],
@@ -26,7 +26,7 @@ const run = async (ops: any[], overlapFraction?: number) => {
     materials: new Map(), planningHorizonStart: start, planningHorizonEnd: new Date(2026, 9, 13),
     schedulingRule: 'edd', schedulingDirection: 'forward',
     resourceCapacities: new Map([['R1', 1], ['R2', 1]]), workcentreCapacities: new Map([['L1', 1], ['L2', 1]]),
-    ruleToggles: { useMoveTime: false, overlapFraction },
+    ruleToggles: { useMoveTime: false, overlapFraction, ...extra },
   };
   const s = await new SchedulingEngine().schedule(ctx);
   const j = s.jobSchedules[0];
@@ -53,5 +53,32 @@ describe('operation overlap', () => {
     const { o, jobEnd } = await run([op(10, 'L1', 'R1', 240), op(20, 'L2', 'R2', 40)], 0.25);
     expect(o[1].e).toBeGreaterThanOrEqual(250 * MIN);
     expect(jobEnd).toBe(Math.max(o[0].e, o[1].e));
+  });
+
+  it('SYSPRO per-op transfer wins over the company % when enabled', async () => {
+    const first = { ...op(10, 'L1', 'R1', 120), transferFraction: 0.5 };
+    const { o } = await run([first, op(20, 'L2', 'R2', 120)], 0.25, { useSysproTransfer: true });
+    expect(o[1].s).toBe(60 * MIN);
+    const off = await run([first, op(20, 'L2', 'R2', 120)], 0.25);
+    expect(off.o[1].s).toBe(30 * MIN);
+  });
+
+  it('wait time delays the next operation only when enabled', async () => {
+    const first = { ...op(10, 'L1', 'R1', 60), waitTime: 45 };
+    const on = await run([first, op(20, 'L2', 'R2', 60)], undefined, { useWaitTime: true });
+    expect(on.o[1].s).toBe(105 * MIN);
+    const off = await run([first, op(20, 'L2', 'R2', 60)]);
+    expect(off.o[1].s).toBe(60 * MIN);
+  });
+});
+
+import { sysproTransferFraction } from '../SysproDatabaseService';
+describe('sysproTransferFraction', () => {
+  it('reads percent and quantity transfers', () => {
+    expect(sysproTransferFraction({ TransferQtyOrPct: 'P', TransferQtyPct: 25 })).toBe(0.25);
+    expect(sysproTransferFraction({ TransferQtyOrPct: 'Q', TransferQtyPct: 50 }, 200)).toBe(0.25);
+    expect(sysproTransferFraction({ TransferQtyOrPct: ' ', TransferQtyPct: 0 })).toBeUndefined();
+    expect(sysproTransferFraction({ TransferQtyOrPct: 'P', TransferQtyPct: 100 })).toBeUndefined();
+    expect(sysproTransferFraction({ TransferQtyOrPct: 'Q', TransferQtyPct: 500 }, 200)).toBeUndefined();
   });
 });
