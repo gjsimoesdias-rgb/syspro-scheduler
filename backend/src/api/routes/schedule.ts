@@ -800,6 +800,68 @@ router.get('/pins', (req: Request, res: Response) => {
   return res.json(Object.values(pins));
 });
 
+/**
+ * POST /api/schedule/pins/time-fence { until }
+ * Time-fence lock (LYNQ "Time Fence Lock"): pin every operation of the master
+ * plan that starts before `until`, at its current machine and times. The next
+ * generate keeps them where they are.
+ */
+router.post('/pins/time-fence', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
+  const until = new Date(String(req.body?.until || ''));
+  if (Number.isNaN(until.getTime())) return res.status(400).json({ error: 'until must be a date/time' });
+  try {
+    const sysproDb = req.app.locals.sysproDb;
+    if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
+    const latest = await sysproDb.query(`
+      IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData;
+      ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`);
+    const data = latest.recordset?.[0]?.ScheduleData;
+    if (!data) return res.status(404).json({ error: 'There is no master plan to lock yet' });
+    const schedule = JSON.parse(data);
+    const pins: Record<string, PinnedOperation> = { ...(req.app.locals.pinnedOperations || {}) };
+    const now = new Date().toISOString();
+    let added = 0;
+    for (const job of schedule.jobSchedules || []) {
+      for (const op of job.operationSchedules || []) {
+        const start = new Date(op.setupStart || op.plannedStartDate);
+        if (Number.isNaN(start.getTime()) || start >= until || !op.resourceId) continue;
+        const key = `${job.jobId}::${op.opId}`;
+        if (!pins[key]) added++;
+        pins[key] = {
+          jobId: job.jobId, opId: op.opId, workcentreId: op.workcentreId, resourceId: op.resourceId,
+          plannedStartDate: new Date(op.plannedStartDate).toISOString(),
+          plannedEndDate: new Date(op.plannedEndDate).toISOString(),
+          pinnedAt: now, pinnedBy: req.user?.username,
+        };
+      }
+    }
+    setLocal(req.app.locals, 'pinnedOperations', pins);
+    req.log.info({ until: until.toISOString(), added }, 'Time-fence lock applied');
+    return res.json({ ok: true, added, total: Object.keys(pins).length });
+  } catch (error) {
+    req.log.error({ err: error }, 'Time-fence lock failed');
+    return res.status(500).json({ error: (error as any).message });
+  }
+});
+
+/**
+ * DELETE /api/schedule/pins[?before=ISO]
+ * Remove all locks (LYNQ "Remove All Locks"), or only those starting before a date
+ * (time-fence unlock).
+ */
+router.delete('/pins', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
+  const pins: Record<string, PinnedOperation> = { ...(req.app.locals.pinnedOperations || {}) };
+  const before = req.query.before ? new Date(String(req.query.before)) : null;
+  if (before && Number.isNaN(before.getTime())) return res.status(400).json({ error: 'before must be a date/time' });
+  let removed = 0;
+  for (const [key, pin] of Object.entries(pins)) {
+    if (!before || new Date(pin.plannedStartDate) < before) { delete pins[key]; removed++; }
+  }
+  setLocal(req.app.locals, 'pinnedOperations', pins);
+  req.log.info({ removed, before: before?.toISOString() }, 'Locks removed');
+  return res.json({ ok: true, removed, total: Object.keys(pins).length });
+});
+
 // ═══════════════ Setup matrix (sequence-dependent changeovers) ═══════════════
 // NOTE: these static routes MUST be registered before GET /:scheduleId below,
 // otherwise Express would treat "setup-matrix" as a scheduleId.

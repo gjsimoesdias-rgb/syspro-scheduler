@@ -695,6 +695,14 @@ export const pinService = {
     const res = await apiClient.delete(`/schedule/pin/${encodeURIComponent(jobId)}/${encodeURIComponent(opId)}`);
     return res.data;
   },
+
+  /** Time-fence lock: pin every master-plan operation starting before `until`. */
+  timeFence: async (until: Date): Promise<{ added: number; total: number }> =>
+    (await apiClient.post('/schedule/pins/time-fence', { until: until.toISOString() })).data,
+
+  /** Remove all locks, or only those starting before `before`. */
+  removeAll: async (before?: Date): Promise<{ removed: number; total: number }> =>
+    (await apiClient.delete('/schedule/pins', { params: before ? { before: before.toISOString() } : {} })).data,
 };
 
 export default apiServices;

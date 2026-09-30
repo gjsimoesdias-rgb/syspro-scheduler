@@ -8,7 +8,46 @@ import DragPreview, { DragPreviewState } from './DragPreview';
 import GanttLegend from './GanttLegend';
 import GanttOperationBar from './GanttOperationBar';
 import { buildParentMap, getMasterRootJobId } from '../utils/masterSub';
+import toast from 'react-hot-toast';
+import { pinService, apiErrorMessage, type PinnedOperationDto } from '../services/api';
+import { useScheduleStore } from '../stores/scheduleStore';
 import './MachineGanttBoard.css';
+
+/** Reload locks from the server into the store (after a bulk lock/unlock). */
+const refreshPins = async () => {
+  const pins = await pinService.getAll();
+  const details = new Map<string, PinnedOperationDto>();
+  for (const p of pins) details.set(`${p.jobId}::${p.opId}`, p);
+  const st = useScheduleStore.getState();
+  st.setPinnedOpDetails(details);
+  st.setPinnedOps(new Set(details.keys()));
+};
+
+const timeFenceLock = async () => {
+  if (useScheduleStore.getState().activeVersion) {
+    toast.error('Locks apply to the master plan — go back to the master (Versions tab) first.');
+    return;
+  }
+  const answer = window.prompt('Time-fence lock: lock every operation that starts within the next N days (at its current machine and time).', '2');
+  if (answer === null) return;
+  const days = Number(answer);
+  if (!Number.isFinite(days) || days <= 0) { toast.error('Enter a number of days'); return; }
+  try {
+    const until = new Date(Date.now() + days * 86_400_000);
+    const r = await pinService.timeFence(until);
+    await refreshPins();
+    toast.success(`🔒 ${r.added} operations locked up to ${until.toLocaleString()} (${r.total} locked in total)`);
+  } catch (err) { toast.error(apiErrorMessage(err, 'Could not apply the time fence')); }
+};
+
+const clearLocks = async () => {
+  if (!window.confirm('Remove ALL locks? Every operation becomes free to move on the next generate.')) return;
+  try {
+    const r = await pinService.removeAll();
+    await refreshPins();
+    toast.success(`🔓 ${r.removed} locks removed`);
+  } catch (err) { toast.error(apiErrorMessage(err, 'Could not remove locks')); }
+};
 
 type ColorMode = 'workcentre' | 'lateness' | 'status' | 'critical';
 
@@ -1159,6 +1198,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
             <button className={`zoom-btn ${zoom === 'minute' ? 'active' : ''}`} onClick={() => setZoom('minute')}>Minute</button>
           </div>
           <button className={`zoom-btn ${showUtilBars ? 'active' : ''}`} onClick={() => setShowUtilBars(v => !v)} title="Toggle utilization bars">📊 Util</button>
+          <button className="zoom-btn" onClick={timeFenceLock} title="Lock every operation starting in the next N days (time fence)">🔒 Time fence</button>
+          <button className="zoom-btn" onClick={clearLocks} title="Remove all locks">🔓 Clear locks</button>
           <button className={`zoom-btn ${showShift ? 'active' : ''}`} onClick={() => setShowShift(v => !v)} title="Toggle shift info">⏱ Shift</button>
           <button
             className={`zoom-btn today-btn${todayStartPx === 'before' || todayStartPx === 'after' ? ' today-btn-out' : ''}`}

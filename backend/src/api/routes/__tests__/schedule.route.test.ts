@@ -339,6 +339,31 @@ describe('export-to-syspro — incremental publish', () => {
   });
 });
 
+describe('locks — time fence and remove all', () => {
+  const token = makeToken('planner');
+  afterEach(() => { app.locals.sysproDb = undefined; (app.locals as any).pinnedOperations = undefined; });
+
+  it('locks master ops starting before the fence, then removes them', async () => {
+    const op = (id: string, start: string) => ({ opId: id, workcentreId: 'L1', resourceId: 'R1', plannedStartDate: start, plannedEndDate: start });
+    const master = { jobSchedules: [{ jobId: 'J1', operationSchedules: [op('J1-OP10', '2026-10-01T08:00:00Z'), op('J1-OP20', '2026-10-09T08:00:00Z')] }] };
+    app.locals.sysproDb = makeFakeDb({ query: jest.fn().mockResolvedValue({ recordset: [{ ScheduleData: JSON.stringify(master) }] }) }) as any;
+    const lock = await request(app).post('/api/schedule/pins/time-fence').set('Authorization', `Bearer ${token}`)
+      .send({ until: '2026-10-05T00:00:00Z' });
+    expect(lock.status).toBe(200);
+    expect(lock.body).toMatchObject({ added: 1, total: 1 });
+    expect(Object.keys((app.locals as any).pinnedOperations)).toEqual(['J1::J1-OP10']);
+
+    const clear = await request(app).delete('/api/schedule/pins').set('Authorization', `Bearer ${token}`);
+    expect(clear.body).toMatchObject({ removed: 1, total: 0 });
+  });
+
+  it('viewers cannot lock', async () => {
+    const res = await request(app).post('/api/schedule/pins/time-fence').set('Authorization', `Bearer ${makeToken('viewer')}`)
+      .send({ until: '2026-10-05T00:00:00Z' });
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('POST /api/schedule/save — approval is never carried over', () => {
   it('stores the schedule as Draft even if the body says Approved', async () => {
     const qwp = jest.fn().mockResolvedValue({ recordset: [] });
