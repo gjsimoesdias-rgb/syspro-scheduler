@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { resourceService } from '../services/api';
+import CalendarExceptionsPanel from './CalendarExceptionsPanel';
 import './ShiftManagementTab.css';
 
 type DiversionType = 'Production' | 'Overtime' | 'Lunch' | 'Break' | 'Non Productive';
@@ -397,6 +398,8 @@ const ShiftManagementTab: React.FC<ShiftManagementTabProps> = ({ onShiftsChanged
           </tbody>
         </table>
       </div>
+
+      <CalendarExceptionsPanel onChanged={onShiftsChanged} />
 
       <div className="shift-legend">
         {DIVERSION_TYPES.map(t => (

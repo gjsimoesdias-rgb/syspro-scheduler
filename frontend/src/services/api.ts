@@ -313,8 +313,34 @@ export const resourceService = {
   deleteShift: async (shiftId: string) => {
     const response = await apiClient.delete(`/resources/shifts/${shiftId}`);
     return response.data;
+  },
+
+  getCalendarExceptions: async (): Promise<CalendarException[]> => {
+    const response = await apiClient.get('/resources/calendar-exceptions');
+    return response.data.exceptions || [];
+  },
+
+  createCalendarException: async (payload: Omit<CalendarException, 'id'>): Promise<CalendarException> => {
+    const response = await apiClient.post('/resources/calendar-exceptions', payload);
+    return response.data.exception;
+  },
+
+  deleteCalendarException: async (id: string) => {
+    const response = await apiClient.delete(`/resources/calendar-exceptions/${encodeURIComponent(id)}`);
+    return response.data;
   }
 };
+
+/** Holiday, shutdown, short day or extra working day (see backend utils/calendarExceptions.ts). */
+export interface CalendarException {
+  id: string;
+  date: string;       // YYYY-MM-DD
+  name: string;
+  scope: string;      // 'plant' or a work-centre id
+  isWorking: boolean;
+  startTime?: string; // HH:MM — when set, only this window is workable
+  endTime?: string;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Inventory — Stock On Hand and Open Purchase Orders

@@ -346,3 +346,10 @@
   border-radius: 2px;
   display: inline-block;
 }
+
+/* Calendar exceptions */
+.calendar-exceptions { margin-top: 12px; }
+.calendar-exc-form { flex-wrap: wrap; align-items: flex-end; margin: 8px 0 10px; }
+.calendar-exc-name { flex: 1 1 200px; }
+.calendar-exc-add { align-self: flex-end; }
+.calendar-exc-past { margin-top: 8px; }
