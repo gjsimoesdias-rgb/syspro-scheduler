@@ -25,6 +25,7 @@ import { stripCompletedOperations } from '../../utils/jobFilters';
 import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
 import { saveAsLatest, promoteToLatest, saveIntoWhatIf } from '../../services/ScheduleStore';
+import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordError, resetPublish, jobIdFromExportError } from '../../services/publishStatus';
 
 const router = Router();
 
@@ -1502,6 +1503,46 @@ router.get('/bom-tree/:stockCode', async (req: Request, res: Response) => {
  * GET /api/schedule/:scheduleId
  * Get schedule by ID
  */
+/**
+ * GET /api/schedule/publish-status
+ * Per-job publish state of the master plan: Published (SYSPRO has these
+ * dates), Pending (changed or never sent), Error (last send failed on it).
+ */
+router.get('/publish-status', async (req: Request, res: Response) => {
+  try {
+    const sysproDb = req.app.locals.sysproDb;
+    if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
+    const latest = await sysproDb.query(`
+      IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData;
+      ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`);
+    const data = latest.recordset?.[0]?.ScheduleData;
+    if (!data) return res.json({ jobs: [], counts: { Published: 0, Pending: 0, Error: 0 } });
+    const jobs = publishStateFor(JSON.parse(data), await loadPublishRows(sysproDb));
+    const counts = { Published: 0, Pending: 0, Error: 0 } as Record<string, number>;
+    for (const j of jobs) counts[j.state]++;
+    res.json({ jobs, counts });
+  } catch (error) {
+    req.log.error({ err: error }, 'Error reading publish status');
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
+/**
+ * POST /api/schedule/publish-status/reset { jobIds }
+ * Forget the last send for these jobs so the next "Send to SYSPRO" includes them.
+ */
+router.post('/publish-status/reset', requirePlanner, async (req: Request, res: Response) => {
+  const jobIds = Array.isArray(req.body?.jobIds) ? req.body.jobIds.map(String).filter(Boolean).slice(0, 5000) : [];
+  if (!jobIds.length) return res.status(400).json({ error: 'jobIds is required' });
+  try {
+    const sysproDb = req.app.locals.sysproDb;
+    if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
+    res.json({ reset: await resetPublish(sysproDb, jobIds) });
+  } catch (error) {
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
 router.get('/:scheduleId', async (req: Request, res: Response) => {
   try {
     const { scheduleId } = req.params;
@@ -1598,13 +1639,35 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
     }
     const schedule = JSON.parse(row.ScheduleData);
 
-    req.log.info({ scheduleId }, 'Exporting schedule to Syspro APS layer');
-    
+    // Incremental publish: only jobs whose machine or dates changed since the
+    // last successful send. { full: true } re-sends every scheduled job.
+    const full = req.body?.full === true;
+    const publishRows = await loadPublishRows(sysproDb);
+    const { toPublish, unchanged } = planPublish(schedule, publishRows, full);
+    const user = (req as any).user?.username;
+
+    if (toPublish.length === 0) {
+      await sysproDb.queryWithParams(
+        `UPDATE aps.SavedSchedules SET Status = 'Exported' WHERE ScheduleID = @scheduleId`, { scheduleId });
+      return res.json({
+        scheduleId, status: 'Exported',
+        message: `Nothing changed since the last send — ${unchanged.length} jobs already up to date in SYSPRO`,
+        details: { schedulesWritten: 0, operationsWritten: 0, unchanged: unchanged.length },
+      });
+    }
+
+    req.log.info({ scheduleId, sending: toPublish.length, unchanged: unchanged.length, full }, 'Exporting schedule to Syspro APS layer');
+
     // Initialize APS service and export
     const apsService = new APSDatabaseService(sysproDb);
-    const exportResult = await apsService.exportSchedule(schedule);
+    const exportResult = await apsService.exportSchedule(schedule, { onlyJobs: toPublish });
 
     if (exportResult.success) {
+      try {
+        await recordPublished(sysproDb, toPublish, scheduleId, user);
+      } catch (statusErr) {
+        req.log.warn({ err: statusErr }, 'Export succeeded but per-job publish status could not be recorded');
+      }
       req.log.info({ schedulesWritten: exportResult.schedulesWritten, operationsWritten: exportResult.operationsWritten }, 'Schedule export succeeded');
       
       try {
@@ -1631,11 +1694,22 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
           schedulesWritten: exportResult.schedulesWritten,
           operationsWritten: exportResult.operationsWritten,
           logsCreated: exportResult.logsCreated,
+          unchanged: unchanged.length,
           executionTimeMs: exportResult.executionTimeMs
         }
       });
     } else {
       req.log.error({ errors: exportResult.errorMessages }, 'Schedule export failed');
+      // The transaction rolled back, so nothing was written. Flag the job the
+      // error names (if any) so it shows as Error in the job list.
+      try {
+        const message = exportResult.errorMessages.join('; ');
+        const culprit = jobIdFromExportError(message, toPublish.map((j: any) => j.jobId));
+        const job = culprit ? toPublish.find((j: any) => j.jobId === culprit) : null;
+        if (job) await recordError(sysproDb, job, scheduleId, message);
+      } catch (statusErr) {
+        req.log.warn({ err: statusErr }, 'Could not record per-job publish error');
+      }
       
       res.status(500).json({
         scheduleId,

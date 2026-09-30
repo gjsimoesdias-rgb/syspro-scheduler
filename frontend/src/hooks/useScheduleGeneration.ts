@@ -179,7 +179,14 @@ export function useScheduleGeneration({
       setScheduleSource('none');
       await loadJobsAndResources();
       const written = result?.details?.schedulesWritten;
-      toast.success(written != null ? `✓ Sent to SYSPRO — ${written} jobs updated` : '✓ Schedule sent to SYSPRO');
+      const unchanged = result?.details?.unchanged;
+      toast.success(
+        written === 0 && result?.message
+          ? `✓ ${result.message}`
+          : written != null
+          ? `✓ Sent to SYSPRO — ${written} jobs updated${unchanged ? `, ${unchanged} already up to date` : ''}`
+          : '✓ Schedule sent to SYSPRO'
+      );
     } catch (error: any) {
       console.error('Error exporting schedule:', error);
       toast.error(apiErrorMessage(error, 'Failed to export schedule'));

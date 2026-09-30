@@ -33,3 +33,10 @@
 .vp-best { font-weight: 700; color: var(--status-success, #16a34a); }
 .vp-retention { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
 .vp-retention input { width: 70px; padding: 3px 6px; border: 1px solid var(--border-default); border-radius: 3px; }
+.vp-publish { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 12px;
+  padding: 8px 10px; border: 1px solid var(--border-default); border-radius: 6px; }
+.vp-pub { font-weight: 700; padding: 1px 6px; border-radius: 3px; }
+.vp-pub-published { color: var(--status-success, #16a34a); }
+.vp-pub-pending { color: var(--status-warning, #b45309); }
+.vp-pub-error { color: var(--status-error, #dc2626); }
+.vp-pub-errline { flex-basis: 100%; color: var(--status-error, #dc2626); font-size: 11px; }

@@ -234,6 +234,12 @@ export const versionService = {
   revert: async (id: string): Promise<void> => { await apiClient.post(`/versions/${encodeURIComponent(id)}/revert`); },
   rename: async (id: string, name: string): Promise<void> => { await apiClient.patch(`/versions/${encodeURIComponent(id)}`, { name }); },
   remove: async (id: string): Promise<void> => { await apiClient.delete(`/versions/${encodeURIComponent(id)}`); },
+  publishStatus: async (): Promise<{
+    jobs: Array<{ jobId: string; state: 'Published' | 'Pending' | 'Error'; publishedAt: string | null; lastError: string | null }>;
+    counts: { Published: number; Pending: number; Error: number };
+  }> => (await apiClient.get('/schedule/publish-status')).data,
+  resetPublish: async (jobIds: string[]): Promise<number> =>
+    (await apiClient.post('/schedule/publish-status/reset', { jobIds })).data.reset,
   purge: async (olderThanDays: number, keepAtLeast = 20): Promise<number> =>
     (await apiClient.post('/versions/purge', { olderThanDays, keepAtLeast })).data.deleted,
 };

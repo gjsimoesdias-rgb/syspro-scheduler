@@ -48,11 +48,13 @@ const VersionsPanel: React.FC = () => {
   const [busy, setBusy] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [purgeDays, setPurgeDays] = useState(90);
+  const [publish, setPublish] = useState<Awaited<ReturnType<typeof versionService.publishStatus>> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       setData(await versionService.list(50));
+      versionService.publishStatus().then(setPublish).catch(() => setPublish(null));
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Could not load versions'));
     } finally {
@@ -220,6 +222,28 @@ const VersionsPanel: React.FC = () => {
               <button className="btn btn-sm btn-primary" onClick={() => commit(byId.get(activeVersion.versionId)!)}>Commit to master</button>
             )}
           </span>
+        </div>
+      )}
+
+      {publish && (publish.jobs.length > 0) && (
+        <div className="vp-publish">
+          <strong>SYSPRO sync (master plan):</strong>
+          <span className="vp-pub vp-pub-published">{publish.counts.Published} published</span>
+          <span className="vp-pub vp-pub-pending">{publish.counts.Pending} pending</span>
+          {publish.counts.Error > 0 && <span className="vp-pub vp-pub-error">{publish.counts.Error} error</span>}
+          <span className="vp-desc">Send to SYSPRO writes only pending and error jobs.</span>
+          {canPlan && publish.counts.Published > 0 && (
+            <button className="btn btn-sm" disabled={!!busy} onClick={() => {
+              if (!window.confirm('Mark every job for re-sending? The next Send to SYSPRO will write all scheduled jobs again.')) return;
+              run('resend', async () => {
+                await versionService.resetPublish(publish.jobs.map((j) => j.jobId));
+                await load();
+              });
+            }}>Re-send all next time</button>
+          )}
+          {publish.jobs.filter((j) => j.state === 'Error').slice(0, 5).map((j) => (
+            <div key={j.jobId} className="vp-pub-errline">Job {j.jobId}: {j.lastError}</div>
+          ))}
         </div>
       )}
 

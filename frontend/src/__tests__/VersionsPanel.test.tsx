@@ -19,6 +19,10 @@ vi.mock('../services/api', () => {
         whatIfs: [v('W', 'WhatIf', 'Saturday overtime', 97)],
         history: [v('H', 'History', 'Last week', 80)],
       })),
+      publishStatus: vi.fn(async () => ({
+        jobs: [{ jobId: 'J1', state: 'Published' }, { jobId: 'J2', state: 'Error', lastError: 'No WipMaster row updated for job J2' }],
+        counts: { Published: 1, Pending: 0, Error: 1 },
+      })),
       get: vi.fn(async () => ({ schedule: { scheduleId: 'W', scheduledDate: '2026-10-01', planningHorizon: { startDate: '2026-10-01', endDate: '2026-10-08' }, jobSchedules: [], constraintViolations: [], metrics: {} } })),
     },
   };
@@ -35,6 +39,8 @@ describe('VersionsPanel', () => {
     expect(screen.getByText('Last week')).toBeInTheDocument();
     expect(screen.getByText('Commit to master')).toBeInTheDocument();
     expect(screen.getByText('Revert to this')).toBeInTheDocument();
+    expect(await screen.findByText('1 error')).toBeInTheDocument();
+    expect(screen.getByText(/No WipMaster row updated for job J2/)).toBeInTheDocument();
   });
 
   it('compares ticked versions and marks the best value', async () => {

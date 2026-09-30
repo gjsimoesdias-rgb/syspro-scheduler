@@ -313,6 +313,32 @@ describe('POST /api/schedule/:scheduleId/export-to-syspro', () => {
   });
 });
 
+describe('export-to-syspro — incremental publish', () => {
+  const token = makeToken('planner');
+  afterEach(() => { app.locals.sysproDb = undefined; });
+  const op = (jobId: string, start: string) => ({ opId: `${jobId}-OP10`, resourceId: 'M1', plannedStartDate: start, plannedEndDate: '2026-10-02T16:00:00Z' });
+  const jobA = { jobId: 'A', plannedStartDate: '2026-10-01T08:00:00Z', plannedEndDate: '2026-10-02T16:00:00Z', operationSchedules: [op('A', '2026-10-01T08:00:00Z')] };
+
+  it('skips SYSPRO entirely when every job matches the last send', async () => {
+    const { jobFingerprint } = await import('../../../services/publishStatus');
+    const qwp = jest.fn().mockImplementation(async (sql: string) =>
+      /SELECT ScheduleData, Status/.test(sql)
+        ? { recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [jobA] }), Status: 'Approved' }] }
+        : { recordset: [] });
+    const query = jest.fn().mockImplementation(async (sql: string) =>
+      /aps\.JobPublishStatus/.test(sql)
+        ? { recordset: [{ JobId: 'A', Status: 'Published', Fingerprint: jobFingerprint(jobA) }] }
+        : { recordset: [] });
+    const db = makeFakeDb({ queryWithParams: qwp, query });
+    app.locals.sysproDb = db as any;
+    const res = await request(app).post('/api/schedule/S1/export-to-syspro').set('Authorization', `Bearer ${token}`).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/Nothing changed/);
+    expect(db.withTransaction).not.toHaveBeenCalled();
+    expect(qwp.mock.calls.some(([sql]) => /SET Status = 'Exported'/.test(sql))).toBe(true);
+  });
+});
+
 describe('POST /api/schedule/save — approval is never carried over', () => {
   it('stores the schedule as Draft even if the body says Approved', async () => {
     const qwp = jest.fn().mockResolvedValue({ recordset: [] });

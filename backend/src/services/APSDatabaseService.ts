@@ -109,7 +109,12 @@ export class APSDatabaseService {
    * refresh runs *before* the transaction because it is a long-running,
    * idempotent operation that does not need to be undone.
    */
-  async exportSchedule(schedule: Schedule): Promise<ExportResult> {
+  /**
+   * @param opts.onlyJobs incremental publish: write only these jobs to SYSPRO.
+   *   The scheduler summary snapshot is still rebuilt from the whole schedule.
+   */
+  async exportSchedule(schedule: Schedule, opts: { onlyJobs?: Schedule['jobSchedules'] } = {}): Promise<ExportResult> {
+    const toWrite: Schedule = opts.onlyJobs ? { ...schedule, jobSchedules: opts.onlyJobs } : schedule;
     const startTime = Date.now();
     const result: ExportResult = {
       success: true,
@@ -138,8 +143,8 @@ export class APSDatabaseService {
         logger.info('Export step 2: populating scheduler record summary');
         await this.populateSchedulerRecordSummary(db, schedule);
 
-        logger.info({ count: schedule.jobSchedules.length }, 'Export step 3: writing job schedules to APS');
-        for (const jobSchedule of schedule.jobSchedules) {
+        logger.info({ count: toWrite.jobSchedules.length }, 'Export step 3: writing job schedules to APS');
+        for (const jobSchedule of toWrite.jobSchedules) {
           const writeResult = await this.writeJobSchedule(db, jobSchedule, schedule);
           if (writeResult.success) {
             innerResult.schedulesWritten += writeResult.schedulesWritten;
@@ -152,10 +157,10 @@ export class APSDatabaseService {
         }
 
         logger.info('Export step 4: writing operation changes to WipJobAllLab');
-        await this.writeBackToWipJobAllLab(db, schedule);
+        await this.writeBackToWipJobAllLab(db, toWrite);
 
         logger.info('Export step 5: writing job changes to WipMaster');
-        await this.writeBackToWipMaster(db, schedule);
+        await this.writeBackToWipMaster(db, toWrite);
 
         return innerResult;
       });
