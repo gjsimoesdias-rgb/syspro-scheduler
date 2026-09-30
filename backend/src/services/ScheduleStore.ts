@@ -133,8 +133,11 @@ export interface VersionSummary {
   metrics: Record<string, any> | null;
 }
 
+// SavedAt is written with GETDATE() (server local time, no offset). Attach the
+// server's offset so the driver returns the real instant, not local-as-UTC.
 const SUMMARY_COLS = `ScheduleID, Status, JobCount, OperationCount, HorizonStart, HorizonEnd,
-  SavedAt, IsLatest, VersionKind, VersionName, BasedOnId, CreatedBy, MetricsJson`;
+  TODATETIMEOFFSET(SavedAt, DATEPART(TZOFFSET, SYSDATETIMEOFFSET())) AS SavedAt,
+  IsLatest, VersionKind, VersionName, BasedOnId, CreatedBy, MetricsJson`;
 
 const toSummary = (r: any): VersionSummary => {
   let metrics: Record<string, any> | null = null;
@@ -142,7 +145,7 @@ const toSummary = (r: any): VersionSummary => {
   return {
     versionId: r.ScheduleID,
     kind: r.VersionKind === 'WhatIf' ? 'WhatIf' : r.IsLatest ? 'Master' : 'History',
-    name: r.VersionName || (r.IsLatest ? 'Master plan' : 'Plan'),
+    name: r.VersionName || (r.IsLatest ? 'Master plan' : 'Earlier plan'),
     status: r.Status,
     jobCount: r.JobCount ?? null,
     operationCount: r.OperationCount ?? null,
@@ -167,7 +170,22 @@ export async function listVersions(db: DbExecutor, historyLimit = 30): Promise<{
       WHERE IsLatest = 0 AND VersionKind <> 'WhatIf' ORDER BY SavedAt DESC
     ) h
     ORDER BY SavedAt DESC`);
-  const rows = (r.recordset || []).map(toSummary);
+  const rows: VersionSummary[] = (r.recordset || []).map(toSummary);
+
+  // Plans saved before versions existed have no KPI snapshot. Backfill the
+  // master and what-ifs (a handful of rows) once, so Compare has numbers.
+  for (const v of rows.filter((x) => !x.metrics && x.kind !== 'History').slice(0, 10)) {
+    try {
+      const d = await db.queryWithParams(
+        `SELECT ScheduleData FROM aps.SavedSchedules WHERE ScheduleID = @id`, { id: v.versionId });
+      const snap = metricsSnapshot(JSON.parse(d.recordset?.[0]?.ScheduleData || 'null'));
+      if (!snap) continue;
+      await db.queryWithParams(
+        `UPDATE aps.SavedSchedules SET MetricsJson = @m WHERE ScheduleID = @id AND MetricsJson IS NULL`,
+        { id: v.versionId, m: snap });
+      v.metrics = JSON.parse(snap);
+    } catch { /* cosmetic — leave the row without KPIs */ }
+  }
   return {
     master: rows.find((v: VersionSummary) => v.kind === 'Master') || null,
     whatIfs: rows.filter((v: VersionSummary) => v.kind === 'WhatIf'),

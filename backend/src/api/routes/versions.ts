@@ -22,6 +22,7 @@ import {
   listVersions, getVersion, createWhatIf, saveIntoWhatIf, commitWhatIf, revertToVersion,
   renameVersion, deleteVersion, purgeHistory, VersionError,
 } from '../../services/ScheduleStore';
+import { AuditLogService } from '../../services/AuditLogService';
 
 const router = Router();
 
@@ -39,6 +40,17 @@ const fail = (req: AuthRequest, res: Response, err: unknown) => {
 
 const audit = (req: AuthRequest, action: string, details: Record<string, unknown>) => {
   (req as any).log?.info?.({ action, user: req.user?.username, ...details }, `version_${action}`);
+  const schedulerDb = req.app.locals.schedulerDb;
+  if (schedulerDb) {
+    new AuditLogService(schedulerDb).log({
+      actorId: req.user?.username || 'unknown',
+      action: `version_${action}`,
+      entityType: 'plan_version',
+      entityId: String(details.versionId ?? 'all'),
+      after: details,
+      traceId: (req as any).id,
+    }).catch(() => { /* best effort */ });
+  }
 };
 
 router.get('/', async (req: AuthRequest, res: Response) => {
