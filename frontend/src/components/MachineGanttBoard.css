@@ -1010,3 +1010,6 @@
   .machine-op-bar,
   .now-line { animation: none; }
 }
+
+/* Horizontal virtualisation: stands in for the off-screen cells */
+.gantt-virtual-spacer { flex-shrink: 0; height: 1px; }

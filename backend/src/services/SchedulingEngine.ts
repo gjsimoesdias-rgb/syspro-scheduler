@@ -166,6 +166,8 @@ export class SchedulingEngine {
   private overtimeFlagged: Set<string> = new Set();
   /** jobId|componentCode pairs for which a MaterialShortage violation has been emitted (dedup). */
   private materialViolationsSeen: Set<string> = new Set();
+  /** Ops whose slot search stopped at MAX_SLOT_ITERATIONS (explained in the violation). */
+  private searchCapHit: Set<string> = new Set();
   /**
    * Per-workcentre overtime budget, populated in initializeLoads from
    * workcentre.maxOvertimePerDay (with env default fallback). Read on each
@@ -441,6 +443,7 @@ export class SchedulingEngine {
       this.windowCache = new WeakMap();
       this.constraints = [];
       this.materialViolationsSeen.clear();
+      this.searchCapHit.clear();
 
       // Step 1: Sort jobs by rule and due date
       const prioritizedJobs = this.prioritizeJobs(context.jobs, context.schedulingRule || 'priority');
@@ -894,8 +897,12 @@ export class SchedulingEngine {
             severity: 'Warning',
             affectedJobId: job.jobId,
             affectedOperationId: operation.opId,
-            description: `Could not find available slot for operation ${operation.opId} (seq ${operation.sequence})`,
-            suggestedAction: 'Increase resource capacity or delay non-critical jobs'
+            description: this.searchCapHit.has(operation.opId)
+              ? `Could not find a slot for operation ${operation.opId} (seq ${operation.sequence}): search stopped after ${MAX_SLOT_ITERATIONS} attempts — the line is booked almost solid over the horizon`
+              : `Could not find available slot for operation ${operation.opId} (seq ${operation.sequence})`,
+            suggestedAction: this.searchCapHit.has(operation.opId)
+              ? 'Extend the horizon, add shift time on this line, or move lower-priority jobs out'
+              : 'Increase resource capacity or delay non-critical jobs'
           });
           // Break the chain — can't schedule subsequent ops without predecessor completion
           break;
@@ -1395,6 +1402,7 @@ export class SchedulingEngine {
       if (++iterations > MAX_SLOT_ITERATIONS) {
         logger.warn({ opId: operation.opId, resourceId: resource.resourceId, iterations: MAX_SLOT_ITERATIONS },
           'Slot search gave up after the iteration cap — operation left unscheduled');
+        this.searchCapHit.add(operation.opId);
         break;
       }
 
@@ -1635,6 +1643,7 @@ export class SchedulingEngine {
       if (++iterations > MAX_SLOT_ITERATIONS) {
         logger.warn({ opId: operation.opId, resourceId: resource.resourceId, iterations: MAX_SLOT_ITERATIONS },
           'Slot search gave up after the iteration cap — operation left unscheduled');
+        this.searchCapHit.add(operation.opId);
         break;
       }
 

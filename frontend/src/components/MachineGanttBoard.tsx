@@ -223,6 +223,38 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
   const timelineWidth = Math.max(1200, totalDays * pxPerDay);
   const timelineSpanMs = Math.max(1, timelineEnd.getTime() - timelineStart.getTime());
 
+  // ── Horizontal virtualisation ──────────────────────────────────────────
+  // Only day cells, time cells and bars near the visible scroll window are
+  // rendered (one screen-width of buffer each side). A 90-day horizon at
+  // Minute zoom was ~4,000 header cells plus days × lines of background.
+  const [viewport, setViewport] = useState({ left: 0, width: 2400 });
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      setViewport((v) => (v.left === el.scrollLeft && v.width === el.clientWidth
+        ? v
+        : { left: el.scrollLeft, width: el.clientWidth || v.width }));
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [zoom, totalDays]);
+  const visFromPx = Math.max(0, viewport.left - viewport.width);
+  const visToPx = viewport.left + viewport.width * 2;
+  const firstVisDay = Math.min(totalDays, Math.max(0, Math.floor(visFromPx / pxPerDay)));
+  const lastVisDay = Math.min(totalDays, Math.max(firstVisDay, Math.ceil(visToPx / pxPerDay)));
+  const visStartMs = timelineStart.getTime() + firstVisDay * 86_400_000;
+  const visEndMs = timelineStart.getTime() + lastVisDay * 86_400_000;
+
   // Lanes are one-per-WorkCentre (Production Line). Each lane id is a worcentreId;
   // every operation of that workcentre — whichever machine it is assigned to —
   // renders on the single workcentre lane.
@@ -537,6 +569,23 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
         .map((op) => ({ ...op, jobId: jobSchedule.jobId }))
     );
   }, [schedule, timelineStart, timelineEnd]);
+
+  // One pass instead of filtering every op for every line, and an O(1) job
+  // status lookup instead of a jobSchedules.find() per bar.
+  const opsByWorkcentre = useMemo(() => {
+    const map = new Map<string, typeof laneOperations>();
+    for (const op of laneOperations) {
+      const key = String(op.workcentreId);
+      let list = map.get(key);
+      if (!list) map.set(key, (list = []));
+      list.push(op);
+    }
+    return map;
+  }, [laneOperations]);
+  const jobStatusById = useMemo(
+    () => new Map((schedule?.jobSchedules || []).map((j) => [j.jobId, j.status] as const)),
+    [schedule]
+  );
 
   // S3.3: Arrow key nudge — must be after laneOperations is declared
   React.useEffect(() => {
@@ -1183,7 +1232,9 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
               ))}
             </div>
             <div className="timeline-date-row">
-              {daySlots.map((date, i) => {
+              <div className="gantt-virtual-spacer" style={{ width: firstVisDay * pxPerDay }} />
+              {daySlots.slice(firstVisDay, lastVisDay).map((date, j) => {
+                const i = firstVisDay + j;
                 const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
                 return (
                   <div key={i} className={`date-cell${isToday ? ' today-date-cell' : ''}`} style={{ width: pxPerDay, minWidth: pxPerDay }}>
@@ -1193,9 +1244,11 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
               })}
             </div>
             <div className="timeline-time-row">
-              {timeSlots.map((date, i) => {
+              <div className="gantt-virtual-spacer" style={{ width: firstVisDay * pxPerDay }} />
+              {timeSlots.filter((d) => d.getTime() >= visStartMs && d.getTime() < visEndMs).map((date) => {
                 const stepHours = zoom === 'minute' ? 0.5 : zoom === 'hour' ? 2 : zoom === 'day' ? 4 : 24;
                 const slotWidth = (stepHours / 24) * pxPerDay;
+                const i = date.getTime();
                 return (
                   <div key={i} className="time-cell" style={{ width: slotWidth, minWidth: slotWidth }}>
                     {zoom === 'week' ? format(date, 'EEE') : format(date, 'HH:mm')}
@@ -1296,7 +1349,9 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                 >
                   {/* Calendar background */}
                   <div className="machine-calendar-bg">
-                    {Array.from({ length: totalDays }).map((_, i) => {
+                    <div className="gantt-virtual-spacer" style={{ width: firstVisDay * pxPerDay }} />
+                    {Array.from({ length: lastVisDay - firstVisDay }).map((_, j) => {
+                      const i = firstVisDay + j;
                       const day = addDays(timelineStart, i);
                       const weekday = day.getDay();
                       const workingDays = workcentreCalendars[wc]?.workingDays || [1, 2, 3, 4, 5];
@@ -1323,17 +1378,19 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                   )}
 
                   {/* Operation bars — multi-phase segments */}
-                  {laneOperations
+                  {(opsByWorkcentre.get(wc) || [])
                     .filter((op) => {
-                      // One lane per workcentre — show every op of this workcentre.
-                      return String(op.workcentreId) === wc;
+                      // Skip bars far outside the scroll window (virtualisation).
+                      const s0 = new Date((op as any).setupStart || op.plannedStartDate).getTime();
+                      const e0 = new Date((op as any).moveEnd || op.plannedEndDate).getTime();
+                      return e0 >= visStartMs && s0 <= visEndMs;
                     })
                     .map((op) => {
                       const opKey = `${op.jobId}::${op.opId}`;
                       const isLocked = !!lockedOps[opKey] || (externalLockedOps?.has(opKey) ?? false);
                       const isHighlit = highlightJobId === op.jobId;
                       const opColor = getOpColor(op);
-                      const jobStatus = schedule?.jobSchedules.find(j => j.jobId === op.jobId)?.status ?? 'Scheduled';
+                      const jobStatus = jobStatusById.get(op.jobId) ?? 'Scheduled';
                       const opStart = new Date(op.plannedStartDate);
                       const opEnd = new Date(op.plannedEndDate);
                       const jobMeta = jobsById.get(op.jobId);
