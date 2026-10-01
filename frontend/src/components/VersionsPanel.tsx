@@ -5,6 +5,7 @@ import { useScheduleStore } from '../stores/scheduleStore';
 import { useAuth } from '../context/AuthContext';
 import { convertScheduleDates } from '../utils/scheduleDates';
 import './VersionsPanel.css';
+import AutoPlanCard from './AutoPlanCard';
 
 /**
  * Plan versions — LYNQ-style Master + what-if model, backed by /api/versions.
@@ -256,6 +257,8 @@ const VersionsPanel: React.FC = () => {
           ))}
         </div>
       )}
+
+      <AutoPlanCard canPlan={canPlan} onPlanned={load} />
 
       {compared.length >= 2 && (
         <div className="vp-compare">

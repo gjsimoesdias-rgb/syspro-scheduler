@@ -41,3 +41,12 @@
 .vp-pub-error { color: var(--status-error, #dc2626); }
 .vp-pub-errline { flex-basis: 100%; color: var(--status-error, #dc2626); font-size: 11px; }
 .vp-error { color: var(--status-error, #dc2626); }
+
+/* ── Auto plan ── */
+.vp-auto { margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--border-default, #e2e8f0); border-radius: 6px;
+  background: var(--bg-surface, #fff); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+.vp-auto-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.vp-auto-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.vp-auto-row label { display: flex; align-items: center; gap: 4px; }
+.vp-auto-row select { font-size: 12px; margin-left: 4px; }
+.vp-auto-status { color: var(--text-secondary); }

@@ -14,6 +14,8 @@ import { sysproConfig, schedulerConfig } from './config/database';
 import environment from './config/environment';
 import DatabaseConnection from './database/connection';
 import AppStateStore from './services/AppStateStore';
+import { AutoScheduler } from './services/autoScheduler';
+import { generateHandler } from './api/routes/schedule';
 import AuthService from './services/AuthService';
 import MigrationRunner from './database/MigrationRunner';
 import ensureSysproObjects from './database/ensureSysproObjects';
@@ -63,6 +65,12 @@ async function startServer() {
     const server = app.listen(port, () => {
       printStartupBanner(port);
     });
+
+    // Background Auto plan — ticks every minute; does nothing until a planner
+    // switches it on (Versions → Auto plan) and the databases are connected.
+    const autoScheduler = new AutoScheduler(app, generateHandler);
+    app.locals.autoScheduler = autoScheduler;
+    if (process.env.NODE_ENV !== 'test') autoScheduler.start();
 
     // Connect to databases in the background (non-blocking)
     (async () => {
@@ -132,6 +140,7 @@ async function startServer() {
     // Graceful shutdown
     process.on('SIGTERM', async () => {
       console.log('SIGTERM received, shutting down gracefully...');
+      autoScheduler.stop();
       server.close(async () => {
         if (sysproDb) await sysproDb.disconnect();
         if (schedulerDb) await schedulerDb.disconnect();

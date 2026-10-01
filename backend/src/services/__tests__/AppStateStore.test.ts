@@ -233,6 +233,8 @@ describe('AppStateStore.hydrateAppLocals', () => {
         'pinnedOperations',
         'calendarExceptions',
         'crewSetup',
+        'autoSchedule',
+        'lastGenerateOptions',
       ])
     );
 

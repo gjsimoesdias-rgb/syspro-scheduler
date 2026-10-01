@@ -26,7 +26,9 @@ export type AppStateKey =
   | 'alternativeGroups'
   | 'pinnedOperations'
   | 'calendarExceptions'
-  | 'crewSetup';
+  | 'crewSetup'
+  | 'autoSchedule'
+  | 'lastGenerateOptions';
 
 export class AppStateStore {
   constructor(private db: DatabaseConnection) {}
@@ -118,6 +120,8 @@ export class AppStateStore {
       'pinnedOperations',
       'calendarExceptions',
       'crewSetup',
+      'autoSchedule',
+      'lastGenerateOptions',
     ];
     let restored = 0;
     for (const key of keys) {

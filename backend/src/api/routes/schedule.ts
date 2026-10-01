@@ -26,6 +26,7 @@ import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireA
 import { saveAsLatest, promoteToLatest, saveIntoWhatIf } from '../../services/ScheduleStore';
 import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordError, resetPublish, jobIdFromExportError } from '../../services/publishStatus';
 import { mapEmployeeRow } from '../../utils/crews';
+import { AUTO_PLAN_VERSION_ID } from '../../services/autoScheduler';
 
 /**
  * Operation overlap from Settings → Transfer/Overlap: "Use transfer" on and
@@ -154,10 +155,22 @@ const mergeImportedJobs = (app: any, jobs: Job[]): Job[] => {
  * POST /api/schedule/generate
  * Generate new schedule
  */
-router.post('/generate', requirePlanner, async (req: Request, res: Response) => {
+export async function generateHandler(req: Request, res: Response) {
   const startedAt = Date.now();
   const validation = validate(generateScheduleSchema, req.body);
   if (!validation.ok) return res.status(400).json(validation.error);
+
+  // Remember the planner's options for the background Auto plan (not the
+  // selection, target version or exact dates — it plans everything from now).
+  if (!(req as any).autoSchedule) {
+    const b = req.body || {};
+    const start = Date.parse(b.planningHorizonStartDate), end = Date.parse(b.planningHorizonEndDate);
+    const { selectedJobIds: _s, excludedJobIds: _e, pinnedJobIds: _p, versionId: _v, planningHorizonStartDate: _hs, planningHorizonEndDate: _he, anchorDate: _a, dateAnchorMode: _m, ...rest } = b;
+    setLocal(req.app.locals, 'lastGenerateOptions', {
+      ...rest,
+      horizonDays: Number.isFinite(start) && Number.isFinite(end) && end > start ? Math.max(1, Math.round((end - start) / 86400000)) : undefined,
+    });
+  }
 
   try {
     const {
@@ -506,7 +519,8 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
     req.log.error({ err: error }, 'Error generating schedule');
     res.status(500).json({ error: (error as any).message || 'Failed to generate schedule' });
   }
-});
+}
+router.post('/generate', requirePlanner, generateHandler);
 
 /**
  * POST /api/schedule/optimize
@@ -699,6 +713,38 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
  * GET /api/schedule/latest
  * Load the most recently saved schedule from DB
  */
+/**
+ * Background Auto plan (services/autoScheduler.ts).
+ *   GET  /api/schedule/auto        { config, status, versionId }
+ *   PUT  /api/schedule/auto        { enabled?, intervalMinutes?, onJobChange?, checkMinutes? }
+ *   POST /api/schedule/auto/run    re-plan the Auto plan what-if now
+ */
+const autoOf = (req: Request) => req.app.locals.autoScheduler as import('../../services/autoScheduler').AutoScheduler | undefined;
+router.get('/auto', (req: Request, res: Response) => {
+  const auto = autoOf(req);
+  if (!auto) return res.status(503).json({ error: 'Auto plan is not available' });
+  res.json({ config: auto.config, status: auto.status, versionId: AUTO_PLAN_VERSION_ID });
+});
+router.put('/auto', requireAuth, requirePlanner, (req: AuthRequest, res: Response) => {
+  const auto = autoOf(req);
+  if (!auto) return res.status(503).json({ error: 'Auto plan is not available' });
+  const body = req.body || {};
+  const config = auto.setConfig({
+    ...body,
+    // The run uses the settings of the company of whoever switched it on.
+    ...(body.enabled ? { companyId: req.user?.companyId, enabledBy: req.user?.username } : {}),
+  });
+  (req as any).log?.info?.({ config, user: req.user?.username }, 'Auto plan settings changed');
+  res.json({ config, status: auto.status });
+});
+router.post('/auto/run', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
+  const auto = autoOf(req);
+  if (!auto) return res.status(503).json({ error: 'Auto plan is not available' });
+  if (!auto.config.companyId) auto.setConfig({ companyId: req.user?.companyId });
+  const status = await auto.runNow(`run now by ${req.user?.username || 'planner'}`);
+  res.status(status.lastResult?.ok ? 200 : 500).json({ status });
+});
+
 router.get('/latest', async (req: Request, res: Response) => {
   try {
     const sysproDb = req.app.locals.sysproDb;

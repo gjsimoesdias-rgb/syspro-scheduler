@@ -220,6 +220,17 @@ export interface VersionSummary {
   metrics: Record<string, any> | null;
 }
 
+export interface AutoPlanConfig { enabled: boolean; intervalMinutes: number; onJobChange: boolean; checkMinutes: number; enabledBy?: string }
+export interface AutoPlanStatus {
+  running: boolean; lastRunAt?: string; lastReason?: string; nextRunAt?: string; lastCheckAt?: string;
+  lastResult?: { ok: boolean; jobs?: number; scheduled?: number; unscheduled?: number; late?: number; ms?: number; error?: string };
+}
+export const autoPlanService = {
+  get: async (): Promise<{ config: AutoPlanConfig; status: AutoPlanStatus; versionId: string }> => (await apiClient.get('/schedule/auto')).data,
+  save: async (config: Partial<AutoPlanConfig>): Promise<{ config: AutoPlanConfig; status: AutoPlanStatus }> => (await apiClient.put('/schedule/auto', config)).data,
+  runNow: async (): Promise<{ status: AutoPlanStatus }> => (await apiClient.post('/schedule/auto/run', {}, { timeout: 600000 })).data,
+};
+
 export const versionService = {
   list: async (historyLimit = 30): Promise<{ master: VersionSummary | null; whatIfs: VersionSummary[]; history: VersionSummary[] }> =>
     (await apiClient.get('/versions', { params: { historyLimit } })).data,
