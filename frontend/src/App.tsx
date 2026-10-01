@@ -884,7 +884,7 @@ const App: React.FC = () => {
   }, []);
   useEffect(() => { if (jobPaneMode === 'mrp') void loadMrpPreview(); }, [jobPaneMode, loadMrpPreview]);
   const suggestedInPlan = useMemo(() => visibleJobSource.filter((j) => (j as any).isSuggested), [visibleJobSource]);
-  const mrpIncluded = mrpPreview?.included ?? suggestedInPlan.length > 0;
+  const mrpIncluded = suggestedInPlan.length > 0 || !!mrpPreview?.included;
   const mrpJobCount = suggestedInPlan.length || mrpPreview?.jobs.length || 0;
   const toggleMrpPlanning = useCallback(async () => {
     setMrpBusy(true);
