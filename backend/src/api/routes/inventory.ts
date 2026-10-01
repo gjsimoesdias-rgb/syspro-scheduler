@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import DatabaseConnection from '../../database/connection';
+import { SysproDatabaseService } from '../../services/SysproDatabaseService';
 
 const router = Router();
 
@@ -389,6 +390,40 @@ router.get('/shortages', async (req: Request, res: Response) => {
   } catch (err: any) {
     req.log.error({ err }, 'PO by stock code query failed');
     return res.status(500).json({ error: err.message, items: [] });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/inventory/projection
+// Projected inventory by day for the components the plan uses.
+// Body: { jobs: [{ jobId, itemCode, quantity, start, end }] } — the planned
+// dates from the current schedule (jobs without dates count as unscheduled).
+// ─────────────────────────────────────────────────────────────
+router.post('/projection', async (req: Request, res: Response) => {
+  const db = getDb(req);
+  if (!db) return res.status(503).json({ error: 'Database not connected', components: [] });
+  const raw = Array.isArray(req.body?.jobs) ? req.body.jobs : null;
+  if (!raw || raw.length > 20000) return res.status(400).json({ error: 'jobs must be an array (max 20000)' });
+  const jobs = raw
+    .map((j: any) => ({
+      jobId: String(j?.jobId ?? '').trim(),
+      itemCode: String(j?.itemCode ?? '').trim(),
+      quantity: Number(j?.quantity) || 0,
+      start: j?.start ?? null,
+      end: j?.end ?? null,
+    }))
+    .filter((j: any) => j.jobId);
+  try {
+    const components = await new SysproDatabaseService(db as any).getInventoryProjection(jobs);
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      count: components.length,
+      shortCount: components.filter((c) => c.status === 'short').length,
+      components,
+    });
+  } catch (err: any) {
+    req.log.error({ err }, 'Inventory projection failed');
+    return res.status(500).json({ error: err.message, components: [] });
   }
 });
 

@@ -355,9 +355,7 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
           {contentTab === 'materials' && schedule && (
             <MaterialVisibility
               jobSchedules={schedule.jobSchedules}
-              planningHorizonStart={schedule.planningHorizon.startDate}
-              planningHorizonEnd={schedule.planningHorizon.endDate}
-              materialPlan={materialPlan as any[]}
+              jobs={openJobs}
             />
           )}
 

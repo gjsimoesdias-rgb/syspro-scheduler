@@ -474,7 +474,23 @@ export interface MaterialShortage {
   productClass: string;
 }
 
+export interface ProjectionEvent { date: string; kind: 'po' | 'output' | 'demand'; ref: string; qty: number; balance: number }
+export interface ComponentProjection {
+  code: string; description?: string; unitOfMeasure?: string;
+  opening: number; onHand: number; events: ProjectionEvent[];
+  unscheduledDemand: Array<{ jobId: string; qty: number }>;
+  minBalance: number; finalBalance: number;
+  firstShort?: { date: string; jobId: string; shortQty: number };
+  status: 'short' | 'ok';
+  daily: Array<{ day: string; balance: number }>;
+}
+
 export const inventoryService = {
+  /** Projected inventory by day for the plan's components. */
+  projection: async (jobs: Array<{ jobId: string; itemCode?: string; quantity?: number; start?: string | null; end?: string | null }>) => {
+    const response = await apiClient.post('/inventory/projection', { jobs });
+    return response.data as { generatedAt: string; count: number; shortCount: number; components: ComponentProjection[] };
+  },
   getStock: async (params?: { warehouse?: string; stockCode?: string; lowStock?: boolean }) => {
     const query = new URLSearchParams();
     if (params?.warehouse) query.set('warehouse', params.warehouse);

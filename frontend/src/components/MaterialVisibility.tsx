@@ -1,255 +1,198 @@
 /**
- * MaterialVisibility - Material-centric view with stockout projection
- * Groups by material, shows running balance and which job causes stockout
+ * Projected inventory by day — every component the plan uses, time-phased:
+ * opening stock, PO receipts on their promise dates, planned sub-assembly
+ * output at job end, and demand at each job's planned start
+ * (backend: services/inventoryProjection.ts).
  */
-
-import React, { useMemo, useState } from 'react';
-import { JobSchedule } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Job, JobSchedule } from '../types';
+import { inventoryService, ComponentProjection } from '../services/api';
 import './MaterialVisibility.css';
 
 interface MaterialVisibilityProps {
   jobSchedules: JobSchedule[];
-  planningHorizonStart: Date;
-  planningHorizonEnd: Date;
-  materialPlan?: Array<{
-    jobId: string;
-    itemCode: string;
-    componentCode: string;
-    description?: string;
-    unitOfMeasure?: string;
-    quantityRequired: number;
-    stockOnHand: number;
-    reservedQty: number;
-    openPoQty: number;
-    availableQty: number;
-    status: 'Materials' | 'Partial' | 'No Materials';
-  }>;
+  jobs: Job[];
 }
 
-interface JobDemand {
-  jobId: string;
-  quantityRequired: number;
-  scheduledDate: Date | null;
-  runningBalance: number;
+const iso = (v: unknown): string | null => {
+  if (!v) return null;
+  const d = new Date(v as any);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+};
+const fmtDate = (s?: string | null) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+};
+const fmtDay = (s: string) => { const [, m, d] = s.split('-'); return `${d}/${m}`; };
+const fmtQty = (n: number) => (Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+const KIND_LABEL = { po: 'PO receipt', output: 'Job output', demand: 'Job demand' } as const;
+
+/** Small step chart of end-of-day balance; red below zero. */
+function Sparkline({ daily }: { daily: ComponentProjection['daily'] }) {
+  const w = 140, h = 28;
+  if (daily.length < 2) return <svg width={w} height={h} className="mat-spark" aria-hidden />;
+  const vals = daily.map((d) => d.balance);
+  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const span = hi - lo || 1;
+  const x = (i: number) => (i / (daily.length - 1)) * (w - 2) + 1;
+  const y = (v: number) => h - 2 - ((v - lo) / span) * (h - 4);
+  let path = `M${x(0)},${y(vals[0])}`;
+  for (let i = 1; i < vals.length; i++) path += ` H${x(i)} V${y(vals[i])}`;
+  return (
+    <svg width={w} height={h} className="mat-spark" role="img"
+      aria-label={`Balance from ${fmtQty(vals[0])} to ${fmtQty(vals[vals.length - 1])}`}>
+      <title>{`${fmtDay(daily[0].day)} → ${fmtDay(daily[daily.length - 1].day)}: low ${fmtQty(Math.min(...vals))}`}</title>
+      <line x1={0} x2={w} y1={y(0)} y2={y(0)} className="mat-spark-zero" />
+      <path d={path} className={Math.min(...vals) < 0 ? 'mat-spark-line short' : 'mat-spark-line'} />
+    </svg>
+  );
 }
 
-interface MaterialRow {
-  code: string;
-  description: string;
-  uom: string;
-  stockOnHand: number;
-  openPoQty: number;
-  totalDemand: number;
-  finalBalance: number;
-  stockoutJob: string | null;
-  stockoutDate: Date | null;
-  status: 'sufficient' | 'warning' | 'shortage';
-  jobs: JobDemand[];
-}
+export default function MaterialVisibility({ jobSchedules, jobs }: MaterialVisibilityProps) {
+  const [data, setData] = useState<ComponentProjection[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [shortOnly, setShortOnly] = useState(false);
+  const [filter, setFilter] = useState('');
 
-function fmtDate(d: Date | null): string {
-  if (!d) return '—';
-  const dt = new Date(d);
-  if (isNaN(dt.getTime())) return '—';
-  const dd = String(dt.getDate()).padStart(2, '0');
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}/${dt.getFullYear()}`;
-}
-
-function fmtQty(n: number): string {
-  return n % 1 === 0 ? String(n) : n.toFixed(2);
-}
-
-export default function MaterialVisibility(props: MaterialVisibilityProps) {
-  const { jobSchedules, materialPlan = [] } = props;
-  const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
-
-  // Build job start-date lookup from schedule
-  const jobDateMap = useMemo(() => {
-    const map = new Map<string, Date>();
-    jobSchedules.forEach((js) => {
-      const start = new Date(js.plannedStartDate);
-      if (!isNaN(start.getTime())) map.set(js.jobId, start);
+  // Planned jobs with their scheduled dates (unscheduled jobs are sent without).
+  const planJobs = useMemo(() => {
+    const byId = new Map(jobSchedules.map((s) => [s.jobId, s]));
+    return jobs.map((j) => {
+      const s = byId.get(j.jobId);
+      const ok = s && s.status !== 'Unschedulable';
+      return {
+        jobId: j.jobId,
+        itemCode: (j as any).itemCode,
+        quantity: Number((j as any).quantity) || 0,
+        start: ok ? iso(s!.plannedStartDate) : null,
+        end: ok ? iso(s!.plannedEndDate) : null,
+      };
     });
-    return map;
-  }, [jobSchedules]);
+  }, [jobs, jobSchedules]);
+  const planKey = useMemo(() => planJobs.map((j) => `${j.jobId}|${j.start}|${j.end}`).join(';'), [planJobs]);
 
-  const materials = useMemo<MaterialRow[]>(() => {
-    if (materialPlan.length === 0) return [];
+  useEffect(() => {
+    if (!planJobs.length) { setData([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const t = setTimeout(() => {
+      inventoryService.projection(planJobs)
+        .then((r) => { if (!cancelled) setData(r.components || []); })
+        .catch((e) => { if (!cancelled) setError(e?.response?.data?.error || e?.message || 'Failed to load projection'); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planKey]);
 
-    // Group rows by componentCode
-    const grouped = new Map<string, { rows: typeof materialPlan; stockOnHand: number; openPoQty: number; desc: string; uom: string }>();
-    materialPlan.forEach((row) => {
-      const key = String(row.componentCode || '').trim() || 'UNKNOWN';
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          rows: [],
-          stockOnHand: Number(row.stockOnHand || 0),
-          openPoQty: Number(row.openPoQty || 0),
-          desc: row.description || '',
-          uom: row.unitOfMeasure || ''
-        });
-      }
-      const g = grouped.get(key)!;
-      g.rows.push(row);
-      g.stockOnHand = Math.max(g.stockOnHand, Number(row.stockOnHand || 0));
-      g.openPoQty = Math.max(g.openPoQty, Number(row.openPoQty || 0));
-      if (!g.desc && row.description) g.desc = row.description;
-      if (!g.uom && row.unitOfMeasure) g.uom = row.unitOfMeasure;
-    });
+  const rows = useMemo(() => {
+    const f = filter.trim().toLowerCase();
+    return (data || []).filter((c) =>
+      (!shortOnly || c.status === 'short') &&
+      (!f || c.code.toLowerCase().includes(f) || (c.description || '').toLowerCase().includes(f) ||
+        c.events.some((e) => e.ref.toLowerCase().includes(f))));
+  }, [data, shortOnly, filter]);
 
-    const result: MaterialRow[] = [];
-
-    grouped.forEach((grp, code) => {
-      // Aggregate demand per job
-      const jobDemandMap = new Map<string, number>();
-      grp.rows.forEach((r) => {
-        jobDemandMap.set(r.jobId, (jobDemandMap.get(r.jobId) || 0) + Number(r.quantityRequired || 0));
-      });
-
-      // Sort jobs by scheduled date (earliest first), unscheduled last
-      const jobDemands: JobDemand[] = Array.from(jobDemandMap.entries())
-        .map(([jobId, qty]) => ({
-          jobId,
-          quantityRequired: qty,
-          scheduledDate: jobDateMap.get(jobId) || null,
-          runningBalance: 0
-        }))
-        .sort((a, b) => {
-          if (!a.scheduledDate && !b.scheduledDate) return a.jobId.localeCompare(b.jobId);
-          if (!a.scheduledDate) return 1;
-          if (!b.scheduledDate) return -1;
-          return a.scheduledDate.getTime() - b.scheduledDate.getTime();
-        });
-
-      // Compute running balance
-      const available = grp.stockOnHand + grp.openPoQty;
-      let balance = available;
-      let stockoutJob: string | null = null;
-      let stockoutDate: Date | null = null;
-      const totalDemand = jobDemands.reduce((sum, j) => sum + j.quantityRequired, 0);
-
-      jobDemands.forEach((jd) => {
-        balance -= jd.quantityRequired;
-        jd.runningBalance = balance;
-        if (balance < 0 && !stockoutJob) {
-          stockoutJob = jd.jobId;
-          stockoutDate = jd.scheduledDate;
-        }
-      });
-
-      let status: 'sufficient' | 'warning' | 'shortage';
-      if (stockoutJob) {
-        status = balance < -available * 0.5 ? 'shortage' : 'warning';
-      } else {
-        status = 'sufficient';
-      }
-
-      result.push({
-        code,
-        description: grp.desc,
-        uom: grp.uom,
-        stockOnHand: grp.stockOnHand,
-        openPoQty: grp.openPoQty,
-        totalDemand,
-        finalBalance: balance,
-        stockoutJob,
-        stockoutDate,
-        status,
-        jobs: jobDemands
-      });
-    });
-
-    // Sort: stockout first, then warnings, then OK; within same status sort by code
-    return result.sort((a, b) => {
-      const order = { shortage: 0, warning: 1, sufficient: 2 };
-      return order[a.status] - order[b.status] || a.code.localeCompare(b.code);
-    });
-  }, [materialPlan, jobDateMap]);
-
-  const shortages = materials.filter((m) => m.status === 'shortage').length;
-  const warnings = materials.filter((m) => m.status === 'warning').length;
-  const ok = materials.filter((m) => m.status === 'sufficient').length;
+  const shortCount = (data || []).filter((c) => c.status === 'short').length;
+  const supplyOf = (c: ComponentProjection) => c.events.filter((e) => e.qty > 0).reduce((s, e) => s + e.qty, 0);
+  const demandOf = (c: ComponentProjection) => -c.events.filter((e) => e.qty < 0).reduce((s, e) => s + e.qty, 0);
 
   return (
     <div className="material-visibility">
       <div className="mat-header">
-        <h3>Material Stockout Projection</h3>
+        <div>
+          <h3>Projected inventory</h3>
+          <div className="mat-sub">
+            Stock on hand less sales-order allocations and open jobs outside the plan, then PO receipts on their
+            promise dates, sub-assembly output at job end, and each job's needs at its planned start.
+          </div>
+        </div>
         <div className="mat-stats">
-          <span className="stat-item error">{shortages} Stockout</span>
-          <span className="stat-item warning">{warnings} At Risk</span>
-          <span className="stat-item success">{ok} OK</span>
-          <span className="stat-item neutral">{materials.length} Materials</span>
+          <span className="stat-item error">{shortCount} short</span>
+          <span className="stat-item success">{(data?.length || 0) - shortCount} OK</span>
+          <span className="stat-item neutral">{data?.length || 0} components</span>
         </div>
       </div>
 
-      {materials.length === 0 && (
-        <div className="material-alert">No material plan loaded. Generate a schedule and load material data first.</div>
+      <div className="mat-toolbar">
+        <input type="search" placeholder="Filter by stock code, description, job or PO" value={filter}
+          onChange={(e) => setFilter(e.target.value)} aria-label="Filter components" />
+        <label><input type="checkbox" checked={shortOnly} onChange={(e) => setShortOnly(e.target.checked)} /> Short only</label>
+        {loading && <span className="mat-muted">Loading…</span>}
+      </div>
+
+      {error && <div className="material-alert">{error}</div>}
+      {!error && data && data.length === 0 && !loading && (
+        <div className="material-alert">No component demand in this plan.</div>
       )}
 
-      <div className="material-table">
-        <div className="table-header mat-grid">
-          <div>Material</div>
-          <div>Description</div>
-          <div className="text-right">Stock OH</div>
-          <div className="text-right">Open PO</div>
-          <div className="text-right">Total Demand</div>
-          <div className="text-right">Balance</div>
-          <div>Stockout Job</div>
-          <div>Stockout Date</div>
-        </div>
-
-        <div className="table-body">
-          {materials.map((mat) => (
-            <React.Fragment key={mat.code}>
-              <div
-                className={`table-row mat-grid row-${mat.status} ${expandedMaterial === mat.code ? 'row-expanded' : ''}`}
-                onClick={() => setExpandedMaterial(expandedMaterial === mat.code ? null : mat.code)}
-                style={{ cursor: 'pointer' }}
-              >
-                <div className="col-code">
-                  <span className="expand-icon">{expandedMaterial === mat.code ? '▾' : '▸'}</span>
-                  {mat.code}
-                </div>
-                <div className="col-desc">{mat.description || '—'}</div>
-                <div className="text-right col-num">{fmtQty(mat.stockOnHand)}</div>
-                <div className="text-right col-num">{fmtQty(mat.openPoQty)}</div>
-                <div className="text-right col-num">{fmtQty(mat.totalDemand)}</div>
-                <div className={`text-right col-num ${mat.finalBalance < 0 ? 'col-negative' : ''}`}>
-                  {fmtQty(mat.finalBalance)}
-                </div>
-                <div className="col-stockout-job">{mat.stockoutJob || '—'}</div>
-                <div className="col-stockout-date">{mat.stockoutJob ? fmtDate(mat.stockoutDate) : '—'}</div>
-              </div>
-
-              {expandedMaterial === mat.code && (
-                <div className="mat-detail">
-                  <div className="mat-detail-header">
-                    <div>Job</div>
-                    <div>Scheduled</div>
-                    <div className="text-right">Qty Required</div>
-                    <div className="text-right">Running Balance</div>
+      {rows.length > 0 && (
+        <div className="material-table">
+          <div className="table-header mat-grid">
+            <div>Material</div>
+            <div>Description</div>
+            <div className="text-right">On hand</div>
+            <div className="text-right" title="On hand − sales-order allocations − needs of open jobs outside the plan">Opening</div>
+            <div className="text-right">Supply</div>
+            <div className="text-right">Demand</div>
+            <div className="text-right">Lowest</div>
+            <div className="text-right">End</div>
+            <div>First short</div>
+            <div>Balance by day</div>
+          </div>
+          <div className="table-body">
+            {rows.map((c) => (
+              <React.Fragment key={c.code}>
+                <div className={`table-row mat-grid ${c.status === 'short' ? 'row-shortage' : 'row-sufficient'} ${expanded === c.code ? 'row-expanded' : ''}`}
+                  onClick={() => setExpanded(expanded === c.code ? null : c.code)} role="button" tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(expanded === c.code ? null : c.code); } }}
+                  aria-expanded={expanded === c.code}>
+                  <div className="col-code"><span className="expand-icon">{expanded === c.code ? '▾' : '▸'}</span>{c.code}</div>
+                  <div className="col-desc" title={c.description}>{c.description || '—'}</div>
+                  <div className="text-right col-num">{fmtQty(c.onHand)}</div>
+                  <div className={`text-right col-num ${c.opening < 0 ? 'col-negative' : ''}`}>{fmtQty(c.opening)}</div>
+                  <div className="text-right col-num">{fmtQty(supplyOf(c))}</div>
+                  <div className="text-right col-num">{fmtQty(demandOf(c))}</div>
+                  <div className={`text-right col-num ${c.minBalance < 0 ? 'col-negative' : ''}`}>{fmtQty(c.minBalance)}</div>
+                  <div className={`text-right col-num ${c.finalBalance < 0 ? 'col-negative' : ''}`}>{fmtQty(c.finalBalance)}</div>
+                  <div className="col-stockout">
+                    {c.firstShort ? <>{c.firstShort.jobId} · {fmtDate(c.firstShort.date)}<br /><span className="mat-muted">short {fmtQty(c.firstShort.shortQty)} {c.unitOfMeasure || ''}</span></> : '—'}
                   </div>
-                  {mat.jobs.map((jd) => (
-                    <div key={jd.jobId} className={`mat-detail-row ${jd.runningBalance < 0 ? 'detail-negative' : ''}`}>
-                      <div className="detail-job">{jd.jobId}</div>
-                      <div className="detail-date">{fmtDate(jd.scheduledDate)}</div>
-                      <div className="text-right">{fmtQty(jd.quantityRequired)}</div>
-                      <div className={`text-right ${jd.runningBalance < 0 ? 'col-negative' : ''}`}>
-                        {fmtQty(jd.runningBalance)}
-                      </div>
-                    </div>
-                  ))}
+                  <div><Sparkline daily={c.daily} /></div>
                 </div>
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-
-      {shortages + warnings > 0 && (
-        <div className="material-alert">
-          <strong>⚠️ {shortages + warnings} material(s)</strong> will stock out before all jobs complete. Click a row to see which job causes the shortage.
+                {expanded === c.code && (
+                  <div className="mat-detail">
+                    <div className="mat-detail-header mat-detail-grid">
+                      <div>Date</div><div>Event</div><div>Job / PO</div>
+                      <div className="text-right">Qty</div><div className="text-right">Balance</div>
+                    </div>
+                    <div className="mat-detail-row mat-detail-grid">
+                      <div>—</div><div>Opening</div><div className="mat-muted">on hand {fmtQty(c.onHand)}</div>
+                      <div /><div className={`text-right ${c.opening < 0 ? 'col-negative' : ''}`}>{fmtQty(c.opening)}</div>
+                    </div>
+                    {c.events.map((e, i) => (
+                      <div key={i} className={`mat-detail-row mat-detail-grid ${e.balance < 0 ? 'detail-negative' : ''}`}>
+                        <div>{fmtDate(e.date)}</div>
+                        <div className={`mat-kind mat-kind-${e.kind}`}>{KIND_LABEL[e.kind]}</div>
+                        <div>{e.ref}</div>
+                        <div className="text-right">{e.qty > 0 ? '+' : ''}{fmtQty(e.qty)}</div>
+                        <div className={`text-right ${e.balance < 0 ? 'col-negative' : ''}`}>{fmtQty(e.balance)}</div>
+                      </div>
+                    ))}
+                    {c.unscheduledDemand.length > 0 && (
+                      <div className="mat-unscheduled">
+                        Not scheduled, so not in the timeline: {c.unscheduledDemand.map((u) => `${u.jobId} (${fmtQty(u.qty)})`).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
       )}
     </div>

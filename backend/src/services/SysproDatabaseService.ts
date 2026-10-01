@@ -46,6 +46,7 @@ export interface JobMaterialPlan {
 }
 import environment from '../config/environment';
 import { computeMaterialPlans, RequirementLine } from './materialPlan';
+import { projectInventory, ProjectionJob, ComponentProjection } from './inventoryProjection';
 
 /**
  * Operation status from SYSPRO. On this install WipJobAllLab.OperationStatus is
@@ -769,7 +770,51 @@ export class SysproDatabaseService {
       this.getOpenPoReceipts(),
       this.getOpenJobMaterialRequirements(),
     ]);
+    await this.addBomFallbackRequirements(jobs, requirementsByJob);
 
+    return computeMaterialPlans({
+      jobs: jobs as any,
+      requirementsByJob,
+      stock: warehouseRows.map((w) => ({
+        code: w.code,
+        warehouseCode: w.warehouseCode === '(default)' ? '' : w.warehouseCode,
+        qtyOnHand: w.qtyOnHand,
+        qtyAllocSO: w.qtyAllocSO,
+      })),
+      poReceipts,
+      order: scheduledOrder,
+    }) as Map<string, JobMaterialPlan>;
+  }
+
+  /**
+   * Projected inventory by day for the components a plan uses
+   * (services/inventoryProjection.ts). `jobs` carry the planned start/end.
+   */
+  async getInventoryProjection(jobs: Array<ProjectionJob & { itemCode?: string; quantity?: number }>): Promise<ComponentProjection[]> {
+    if (!jobs.length) return [];
+    const [warehouseRows, poReceipts, requirementsByJob] = await Promise.all([
+      this.getInventoryByWarehouse(),
+      this.getOpenPoReceipts(),
+      this.getOpenJobMaterialRequirements(),
+    ]);
+    await this.addBomFallbackRequirements(jobs as any, requirementsByJob);
+    return projectInventory({
+      jobs,
+      requirementsByJob,
+      stock: warehouseRows.map((w) => ({
+        code: w.code,
+        warehouseCode: w.warehouseCode,
+        qtyOnHand: w.qtyOnHand,
+        qtyAllocSO: w.qtyAllocSO,
+        description: w.description,
+        unitOfMeasure: w.unitOfMeasure,
+      })),
+      poReceipts,
+    });
+  }
+
+  /** Jobs with no WipJobAllMat lines get their needs from the product BOM. */
+  private async addBomFallbackRequirements(jobs: Job[], requirementsByJob: Map<string, RequirementLine[]>): Promise<void> {
     // Jobs with no WipJobAllMat lines (e.g. bulk-imported jobs not in SYSPRO)
     // fall back to the product BOM: qty per × job qty × (1 + scrap).
     const missing = jobs.filter((j) => !requirementsByJob.has(String(j.jobId).trim()));
@@ -799,19 +844,6 @@ export class SysproDatabaseService {
         }))
       );
     }
-
-    return computeMaterialPlans({
-      jobs: jobs as any,
-      requirementsByJob,
-      stock: warehouseRows.map((w) => ({
-        code: w.code,
-        warehouseCode: w.warehouseCode === '(default)' ? '' : w.warehouseCode,
-        qtyOnHand: w.qtyOnHand,
-        qtyAllocSO: w.qtyAllocSO,
-      })),
-      poReceipts,
-      order: scheduledOrder,
-    }) as Map<string, JobMaterialPlan>;
   }
 
   // ==================== CALENDARS ====================
