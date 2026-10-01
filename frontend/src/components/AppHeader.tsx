@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import CruxLogo from './CruxLogo';
-import { Sun, Moon, HelpCircle, RefreshCw } from 'lucide-react';
+import { Sun, Moon, HelpCircle, RefreshCw, Search } from 'lucide-react';
 
 export interface DbStatus {
   sysproConnected: boolean;
@@ -22,6 +22,8 @@ interface Props {
   onOpenUserGuide: (section?: 'overview' | 'company' | 'jobs' | 'materials' | 'publish' | 'shortcuts') => void;
   dbStatus: DbStatus;
   dataWarning: string | null;
+  /** Open the Ctrl+K menu search. */
+  onOpenCommandPalette?: () => void;
 }
 
 const AppHeader: React.FC<Props> = ({
@@ -30,6 +32,7 @@ const AppHeader: React.FC<Props> = ({
   onOpenUserGuide,
   dbStatus,
   dataWarning,
+  onOpenCommandPalette,
 }) => (
   <header className="app-header">
     <div className="header-content">
@@ -39,6 +42,13 @@ const AppHeader: React.FC<Props> = ({
         </div>
       </div>
       <div className="header-controls">
+        {onOpenCommandPalette && (
+          <button className="header-search" onClick={onOpenCommandPalette} title="Search menus and views (Ctrl+K)" aria-label="Search menus and views (Ctrl+K)" aria-keyshortcuts="Control+K">
+            <Search size={14} aria-hidden="true" />
+            <span>Type a menu item…</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+        )}
         <button
           className="btn btn-icon"
           onClick={toggleDarkMode}

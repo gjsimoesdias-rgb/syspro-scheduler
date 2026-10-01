@@ -38,18 +38,19 @@ const OrderPromisePanel     = lazy(() => import('./OrderPromisePanel'));
 const ChangeoverMatrix      = lazy(() => import('./ChangeoverMatrix'));
 const OptimizerPanel        = lazy(() => import('./OptimizerPanel'));
 const BomTreeView           = lazy(() => import('./BomTreeView'));
+const MachineAnalysis       = lazy(() => import('./MachineAnalysis'));
 
 
 // ── Views ─────────────────────────────────────────────────────────────────
 // 19 feature tabs grouped into six views, like LYNQ's single planning screen.
 type ViewGroupId = 'plan' | 'analyse' | 'materials' | 'versions' | 'promise' | 'setup';
-const VIEW_GROUPS: Array<{ id: ViewGroupId; label: string; icon: LucideIcon; tabs: Array<{ id: ContentTab; label: string }> }> = [
+export const VIEW_GROUPS: Array<{ id: ViewGroupId; label: string; icon: LucideIcon; tabs: Array<{ id: ContentTab; label: string }> }> = [
   { id: 'plan', label: 'Plan', icon: BarChart2, tabs: [
     { id: 'gantt', label: 'Gantt' }, { id: 'jobtree', label: 'Job tree' },
     { id: 'dispatch', label: 'Dispatch list' }, { id: 'constraints', label: 'Constraints' },
   ] },
   { id: 'analyse', label: 'Analyse', icon: Target, tabs: [
-    { id: 'kpi', label: 'KPIs' }, { id: 'capacity', label: 'Capacity' }, { id: 'bottleneck', label: 'Bottleneck' },
+    { id: 'kpi', label: 'KPIs' }, { id: 'machines', label: 'Machines' }, { id: 'capacity', label: 'Capacity' }, { id: 'bottleneck', label: 'Bottleneck' },
     { id: 'leveling', label: 'Leveling' }, { id: 'pegging', label: 'Pegging' },
   ] },
   { id: 'materials', label: 'Materials', icon: Factory, tabs: [
@@ -260,6 +261,10 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
 
           {contentTab === 'kpi' && (
             <KpiDashboard schedule={schedule} jobsTotal={openJobs.length} />
+          )}
+
+          {contentTab === 'machines' && (
+            <MachineAnalysis schedule={schedule} resources={resources} />
           )}
 
           {contentTab === 'capacity' && (

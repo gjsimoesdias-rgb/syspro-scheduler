@@ -15,7 +15,8 @@ import AppRibbon from './components/AppRibbon';
 import ConnectionModal from './components/ConnectionModal';
 import ResourceTree from './components/ResourceTree';
 import SchemaExplorer from './components/SchemaExplorer';
-import ContentTabPanel from './components/ContentTabPanel';
+import ContentTabPanel, { VIEW_GROUPS } from './components/ContentTabPanel';
+import CommandPalette, { type PaletteCommand } from './components/CommandPalette';
 // Type-only import (no runtime value used)
 // Lazy tab panels still used directly in App.tsx (manage tab)
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -144,6 +145,7 @@ const App: React.FC = () => {
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const jobPaneMode = useUiStore((s) => s.jobPaneMode) as JobPaneMode;
   const showResourceTree = useUiStore((s) => s.showResourceTree);
+  const setShowResourceTree = useUiStore((s) => s.setShowResourceTree);
   const setJobPaneMode = useUiStore((s) => s.setJobPaneMode);
   const scheduleAroundMode = useUiStore((s) => s.scheduleAroundMode) as ScheduleAroundMode;
   const setScheduleAroundMode = useUiStore((s) => s.setScheduleAroundMode);
@@ -1397,8 +1399,60 @@ const App: React.FC = () => {
     visibleOperationColumns,
   });
 
+  // ─── Ctrl+K menu search (LYNQ "Type a menu item") ──────────────────────
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  // Rebuilt each render (≈40 small objects) so every action sees current state.
+  const paletteCommands = ((): PaletteCommand[] => {
+    const toManage = (tab: Parameters<typeof setManageTab>[0]) => () => { setMainTab('manage'); setManageTab(tab); };
+    const toPane = (mode: JobPaneMode) => () => { setManageTab('none'); setJobPaneMode(mode); };
+    const noPlan = !schedule;
+    return [
+      ...VIEW_GROUPS.flatMap((g) => g.tabs.map((t) => ({
+        id: `view-${t.id}`, group: g.label, label: t.label, keywords: `view ${t.id} ${t.id === 'machines' ? 'workunit machine analysis load utilisation utilization idle busy' : ''}`,
+        run: () => setContentTab(t.id),
+      }))),
+      { id: 'act-generate', group: 'Schedule', label: 'Generate schedule…', keywords: 'plan run autoschedule', hint: 'Ctrl+Enter', disabled: !dbStatus.sysproConnected, run: () => openScheduleSetup() },
+      { id: 'act-send', group: 'Schedule', label: 'Send to SYSPRO', keywords: 'publish export dates save', disabled: noPlan || !dbStatus.sysproConnected, run: () => { void exportToSyspro(); } },
+      { id: 'act-undo', group: 'Schedule', label: 'Undo', hint: 'Ctrl+Z', run: () => handleUndo() },
+      { id: 'act-redo', group: 'Schedule', label: 'Redo', hint: 'Ctrl+Shift+Z', run: () => handleRedo() },
+      { id: 'act-refresh', group: 'Data', label: 'Refresh jobs from SYSPRO', keywords: 'reload data', run: () => { void loadJobsAndResources(); } },
+      { id: 'act-export-grid', group: 'Data', label: 'Export jobs grid (Excel)', keywords: 'csv download', run: () => exportJobsGrid() },
+      { id: 'act-report', group: 'Reports', label: 'Schedule report (PDF)', keywords: 'print', disabled: noPlan, run: () => handleExport('pdf') },
+      { id: 'pane-production', group: 'Jobs', label: 'Production jobs', run: toPane('production') },
+      { id: 'pane-master', group: 'Jobs', label: 'Master jobs', keywords: 'sub jobs', run: toPane('master') },
+      { id: 'pane-mrp', group: 'Jobs', label: 'MRP jobs', keywords: 'suggested', run: toPane('mrp') },
+      { id: 'flt-unscheduled', group: 'Filter', label: 'Unscheduled jobs', run: () => applyWorkflowFilter('unscheduled') },
+      { id: 'flt-pastdue', group: 'Filter', label: 'Past due jobs', keywords: 'late overdue', run: () => applyWorkflowFilter('past-due') },
+      { id: 'flt-advanced', group: 'Filter', label: 'Advanced filter…', run: () => setShowAdvancedFilter(true) },
+      { id: 'flt-clear', group: 'Filter', label: 'Clear job filters', keywords: 'reset all', run: () => applyWorkflowFilter('all') },
+      { id: 'mng-workcenters', group: 'Manage', label: 'Work centres', keywords: 'lines', run: toManage('workcenters') },
+      { id: 'mng-machines', group: 'Manage', label: 'Machines', keywords: 'resources', run: toManage('machines') },
+      { id: 'mng-shifts', group: 'Manage', label: 'Shifts', keywords: 'calendar', run: toManage('shifts') },
+      { id: 'mng-crews', group: 'Manage', label: 'Crews', keywords: 'operators labour employees', run: toManage('crews') },
+      { id: 'mng-markers', group: 'Manage', label: 'Markers', keywords: 'tags colours labels', run: toManage('markers') },
+      { id: 'mng-alternatives', group: 'Manage', label: 'Alternatives', run: toManage('alternatives') },
+      { id: 'mng-interval', group: 'Manage', label: 'Planning interval', keywords: 'board horizon', run: toManage('interval') },
+      { id: 'ui-tree', group: 'View', label: showResourceTree ? 'Hide resource tree' : 'Show resource tree', keywords: 'lanes lines', run: () => setShowResourceTree(!showResourceTree) },
+      { id: 'ui-dark', group: 'View', label: isDarkMode ? 'Light mode' : 'Dark mode', keywords: 'theme', hint: 'Ctrl+Shift+D', run: () => toggleDarkMode() },
+      { id: 'ui-settings', group: 'File', label: 'Settings', keywords: 'preferences options', run: () => setShowSettingsModal(true) },
+      { id: 'ui-help', group: 'File', label: 'Help / user guide', run: () => openUserGuide('overview') },
+      { id: 'ui-shortcuts', group: 'File', label: 'Keyboard shortcuts', run: () => openUserGuide('shortcuts') },
+    ];
+  })();
+
   return (
     <div className="app" data-theme={isDarkMode ? 'dark' : 'light'}>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} />
       <Toaster
         position="top-right"
         toastOptions={{
@@ -1437,6 +1491,7 @@ const App: React.FC = () => {
         onOpenUserGuide={openUserGuide}
         dbStatus={dbStatus}
         dataWarning={dataWarning}
+        onOpenCommandPalette={() => setPaletteOpen(true)}
       />
 
       <main className="aps-main">
