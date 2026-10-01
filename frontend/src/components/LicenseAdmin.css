@@ -27,7 +27,7 @@
   font-size: 12px;
 }
 .la-table th {
-  background: linear-gradient(180deg, #e5d7f9, #d8c8f0);
+  background: linear-gradient(180deg, #e5d7f9, var(--bg-surface-2));
   color: #4c1d95; font-weight: 700; padding: 7px 10px; text-align: left;
   border-bottom: 1px solid #c4b5fd;
 }

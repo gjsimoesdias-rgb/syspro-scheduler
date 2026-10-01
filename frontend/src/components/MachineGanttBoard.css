@@ -872,7 +872,7 @@
 .drag-preview-value {
   font-size: 11px;
   color: #1a365d;
-  background: #edf2f7;
+  background: var(--bg-surface-2);
   border: 1px solid #cbd5e0;
   border-radius: 3px;
   padding: 2px 6px;
@@ -883,7 +883,7 @@
 
 .drag-preview-divider {
   height: 1px;
-  background: #e2e8f0;
+  background: var(--bg-surface-2);
   margin: 6px 0;
 }
 
@@ -903,7 +903,7 @@
   z-index: 2000;
   min-width: 220px;
   padding: 4px;
-  background: #ffffff;
+  background: var(--bg-surface);
   color: var(--text-primary);
   border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 8px;
@@ -923,7 +923,7 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #64748b;
+  color: var(--text-secondary);
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
   margin-bottom: 4px;
 }
@@ -962,7 +962,7 @@
   box-shadow: 0 18px 38px rgba(0, 0, 0, 0.55);
 }
 [data-theme='dark'] .gantt-context-menu__header {
-  color: #94a3b8;
+  color: var(--text-secondary);
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 [data-theme='dark'] .gantt-context-menu__header strong { color: #e2e8f0; }

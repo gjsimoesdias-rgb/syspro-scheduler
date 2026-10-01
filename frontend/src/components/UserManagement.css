@@ -29,7 +29,7 @@
   font-size: 12px;
 }
 .um-table th {
-  background: linear-gradient(180deg, #d8e7f8, #c8ddf2);
+  background: linear-gradient(180deg, var(--bg-surface-2), var(--bg-surface-2));
   color: var(--text-primary); font-weight: 700; padding: 7px 12px; text-align: left;
   border-bottom: 1px solid var(--border-default);
 }

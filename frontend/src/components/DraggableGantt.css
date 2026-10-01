@@ -1,8 +1,8 @@
 .draggable-gantt {
-  background: white;
+  background: var(--bg-surface);
   padding: 20px;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
   margin-bottom: 20px;
 }
 
@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .gantt-timeline {
@@ -27,7 +27,7 @@
 .op-row {
   display: flex;
   padding: 8px 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--border-default);
   align-items: center;
 }
 
@@ -76,8 +76,8 @@
 }
 
 .timeline-header {
-  background: #f3f4f6;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg-surface-2);
+  border-bottom: 1px solid var(--border-default);
   padding: 0;
   margin-left: 100px;
 }
@@ -94,5 +94,5 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--border-default);
 }

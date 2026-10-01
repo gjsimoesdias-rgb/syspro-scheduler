@@ -31,7 +31,7 @@
 .sf-refresh {
   display: inline-flex; align-items: center; gap: 8px;
   min-height: 44px; min-width: 44px; padding: 0 14px;
-  background: transparent; color: var(--text-topbar, #fff);
+  background: transparent; color: var(--text-topbar, var(--bg-surface));
   border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 6px;
   font-size: 15px; cursor: pointer;
 }

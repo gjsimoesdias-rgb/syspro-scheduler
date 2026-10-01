@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #eef5fe;
+  background: var(--bg-surface-2);
   overflow: auto;
 }
 
@@ -18,7 +18,7 @@
 .cap-hist-header {
   padding: 10px 14px 6px;
   border-bottom: 1px solid #b7cae0;
-  background: linear-gradient(180deg, #d8e7f8 0%, #c8dbf0 100%);
+  background: linear-gradient(180deg, var(--bg-surface-2) 0%, var(--bg-surface-2) 100%);
 }
 
 .cap-hist-header h3 {
@@ -41,8 +41,8 @@
 }
 
 .cap-wc-block {
-  background: white;
-  border: 1px solid #c5d7ed;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 4px;
   padding: 8px 10px;
   min-width: 180px;
@@ -54,7 +54,7 @@
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 6px;
-  border-bottom: 1px solid #e0eaf6;
+  border-bottom: 1px solid var(--border-default);
   padding-bottom: 4px;
 }
 
@@ -80,8 +80,8 @@
 .cap-bar-outer {
   position: relative;
   width: 22px;
-  background: #e8f0fc;
-  border: 1px solid #c5d7ed;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
   border-radius: 2px 2px 0 0;
   display: flex;
   flex-direction: column;
@@ -106,7 +106,7 @@
   left: -1px;
   right: -1px;
   height: 2px;
-  background: #1d3554;
+  background: var(--text-secondary);
   border-top: 2px dashed #1d3554;
   z-index: 2;
 }

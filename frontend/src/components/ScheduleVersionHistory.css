@@ -1,8 +1,8 @@
 .version-history {
-  background: white;
+  background: var(--bg-surface);
   padding: 20px;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
 }
 
 .version-history h3 {
@@ -15,7 +15,7 @@
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-align: center;
 }
 
@@ -55,7 +55,7 @@
 .timeline-dot {
   width: 12px;
   height: 12px;
-  background: #e5e7eb;
+  background: var(--bg-surface-2);
   border: 3px solid white;
   border-radius: 50%;
   z-index: 2;
@@ -73,13 +73,13 @@
 .timeline-line {
   width: 2px;
   height: 40px;
-  background: #e5e7eb;
+  background: var(--bg-surface-2);
   margin-top: 8px;
 }
 
 .version-content {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 15px;
   cursor: pointer;
@@ -88,8 +88,8 @@
 }
 
 .version-content:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+  background: var(--bg-surface-2);
+  border-color: var(--border-default);
 }
 
 .version-header {
@@ -127,7 +127,7 @@
 .version-details {
   margin-top: 15px;
   padding-top: 15px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-default);
 }
 
 .details-grid {
@@ -138,17 +138,17 @@
 }
 
 .detail-item {
-  background: white;
+  background: var(--bg-surface);
   padding: 10px;
   border-radius: 4px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
 }
 
 .detail-item label {
   display: block;
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-transform: uppercase;
   margin-bottom: 5px;
 }

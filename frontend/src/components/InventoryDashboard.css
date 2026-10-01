@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-primary, #f0f4f8);
+  background: var(--bg-primary, var(--bg-surface-2));
   overflow: hidden;
 }
 
@@ -17,12 +17,12 @@
   gap: 4px;
   padding: 8px 12px 0;
   border-bottom: 1px solid #c8d8e8;
-  background: #dde8f3;
+  background: var(--bg-surface-2);
   flex-shrink: 0;
 }
 
 .inv-dashboard.dark .inv-tab-bar {
-  background: #2d3748;
+  background: var(--bg-surface);
   border-color: var(--text-secondary);
 }
 
@@ -31,7 +31,7 @@
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: 6px 6px 0 0;
-  background: #c8daea;
+  background: var(--bg-surface-2);
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
@@ -49,13 +49,13 @@
 }
 
 .inv-dashboard.dark .inv-tab {
-  background: #374151;
-  color: #9ca3af;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
   border-color: transparent;
 }
 .inv-dashboard.dark .inv-tab.active {
   background: #1f2937;
-  color: #f3f4f6;
+  color: var(--text-primary);
   border-color: var(--text-secondary);
 }
 
@@ -93,7 +93,7 @@
 .inv-dashboard.dark .inv-panel-header h3 { color: #e2e8f0; }
 
 .inv-count {
-  background: #e2edf8;
+  background: var(--bg-surface-2);
   border-radius: 10px;
   padding: 2px 8px;
   font-size: 11px;
@@ -107,8 +107,8 @@
 }
 
 .inv-dashboard.dark .inv-count {
-  background: #374151;
-  color: #9ca3af;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
 }
 
 .inv-refresh-btn {
@@ -139,12 +139,12 @@
   padding: 5px 10px;
   font-size: 13px;
   min-width: 200px;
-  background: #fff;
+  background: var(--bg-surface);
   color: var(--text-primary);
 }
 
 .inv-dashboard.dark .inv-search {
-  background: #374151;
+  background: var(--bg-surface-2);
   border-color: var(--text-secondary);
   color: #e2e8f0;
 }
@@ -154,12 +154,12 @@
   border-radius: 4px;
   padding: 5px 8px;
   font-size: 13px;
-  background: #fff;
+  background: var(--bg-surface);
   color: var(--text-primary);
 }
 
 .inv-dashboard.dark .inv-select {
-  background: #374151;
+  background: var(--bg-surface-2);
   border-color: var(--text-secondary);
   color: #e2e8f0;
 }
@@ -178,15 +178,15 @@
   display: flex;
   gap: 20px;
   font-size: 13px;
-  background: #e8f0fa;
+  background: var(--bg-surface-2);
   border-radius: 4px;
   padding: 6px 12px;
   color: var(--text-primary);
 }
 
 .inv-dashboard.dark .inv-summary-bar {
-  background: #2d3748;
-  color: #a0aec0;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
 }
 
 /* ── Table ───────────────────────────────────────────────────── */
@@ -209,7 +209,7 @@
 .inv-table thead th {
   position: sticky;
   top: 0;
-  background: #dde8f5;
+  background: var(--bg-surface-2);
   color: var(--text-primary);
   font-weight: 600;
   padding: 7px 8px;
@@ -224,14 +224,14 @@
 .inv-table thead th:hover { background: #c5d8ee; }
 
 .inv-dashboard.dark .inv-table thead th {
-  background: #374151;
-  color: #9ca3af;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
   border-color: var(--text-secondary);
 }
 .inv-dashboard.dark .inv-table thead th:hover { background: #4b5563; }
 
 .inv-table tbody tr {
-  border-bottom: 1px solid #e8eef5;
+  border-bottom: 1px solid var(--border-default);
   transition: background 0.1s;
 }
 .inv-table tbody tr:hover { background: #eef4fc; }
@@ -254,15 +254,15 @@
 .inv-table td.code { font-family: monospace; font-weight: 600; white-space: nowrap; }
 .inv-table td.muted { color: #6b7a8d; }
 .inv-table td.small { font-size: 11px; }
-.inv-table td.zero { color: #dc2626; font-weight: 700; }
+.inv-table td.zero { color: var(--status-bad); font-weight: 700; }
 
 /* Stock status row colours */
-.inv-table tbody tr.stock-low { background: #fffbeb; }
-.inv-table tbody tr.stock-zero { background: #fff1f2; }
+.inv-table tbody tr.stock-low { background: var(--status-warn-soft); }
+.inv-table tbody tr.stock-zero { background: var(--status-bad-soft); box-shadow: inset 3px 0 0 var(--status-bad); }
 .inv-table tbody tr.stock-ok { }
 
-.inv-dashboard.dark .inv-table tbody tr.stock-low { background: #3b3006; }
-.inv-dashboard.dark .inv-table tbody tr.stock-zero { background: #3b0606; }
+.inv-dashboard.dark .inv-table tbody tr.stock-low { background: rgba(245, 176, 46, 0.08); }
+.inv-dashboard.dark .inv-table tbody tr.stock-zero { background: rgba(244, 47, 47, 0.08); }
 
 /* PO rows */
 .inv-table tbody tr.po-header-row {
@@ -304,7 +304,7 @@
 /* Empty state */
 .inv-empty {
   text-align: center;
-  color: #6b7a8d;
+  color: var(--text-secondary);
   padding: 20px;
 }
 

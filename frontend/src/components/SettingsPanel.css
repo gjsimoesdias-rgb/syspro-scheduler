@@ -125,7 +125,7 @@
 .sp-tab.active {
   background: var(--bg-surface-2);
   border-color: var(--border-default);
-  border-bottom-color: #edf3fa;
+  border-bottom-color: var(--border-default);
   color: var(--text-primary);
 }
 
@@ -138,7 +138,7 @@
 }
 
 .sp-group-title {
-  background: linear-gradient(180deg, #d8e7f8, #c8ddf2);
+  background: linear-gradient(180deg, var(--bg-surface-2), var(--bg-surface-2));
   border-bottom: 1px solid var(--border-default);
   padding: 5px 12px;
   font-size: 11px;
@@ -323,7 +323,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: #d0e3f4;
+  background: var(--bg-surface-2);
   border-top: 1px solid var(--border-default);
   flex-shrink: 0;
 }

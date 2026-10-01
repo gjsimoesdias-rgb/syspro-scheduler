@@ -43,8 +43,8 @@
 }
 
 .kpi-tile {
-  background: white;
-  border: 1px solid #c5d7ed;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-top-width: 3px;
   border-radius: 4px;
   padding: 10px 12px;
@@ -94,7 +94,7 @@
 .kpi-util-track {
   flex: 1;
   height: 14px;
-  background: #dce8f8;
+  background: var(--bg-surface-2);
   border-radius: 7px;
   border: 1px solid var(--border-default);
   position: relative;

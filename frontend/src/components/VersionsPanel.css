@@ -44,7 +44,7 @@
 
 /* ── Auto plan ── */
 .vp-auto { margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--border-default, #e2e8f0); border-radius: 6px;
-  background: var(--bg-surface, #fff); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+  background: var(--bg-surface, var(--bg-surface)); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
 .vp-auto-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .vp-auto-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
 .vp-auto-row label { display: flex; align-items: center; gap: 4px; }

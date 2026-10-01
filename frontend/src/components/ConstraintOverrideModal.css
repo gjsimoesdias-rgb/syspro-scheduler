@@ -22,7 +22,7 @@
 }
 
 .modal-content {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 8px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   max-width: 500px;
@@ -218,7 +218,7 @@
 }
 
 .btn-cancel:hover:not(:disabled) {
-  background: #d1d5db;
+  background: var(--bg-surface-2);
 }
 
 .btn-approve {

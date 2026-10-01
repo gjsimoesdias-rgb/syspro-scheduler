@@ -1,5 +1,5 @@
 .constraint-violations {
-  background: white;
+  background: var(--bg-surface);
   padding: 20px;
   border-radius: 8px;
   border: 1px solid var(--border-default);

@@ -26,7 +26,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 8px;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 4px;
   border: 1px solid var(--border-default);
 }
@@ -101,7 +101,7 @@
 
 .violation-item {
   padding: 8px;
-  background: white;
+  background: var(--bg-surface);
   border-left: 3px solid;
   border-radius: 3px;
   transition: all 0.15s;

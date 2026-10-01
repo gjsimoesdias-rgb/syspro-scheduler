@@ -84,7 +84,7 @@
 .resource-def-grid thead th {
   position: sticky;
   top: 0;
-  background: #d7e5f7;
+  background: var(--bg-surface-2);
   color: var(--text-primary);
   text-align: left;
   padding: 6px;
@@ -94,8 +94,8 @@
 
 .resource-def-grid tbody td {
   padding: 5px 6px;
-  border-bottom: 1px solid #d7e3f0;
-  border-right: 1px solid #e3ecf8;
+  border-bottom: 1px solid var(--border-default);
+  border-right: 1px solid var(--border-default);
 }
 
 .qty-input,

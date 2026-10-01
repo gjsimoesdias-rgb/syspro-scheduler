@@ -32,7 +32,7 @@
   align-items: center;
   gap: 4px;
   padding: 10px;
-  background: white;
+  background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 4px;
 }
@@ -63,7 +63,7 @@
   align-items: center;
   gap: 12px;
   padding: 10px;
-  background: white;
+  background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 4px;
 }
@@ -87,7 +87,7 @@
   border-radius: 3px;
   font-size: 11px;
   color: var(--text-secondary);
-  background: white;
+  background: var(--bg-surface);
 }
 
 .btn {
@@ -133,7 +133,7 @@
   gap: 0;
   border-bottom: 1px solid var(--border-default);
   font-size: 11px;
-  background: white;
+  background: var(--bg-surface);
 }
 
 .list-header {

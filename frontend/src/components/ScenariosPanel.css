@@ -18,14 +18,14 @@
 }
 .scenarios-desc {
   font-size: 13px;
-  color: var(--text-secondary, #6b7f99);
+  color: var(--text-secondary, var(--text-secondary));
   margin: 0;
 }
 
 /* Create form */
 .scenarios-create-form {
-  background: var(--bg-card, #f8fafc);
-  border: 1px solid var(--border, #d0dff2);
+  background: var(--bg-card, var(--bg-surface));
+  border: 1px solid var(--border, var(--border-default));
   border-radius: 8px;
   padding: 16px 20px;
   margin-bottom: 24px;
@@ -51,10 +51,10 @@
   flex: 1;
   min-width: 160px;
   padding: 7px 10px;
-  border: 1px solid var(--border, #d0dff2);
+  border: 1px solid var(--border, var(--border-default));
   border-radius: 5px;
   font-size: 13px;
-  background: var(--bg-primary, #fff);
+  background: var(--bg-primary, var(--bg-surface));
   color: var(--text-primary, #1a2332);
 }
 .scenarios-input:focus {
@@ -82,7 +82,7 @@
 }
 .scenarios-count {
   font-weight: 400;
-  color: var(--text-secondary, #6b7f99);
+  color: var(--text-secondary, var(--text-secondary));
 }
 
 .scenarios-error {
@@ -95,11 +95,11 @@
   margin-bottom: 12px;
 }
 .scenarios-empty {
-  color: var(--text-secondary, #6b7f99);
+  color: var(--text-secondary, var(--text-secondary));
   font-size: 13px;
   padding: 24px;
   text-align: center;
-  border: 1px dashed var(--border, #d0dff2);
+  border: 1px dashed var(--border, var(--border-default));
   border-radius: 8px;
 }
 
@@ -113,8 +113,8 @@
   gap: 10px;
 }
 .scenarios-item {
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border, #d0dff2);
+  background: var(--bg-card, var(--bg-surface));
+  border: 1px solid var(--border, var(--border-default));
   border-radius: 8px;
   padding: 14px 16px;
   transition: box-shadow 0.15s;
@@ -155,12 +155,12 @@
 
 .scenarios-item-desc {
   font-size: 13px;
-  color: var(--text-secondary, #6b7f99);
+  color: var(--text-secondary, var(--text-secondary));
   margin: 2px 0 6px;
 }
 .scenarios-item-meta {
   font-size: 11px;
-  color: var(--text-muted, #9badc4);
+  color: var(--text-muted, var(--text-muted));
   margin-bottom: 10px;
 }
 .scenarios-item-actions {
