@@ -88,6 +88,7 @@ interface CompanySettings {
       asap: boolean;
       enforceMaterialConstraints: boolean;
       allowFinishAfterHorizon?: boolean;
+      includeMrpSuggestedJobs?: boolean;
     };
     tracking: {
       showExecutionInJobPanels: boolean;
@@ -441,6 +442,9 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
             </GroupBox>
             <GroupBox title="Planning window">
               <CheckRow label="Let operations finish after the planning window (they must still start inside it) — otherwise an operation longer than the window is never scheduled" checked={r.allowFinishAfterHorizon ?? false} onChange={v => setR('allowFinishAfterHorizon', v)} />
+            </GroupBox>
+            <GroupBox title="MRP suggestions">
+              <CheckRow label="Plan SYSPRO MRP suggested jobs as planned work (shown as MRP-… jobs; never sent to SYSPRO). Refresh the jobs after changing this." checked={r.includeMrpSuggestedJobs ?? false} onChange={v => setR('includeMrpSuggestedJobs', v)} />
             </GroupBox>
             <GroupBox title="Material">
               <CheckRow

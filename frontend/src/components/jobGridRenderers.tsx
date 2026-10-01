@@ -58,6 +58,9 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
         : job.operations.every((o) => o.status === 'Complete')
         ? 'All operations complete'
         : null;
+      if (!reason && (job as any).isSuggested) {
+        return <span className="grid-flag grid-flag-info" title="SYSPRO MRP suggested job — scheduled as planned work">✓ MRP</span>;
+      }
       return reason
         ? <span className="grid-flag grid-flag-bad" title={reason}>✕ {reason}</span>
         : <span className="grid-flag grid-flag-ok" title="Can be scheduled">✓</span>;
@@ -82,6 +85,9 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
     }
 
     if (column.key === 'publishState') {
+      if ((job as any).isSuggested) {
+        return <span className="grid-flag grid-flag-info" title={`SYSPRO MRP suggested job ${(job as any).suggestedJob || ''} — planned only; create the job in SYSPRO to send dates`}>MRP suggestion</span>;
+      }
       const st = publishByJob.get(String(job.jobId).trim());
       const cls = st === 'Published' ? 'grid-flag-ok' : st === 'Error' ? 'grid-flag-bad' : st === 'Pending' ? 'grid-flag-warn' : '';
       const tip = st === 'Published' ? 'SYSPRO has these dates' : st === 'Pending' ? 'Changed since the last Send to SYSPRO' : st === 'Error' ? 'Last send failed on this job' : 'Not in the master plan';

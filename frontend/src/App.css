@@ -2617,4 +2617,5 @@
 .grid-flag { font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
 .grid-flag-ok { color: var(--status-success, #15803d); }
 .grid-flag-warn { color: var(--status-warning, #b45309); }
+.grid-flag-info { color: var(--status-info, #4f46e5); }
 .grid-flag-bad { color: var(--status-error, #dc2626); }

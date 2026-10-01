@@ -47,6 +47,7 @@ export interface JobMaterialPlan {
 import environment from '../config/environment';
 import { computeMaterialPlans, RequirementLine } from './materialPlan';
 import { projectInventory, ProjectionJob, ComponentProjection } from './inventoryProjection';
+import { isSuggestedJobId } from '../utils/suggestedJobs';
 import { pegSalesOrders, PegJob, PeggedLine, JobPeg, SoLine } from './salesPegging';
 
 /**
@@ -122,7 +123,34 @@ export function sysproTransferFraction(row: Record<string, any>, opQty?: number)
 }
 
 export class SysproDatabaseService {
-  constructor(private sysproDb: DatabaseConnection) {}
+  /**
+   * @param options.includeSuggestedJobs add SYSPRO MRP suggested jobs (MRP- ids)
+   *   to open jobs and material needs — company setting
+   *   fcs.schedulingRules.includeMrpSuggestedJobs (see api/sysproServiceFor.ts).
+   */
+  constructor(private sysproDb: DatabaseConnection, private options: { includeSuggestedJobs?: boolean } = {}) {}
+
+  /** MRP suggested jobs as planned jobs (empty when off or the tables are missing). */
+  async getSuggestedJobs(): Promise<Job[]> {
+    try {
+      const [result, opsResult] = await Promise.all([
+        this.sysproDb.query(SYSPRO_QUERIES.getSuggestedJobs),
+        this.sysproDb.query(SYSPRO_QUERIES.getOperationsForSuggestedJobs),
+      ]);
+      const opsByJob = this.groupOperationsByJob(opsResult.recordset);
+      return (result.recordset || []).map((row: any) => {
+        const job: any = this.mapRowToJob(row, opsByJob.get(jobKey(row.jobId)) || []);
+        job.isSuggested = true;
+        job.suggestedJob = String(row.suggestedJob || '').trim();
+        job.status = 'Planned';
+        job.masterJobId = null;
+        return job as Job;
+      });
+    } catch (error) {
+      logger.warn({ err: error }, 'Could not read MRP suggested jobs; continuing without them');
+      return [];
+    }
+  }
 
   private normalizeSysproTextValue(value: any): string {
     if (Array.isArray(value)) {
@@ -326,6 +354,7 @@ export class SysproDatabaseService {
       if (linkStats.resolved || linkStats.selfCleared) {
         logger.info(linkStats, 'Normalised master/sub-job links');
       }
+      if (this.options.includeSuggestedJobs) jobs.push(...(await this.getSuggestedJobs()));
       return jobs;
     } catch (error) {
       logger.error({ err: error }, 'Error fetching open jobs');
@@ -392,6 +421,7 @@ export class SysproDatabaseService {
       }
 
       logger.info({ count: jobs.length }, 'Loaded jobs from APS views');
+      if (this.options.includeSuggestedJobs) jobs.push(...(await this.getSuggestedJobs()));
       return jobs;
     } catch (error) {
       logger.error({ err: error }, 'Error fetching jobs from APS views');
@@ -400,6 +430,10 @@ export class SysproDatabaseService {
   }
 
   async getJobById(jobId: string): Promise<Job | null> {
+    if (isSuggestedJobId(jobId)) {
+      const all = await this.getSuggestedJobs();
+      return all.find((j) => jobKey(j.jobId) === jobKey(jobId)) || null;
+    }
     try {
       const result = await this.sysproDb.queryWithParams(
         SYSPRO_QUERIES.getJobById,
@@ -680,8 +714,14 @@ export class SysproDatabaseService {
    */
   async getOpenJobMaterialRequirements(): Promise<Map<string, RequirementLine[]>> {
     const result = await this.sysproDb.query(SYSPRO_QUERIES.getOpenJobMaterialRequirements);
+    const rows = [...(result.recordset || [])];
+    if (this.options.includeSuggestedJobs) {
+      const sug = await this.sysproDb.query(SYSPRO_QUERIES.getSuggestedJobMaterialRequirements)
+        .catch((err: any) => { logger.warn({ err }, 'Could not read MRP suggested job materials'); return { recordset: [] } as any; });
+      rows.push(...(sug.recordset || []));
+    }
     const byJob = new Map<string, RequirementLine[]>();
-    for (const row of result.recordset || []) {
+    for (const row of rows) {
       const jobId = String(row.jobId || '').trim();
       const componentCode = String(row.componentCode || '').trim();
       if (!jobId || !componentCode) continue;

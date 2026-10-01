@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import DatabaseConnection from '../../database/connection';
 import { SysproDatabaseService } from '../../services/SysproDatabaseService';
+import { sysproServiceFor } from '../sysproServiceFor';
 
 const router = Router();
 
@@ -420,7 +421,7 @@ router.post('/projection', async (req: Request, res: Response) => {
   const jobs = planJobsFrom(req);
   if (!jobs) return res.status(400).json({ error: 'jobs must be an array (max 20000)' });
   try {
-    const components = await new SysproDatabaseService(db as any).getInventoryProjection(jobs);
+    const components = await (await sysproServiceFor(req, db)).getInventoryProjection(jobs);
     return res.json({
       generatedAt: new Date().toISOString(),
       count: components.length,
@@ -444,7 +445,7 @@ router.post('/pegging', async (req: Request, res: Response) => {
   const jobs = planJobsFrom(req);
   if (!jobs) return res.status(400).json({ error: 'jobs must be an array (max 20000)' });
   try {
-    const result = await new SysproDatabaseService(db as any).getSalesOrderPegging(jobs);
+    const result = await (await sysproServiceFor(req, db)).getSalesOrderPegging(jobs);
     const count = (s: string) => result.lines.filter((l) => l.status === s).length;
     return res.json({
       generatedAt: new Date().toISOString(),

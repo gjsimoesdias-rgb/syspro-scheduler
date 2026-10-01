@@ -8,6 +8,7 @@ import { Worker } from 'worker_threads';
 import * as path from 'path';
 import ConstraintManager from '../../services/ConstraintManager';
 import SysproDatabaseService from '../../services/SysproDatabaseService';
+import { sysproServiceFor } from '../sysproServiceFor';
 import SettingsService from '../../services/SettingsService';
 import APSDatabaseService from '../../services/APSDatabaseService';
 import environment from '../../config/environment';
@@ -183,7 +184,7 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
     }
 
     // Load data from Syspro
-    const sysproService = new SysproDatabaseService(sysproDb);
+    const sysproService = await sysproServiceFor(req, sysproDb);
     req.log.info('Loading master data from Syspro');
 
     const [sysproJobs, workcentres, rawResources, materials] = await Promise.all([
@@ -542,7 +543,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
     }
 
     // ── Load master data once (shared across all rule runs) ──────────────────
-    const sysproService = new SysproDatabaseService(sysproDb);
+    const sysproService = await sysproServiceFor(req, sysproDb);
     const [sysproJobs, workcentres, rawResources, materials] = await Promise.all([
       sysproService.getOpenJobs(),
       sysproService.getWorkcentres(),

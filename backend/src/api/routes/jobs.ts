@@ -4,6 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import SysproDatabaseService from '../../services/SysproDatabaseService';
+import { sysproServiceFor } from '../sysproServiceFor';
 import { Job, Operation } from '../../types';
 import { setLocal } from '../../utils/setLocal';
 import { validateBody } from '../middleware/validateBody';
@@ -154,7 +155,7 @@ router.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    const sysproService = new SysproDatabaseService(sysproDb);
+    const sysproService = await sysproServiceFor(req, sysproDb);
     const jobs = await sysproService.getOpenJobs();
     const importedJobs = buildMergedImportedJobs(req.app);
     const mergedJobs = [...jobs];
@@ -257,7 +258,7 @@ router.post('/material-plan', async (req: Request, res: Response) => {
       return res.json({ count: 0, materials: [], jobStatuses: {}, warning: 'Database not connected' });
     }
 
-    const sysproService = new SysproDatabaseService(sysproDb);
+    const sysproService = await sysproServiceFor(req, sysproDb);
     const inputJobs = Array.isArray(req.body?.jobs) ? req.body.jobs : await sysproService.getOpenJobs();
     const inventory = await sysproService.getInventory().catch(() => []);
     const inventoryByCode = new Map<string, any>(
@@ -382,7 +383,7 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const sysproService = new SysproDatabaseService(sysproDb);
+    const sysproService = await sysproServiceFor(req, sysproDb);
 
     // 1. Resolve the job (need itemCode + quantity for BOM expansion).
     const job = await sysproService.getJobById(jobId).catch(() => null);

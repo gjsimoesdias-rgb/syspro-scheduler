@@ -7,6 +7,7 @@
  */
 import { createHash } from 'crypto';
 import type { DbExecutor } from '../database/connection';
+import { isSuggestedJobId } from '../utils/suggestedJobs';
 
 export type PublishState = 'Published' | 'Pending' | 'Error';
 
@@ -52,6 +53,7 @@ export function planPublish(schedule: any, rows: Map<string, PublishRow>, full =
   const unchanged: string[] = [];
   for (const job of schedule?.jobSchedules || []) {
     if (!job?.operationSchedules?.length) continue;
+    if (isSuggestedJobId(job.jobId)) continue; // MRP suggestions are not SYSPRO jobs yet
     const prev = rows.get(String(job.jobId).trim());
     if (!full && prev?.status === 'Published' && prev.fingerprint === jobFingerprint(job)) {
       unchanged.push(job.jobId);
@@ -67,7 +69,7 @@ export function publishStateFor(schedule: any, rows: Map<string, PublishRow>): A
   jobId: string; state: PublishState; publishedAt: Date | null; lastError: string | null;
 }> {
   return (schedule?.jobSchedules || [])
-    .filter((j: any) => j?.operationSchedules?.length)
+    .filter((j: any) => j?.operationSchedules?.length && !isSuggestedJobId(j.jobId))
     .map((job: any) => {
       const prev = rows.get(String(job.jobId).trim());
       const state: PublishState = prev?.status === 'Error'

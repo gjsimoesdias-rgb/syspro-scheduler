@@ -84,6 +84,8 @@ export const DEFAULT_COMPANY_SETTINGS = {
       enforceMaterialConstraints: true,
       // Operations start inside the planning window but may finish after it.
       allowFinishAfterHorizon: false,
+      // Plan SYSPRO MRP suggested jobs (MrpSugJobMaster) as 'Planned' jobs.
+      includeMrpSuggestedJobs: false,
     },
     tracking: {
       showExecutionInJobPanels: true,

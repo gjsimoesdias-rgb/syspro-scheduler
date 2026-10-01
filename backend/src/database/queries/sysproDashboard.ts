@@ -592,6 +592,78 @@ export const SYSPRO_QUERIES = {
       AND ISNULL(m.StockCode, '') <> ''
   `,
 
+  // ==================== MRP SUGGESTED JOBS ====================
+  // Same layout as WipMaster / WipJobAllLab / WipJobAllMat; ids get the MRP-
+  // prefix (utils/suggestedJobs.ts). Empty when the tables are missing.
+  getSuggestedJobs: `
+    IF OBJECT_ID('MrpSugJobMaster', 'U') IS NULL
+      SELECT TOP 0 CAST('' AS varchar(30)) AS jobId
+    ELSE
+      SELECT
+        sj.*,
+        'MRP-' + RTRIM(sj.Job) AS jobId,
+        RTRIM(sj.Job) AS suggestedJob,
+        sj.StockCode AS itemCode,
+        ISNULL(NULLIF(sj.JobDescription, ''), sj.StockDescription) AS description,
+        ISNULL(sj.QtyToMake, 0) AS quantity,
+        ISNULL(sj.JobDeliveryDate, ISNULL(sj.SchEndDate, GETDATE())) AS dueDate,
+        ISNULL(sj.JobStartDate, ISNULL(sj.SchStartDate, GETDATE())) AS releaseDate,
+        TRY_CONVERT(int, sj.Priority) AS priority,
+        'Planned' AS status,
+        ISNULL(sj.ExpMaterial, 0) AS estimatedMaterialCost,
+        CAST(NULL AS varchar(30)) AS masterJobId,
+        CAST(0 AS bit) AS IsMasterJob,
+        CAST(0 AS bit) AS IsSubJob
+      FROM MrpSugJobMaster sj
+      WHERE ISNULL(sj.Complete, 'N') <> 'Y' AND ISNULL(sj.QtyToMake, 0) > 0
+      ORDER BY ISNULL(sj.JobDeliveryDate, sj.SchEndDate) ASC
+  `,
+  getOperationsForSuggestedJobs: `
+    IF OBJECT_ID('MrpSugJobAlLab', 'U') IS NULL OR OBJECT_ID('MrpSugJobMaster', 'U') IS NULL
+      SELECT TOP 0 CAST('' AS varchar(30)) AS jobId
+    ELSE
+      SELECT
+        CONCAT('MRP-', RTRIM(l.Job), '-OP', CAST(CAST(l.Operation AS int) AS varchar(20))) AS opId,
+        'MRP-' + RTRIM(l.Job) AS jobId,
+        CAST(l.Operation AS int) AS sequence,
+        ISNULL(l.WorkCentre, ISNULL(l.IMachine, 'WC-UNKNOWN')) AS workcentreId,
+        ISNULL(NULLIF(l.WorkCentreDesc, ''), ISNULL(l.WorkCentre, 'Unknown')) AS workcentreName,
+        (ISNULL(l.IExpUnitRunTim, 0) * ISNULL(NULLIF(l.ParentQtyPlanned, 0), ISNULL(sj.QtyToMake, 1))) AS duration,
+        ISNULL(l.IExpSetUpTime, 0) AS setupTime,
+        ISNULL(l.QueueTime, 0) AS queueTime,
+        ISNULL(l.MovementTime, 0) AS moveTime,
+        ISNULL(NULLIF(l.IQuantity, 0), 1) AS batchSize,
+        ISNULL(NULLIF(LTRIM(RTRIM(l.OperationStatus)), ''), 'NotStarted') AS status,
+        l.ScheduledMachine,
+        l.IMachine,
+        l.*
+      FROM MrpSugJobAlLab l
+      JOIN MrpSugJobMaster sj ON sj.Job = l.Job
+      WHERE ISNULL(sj.Complete, 'N') <> 'Y'
+      ORDER BY l.Job ASC, CAST(l.Operation AS int) ASC
+  `,
+  getSuggestedJobMaterialRequirements: `
+    IF OBJECT_ID('MrpSugJobAlMat', 'U') IS NULL OR OBJECT_ID('MrpSugJobMaster', 'U') IS NULL
+      SELECT TOP 0 CAST('' AS varchar(30)) AS jobId
+    ELSE
+      SELECT
+        'MRP-' + RTRIM(m.Job)                  AS jobId,
+        RTRIM(m.StockCode)                     AS componentCode,
+        RTRIM(ISNULL(m.Warehouse, ''))         AS warehouseCode,
+        RTRIM(ISNULL(NULLIF(m.Uom, ''), 'EA')) AS unitOfMeasure,
+        CAST(
+          CASE WHEN m.FixedQtyPerFlag = 'Y' THEN ISNULL(m.FixedQtyPer, 0)
+               ELSE ISNULL(NULLIF(m.NetUnitQtyReqd, 0), ISNULL(m.UnitQtyReqd, 0)) * ISNULL(sj.QtyToMake, 0)
+          END * (1 + ISNULL(m.ScrapPercentage, 0) / 100.0)
+        AS decimal(18, 6))                     AS requiredQty,
+        ISNULL(m.QtyIssued, 0)                 AS issuedQty,
+        CASE WHEN m.AllocCompleted = 'Y' THEN 1 ELSE 0 END AS allocCompleted
+      FROM MrpSugJobAlMat m
+      JOIN MrpSugJobMaster sj ON sj.Job = m.Job
+      WHERE ISNULL(sj.Complete, 'N') <> 'Y'
+        AND ISNULL(m.StockCode, '') <> ''
+  `,
+
   /**
    * One row per outstanding PO line — for a planner to see exactly when
    * a stock-out clears. Used to render the "Incoming receipts" panel
