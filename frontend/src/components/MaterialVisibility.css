@@ -14,7 +14,7 @@
 .mat-toolbar label { display: flex; align-items: center; gap: 4px; }
 
 .material-table { border: 1px solid var(--border-default, #e2e8f0); border-radius: 6px; overflow: hidden; background: var(--bg-surface, #fff); }
-.mat-grid { display: grid; grid-template-columns: 130px minmax(140px, 1fr) 80px 80px 80px 80px 80px 80px 130px 150px; align-items: center; padding: 5px 10px; column-gap: 6px; }
+.mat-grid { display: grid; grid-template-columns: 130px minmax(140px, 1fr) 80px 80px 80px 80px 80px 80px 150px 150px; align-items: center; padding: 5px 10px; column-gap: 6px; }
 .table-header.mat-grid { background: #1e293b; color: #e2e8f0; font-weight: 700; font-size: 11px; position: sticky; top: 0; z-index: 1; }
 .table-row.mat-grid { border-top: 1px solid var(--border-subtle, #f1f5f9); }
 .table-row.mat-grid:hover { background: var(--bg-hover, #f1f5f9); }

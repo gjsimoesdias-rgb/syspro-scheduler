@@ -31,11 +31,13 @@ const KIND_LABEL = { po: 'PO receipt', output: 'Job output', demand: 'Job demand
 /** Small step chart of end-of-day balance; red below zero. */
 function Sparkline({ daily }: { daily: ComponentProjection['daily'] }) {
   const w = 140, h = 28;
-  if (daily.length < 2) return <svg width={w} height={h} className="mat-spark" aria-hidden />;
-  const vals = daily.map((d) => d.balance);
+  if (!daily.length) return <svg width={w} height={h} className="mat-spark" aria-hidden />;
+  // One day only: draw it as a flat line across the cell.
+  const series = daily.length === 1 ? [daily[0], daily[0]] : daily;
+  const vals = series.map((d) => d.balance);
   const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
   const span = hi - lo || 1;
-  const x = (i: number) => (i / (daily.length - 1)) * (w - 2) + 1;
+  const x = (i: number) => (i / (series.length - 1)) * (w - 2) + 1;
   const y = (v: number) => h - 2 - ((v - lo) / span) * (h - 4);
   let path = `M${x(0)},${y(vals[0])}`;
   for (let i = 1; i < vals.length; i++) path += ` H${x(i)} V${y(vals[i])}`;
@@ -160,7 +162,7 @@ export default function MaterialVisibility({ jobSchedules, jobs }: MaterialVisib
                   <div className={`text-right col-num ${c.minBalance < 0 ? 'col-negative' : ''}`}>{fmtQty(c.minBalance)}</div>
                   <div className={`text-right col-num ${c.finalBalance < 0 ? 'col-negative' : ''}`}>{fmtQty(c.finalBalance)}</div>
                   <div className="col-stockout">
-                    {c.firstShort ? <>{c.firstShort.jobId} · {fmtDate(c.firstShort.date)}<br /><span className="mat-muted">short {fmtQty(c.firstShort.shortQty)} {c.unitOfMeasure || ''}</span></> : '—'}
+                    {c.firstShort ? <><span title={c.firstShort.jobId}>{c.firstShort.jobId.replace(/^0+(?=\d)/, '')}</span> · {fmtDate(c.firstShort.date)}<br /><span className="mat-muted">short {fmtQty(c.firstShort.shortQty)} {c.unitOfMeasure || ''}</span></> : '—'}
                   </div>
                   <div><Sparkline daily={c.daily} /></div>
                 </div>
