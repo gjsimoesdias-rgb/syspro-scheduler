@@ -53,7 +53,7 @@ const context = {
   cpSatTimeLimitSeconds: ctx.cpSatTimeLimitSeconds,
   productionMode: ctx.productionMode,
   ruleToggles: ctx.ruleToggles,
-  crews: crewLookupFrom(ctx.crewSetup),
+  crews: crewLookupFrom(ctx.crewSetup, ctx.crewEmployees, ctx.crewShifts),
 };
 
 (async () => {

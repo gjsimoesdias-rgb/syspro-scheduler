@@ -3,7 +3,7 @@
  * time. Cumulative — a pool of 6 can run two 3-operator lines at once, not a
  * third. Used by SchedulingEngine's slot search.
  */
-import type { CrewLookup } from '../utils/crews';
+import { capacityAt, capacityBreakpoints, type CrewLookup } from '../utils/crews';
 
 export interface CrewBooking { start: number; end: number; operators: number; jobId: string }
 
@@ -49,6 +49,22 @@ export class CrewLoad {
     const s = start.getTime(); const e = end.getTime();
     const list = this.bookings.get(need.poolId) || [];
     const overlapping = list.filter((b) => b.start < e && b.end > s);
+    const cap = this.lookup.capacity?.get(need.poolId);
+    if (cap) {
+      // Capacity changes with shifts: check every segment between booking
+      // and shift edges. On the first segment that can't be staffed, no start
+      // before its end can work (the op would still cover it) — retry there.
+      const points = new Set<number>([s, e, ...capacityBreakpoints(cap, s, e)]);
+      for (const b of overlapping) { if (b.start > s && b.start < e) points.add(b.start); if (b.end > s && b.end < e) points.add(b.end); }
+      const sorted = [...points].sort((x, y) => x - y);
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const a = sorted[i];
+        let used = 0;
+        for (const b of overlapping) if (b.start <= a && b.end > a) used += b.operators;
+        if (used + need.operators > capacityAt(cap, new Date(a))) return new Date(sorted[i + 1]);
+      }
+      return null;
+    }
     if (peakUsage(overlapping, s, e) + need.operators <= need.headcount) return null;
     let next = Infinity;
     for (const b of overlapping) if (b.end < next) next = b.end;

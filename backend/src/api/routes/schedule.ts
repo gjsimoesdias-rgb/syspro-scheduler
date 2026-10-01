@@ -24,12 +24,33 @@ import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
 import { saveAsLatest, promoteToLatest, saveIntoWhatIf } from '../../services/ScheduleStore';
 import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordError, resetPublish, jobIdFromExportError } from '../../services/publishStatus';
+import { mapEmployeeRow } from '../../utils/crews';
 
 /**
  * Operation overlap from Settings → Transfer/Overlap: "Use transfer" on and
  * "Start next operation after N % of the run" below 100 → fraction N/100.
  * Anything else → no overlap.
  */
+/**
+ * SYSPRO employees (code + ShiftId) mapped to crews, so a crew's operators can
+ * follow its people's shifts. Skipped when crews are off or nobody is mapped;
+ * best-effort (an error just means no shift data → employees count always).
+ */
+async function loadCrewEmployees(sysproDb: any, setup: any): Promise<Array<{ code: string; shiftId?: string }> | undefined> {
+  if (!sysproDb || !setup?.enabled) return undefined;
+  const mapped = new Set<string>((setup.pools || []).flatMap((p: any) => p.employees || []));
+  if (!mapped.size) return undefined;
+  try {
+    const r = await sysproDb.query(`IF OBJECT_ID('BomEmployee') IS NULL SELECT TOP 0 1 AS x ELSE SELECT * FROM BomEmployee`);
+    return (r.recordset || [])
+      .map((row: any) => mapEmployeeRow(row))
+      .filter((e: any) => e && mapped.has(e.code))
+      .map((e: any) => ({ code: e.code, shiftId: e.shiftId }));
+  } catch {
+    return undefined;
+  }
+}
+
 function overlapFractionFrom(rules: any): number | undefined {
   if (rules?.useTransfer !== true) return undefined;
   const pct = Number(rules?.overlapPercent);
@@ -394,6 +415,9 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
       ruleToggles,
       // Crew pools (Manage → Crews); the worker builds the engine lookup.
       crewSetup: req.app.locals.crewSetup,
+      // Employees' SYSPRO shifts + CRUX shift templates → crew size by shift.
+      crewEmployees: await loadCrewEmployees(sysproDb, req.app.locals.crewSetup),
+      crewShifts: req.app.locals.shiftTemplates || [],
       // Pinned operations — serialised as [key, PinnedOperation][] for the worker.
       // Frozen-zone auto-pins are merged first; manual pins override them.
       pinnedOperations: (() => {
@@ -627,6 +651,9 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
       ruleToggles,
       // Crew pools (Manage → Crews); the worker builds the engine lookup.
       crewSetup: req.app.locals.crewSetup,
+      // Employees' SYSPRO shifts + CRUX shift templates → crew size by shift.
+      crewEmployees: await loadCrewEmployees(sysproDb, req.app.locals.crewSetup),
+      crewShifts: req.app.locals.shiftTemplates || [],
     };
 
     const runWorker = (schedulingRule: SchedulingRule) =>

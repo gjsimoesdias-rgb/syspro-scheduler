@@ -27,6 +27,7 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
   const [filter, setFilter] = useState('');
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState('');
+  const [shiftTemplates, setShiftTemplates] = useState<Array<{ shiftId: string; name: string; startTime?: string; endTime?: string }>>([]);
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +45,9 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
     crewService.employees()
       .then((r) => { setEmployees(r.employees); setEmployeeNote(r.note); })
       .catch((err) => setEmployeeNote(apiErrorMessage(err, 'Could not read SYSPRO employees')));
+    resourceService.getDefinitions()
+      .then((r) => setShiftTemplates((r.shifts || []).map((t: any) => ({ shiftId: String(t.shiftId), name: String(t.name), startTime: t.startTime, endTime: t.endTime }))))
+      .catch(() => setShiftTemplates([]));
     resourceService.getWorkcentres()
       .then((rows: any[]) => setWcNames(Object.fromEntries((rows || []).map((w) => [
         String(w.worcentreId ?? w.workcentreId ?? w.id), String(w.name ?? w.description ?? ''),
@@ -62,6 +66,15 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
     return m;
   }, [setup.pools]);
   const knownCodes = useMemo(() => new Set(employees.map((e) => e.code)), [employees]);
+  /** CRUX shift an employee's SYSPRO ShiftId matches (by id or name, case-insensitive). */
+  const shiftFor = useCallback((code?: string) => {
+    const c = (code || '').trim().toLowerCase();
+    return c ? shiftTemplates.find((t) => t.shiftId.toLowerCase() === c || t.name.trim().toLowerCase() === c) : undefined;
+  }, [shiftTemplates]);
+  const employeeByCode = useMemo(() => new Map(employees.map((e) => [e.code, e] as const)), [employees]);
+  /** Distinct CRUX shifts among a crew's employees (empty = everyone counts all the time). */
+  const crewShifts = (p: CrewPool) => Array.from(new Set((p.employees ?? [])
+    .map((c) => shiftFor(employeeByCode.get(c)?.shiftId)?.name).filter(Boolean) as string[]));
   const linesOf = (poolId: string) => Object.entries(setup.lines).filter(([, l]) => l.poolId === poolId).map(([wc]) => wc);
 
   // ── Crews ──
@@ -133,7 +146,8 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
     <div className="shifts-table-section crews-panel">
       <div className="shift-rule-note">
         Operators are shared by the lines in a crew. A crew's operators are the SYSPRO employees
-        (BomEmployee) mapped to it below. When crew limits are on, the scheduler only runs an operation
+        (BomEmployee) mapped to it below; an employee whose SYSPRO ShiftId matches a CRUX shift
+        (Manage → Shifts, by code or name) only counts while that shift is working. When crew limits are on, the scheduler only runs an operation
         while its crew has enough free operators — a crew of 6 runs two lines that need 3 each, and a third
         line waits. Applies to the next <strong>Generate</strong> (forward scheduling).
       </div>
@@ -155,7 +169,14 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
                 <td>{mapped}</td>
                 <td>
                   {mapped > 0 ? (
-                    <strong title="Number of employees mapped to this crew">{mapped}</strong>
+                    <>
+                      <strong title="Employees mapped to this crew">{mapped}</strong>
+                      {crewShifts(p).length > 0 && (
+                        <span className="crews-hint" title="Employees only count while their shift is working">
+                          varies by shift ({crewShifts(p).join(', ')})
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <span className="crews-manual" title="No employees mapped — this manual headcount is used instead">
                       <input className="crews-input crews-num" type="number" min={0} step={1} value={p.headcount}
@@ -230,7 +251,13 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
                   <td>{e.code}</td>
                   <td>{e.name}{!e.active && <span className="crews-hint"> (inactive)</span>}</td>
                   <td>{e.workCentre || '—'}</td>
-                  <td>{e.shiftId || '—'}</td>
+                  <td>
+                    {e.shiftId ? (
+                      shiftFor(e.shiftId)
+                        ? <span title="Counts toward the crew only while this CRUX shift is working">{e.shiftId} → {shiftFor(e.shiftId)!.name}{shiftFor(e.shiftId)!.startTime ? ` (${shiftFor(e.shiftId)!.startTime}–${shiftFor(e.shiftId)!.endTime})` : ''}</span>
+                        : <span className="crews-hint" title="No CRUX shift with this code or name (Manage → Shifts) — counts all the time">{e.shiftId} (no CRUX shift)</span>
+                    ) : '—'}
+                  </td>
                   <td>
                     <select className="crews-input" value={crewOfEmployee.get(e.code) || ''} onChange={(ev) => assignEmployee(e.code, ev.target.value)}>
                       <option value="">— none —</option>

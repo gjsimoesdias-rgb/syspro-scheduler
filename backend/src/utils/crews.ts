@@ -56,11 +56,88 @@ export function mapEmployeeRow(row: Record<string, any>): SysproEmployee | null 
 export interface CrewLine { poolId: string; operators: number }
 export interface CrewSetup { enabled: boolean; pools: CrewPool[]; lines: Record<string, CrewLine> }
 
-/** What the engine needs: per line, its pool and operators; per pool, the headcount and name. */
+/** A shift's working time: weekdays (0 = Sun) and windows in minutes from midnight (end < start = overnight). */
+export interface ShiftWindowDef { workingDays: number[]; windows: Array<[number, number]> }
+
+/**
+ * Operators a crew can field over time: `constant` always, plus each
+ * `shifts[i].count` employees while their shift is working.
+ */
+export interface CrewCapacity { constant: number; shifts: Array<{ count: number; def: ShiftWindowDef; name: string }> }
+
+/** What the engine needs: per line, its pool and operators; per pool, its capacity and name. */
 export interface CrewLookup {
   lineNeeds: Map<string, CrewLine>;
+  /** Most operators the crew can ever field (for "crew too small" and messages). */
   headcount: Map<string, number>;
   poolName: Map<string, string>;
+  /** Time-varying capacity; absent = constant `headcount`. */
+  capacity?: Map<string, CrewCapacity>;
+}
+
+/** A CRUX shift template (Manage → Shifts), as far as crews need it. */
+export interface ShiftTemplateLike {
+  shiftId: string;
+  name: string;
+  startTime?: string;
+  endTime?: string;
+  workingDays?: number[];
+  diversions?: Array<{ startTime: string; endTime: string; schedulable?: boolean; type?: string }>;
+}
+
+const toMin = (v?: string): number => {
+  const [h, m] = String(v || '00:00').split(':').map((x) => Number(x) || 0);
+  return Math.max(0, Math.min(1440, h * 60 + m));
+};
+
+/** Working windows of a shift: its schedulable diversions, else start–end. */
+export function shiftDefFromTemplate(t: ShiftTemplateLike): ShiftWindowDef {
+  const prod = (t.diversions || []).filter((d) =>
+    typeof d.schedulable === 'boolean' ? d.schedulable : /production|overtime/i.test(String(d.type || '')));
+  const windows: Array<[number, number]> = prod.length
+    ? prod.map((d) => [toMin(d.startTime), toMin(d.endTime)])
+    : [[toMin(t.startTime || '00:00'), toMin(t.endTime || '23:59')]];
+  return { workingDays: t.workingDays?.length ? t.workingDays : [1, 2, 3, 4, 5], windows };
+}
+
+/** Is the shift working at this instant (local time)? Overnight windows belong to the day they start. */
+export function shiftWorkingAt(def: ShiftWindowDef, t: Date): boolean {
+  const minute = t.getHours() * 60 + t.getMinutes() + t.getSeconds() / 60;
+  const day = t.getDay();
+  const prevDay = (day + 6) % 7;
+  for (const [a, b] of def.windows) {
+    if (b > a) {
+      if (def.workingDays.includes(day) && minute >= a && minute < b) return true;
+    } else if (b < a) { // overnight
+      if (def.workingDays.includes(day) && minute >= a) return true;
+      if (def.workingDays.includes(prevDay) && minute < b) return true;
+    }
+  }
+  return false;
+}
+
+export function capacityAt(cap: CrewCapacity, t: Date): number {
+  let n = cap.constant;
+  for (const s of cap.shifts) if (shiftWorkingAt(s.def, t)) n += s.count;
+  return n;
+}
+
+/** Instants in (start, end) where a crew's capacity can change (shift window edges). */
+export function capacityBreakpoints(cap: CrewCapacity, start: number, end: number): number[] {
+  const out: number[] = [];
+  if (!cap.shifts.length) return out;
+  const day = new Date(start); day.setHours(0, 0, 0, 0);
+  day.setDate(day.getDate() - 1); // overnight windows from the previous day
+  for (; day.getTime() < end; day.setDate(day.getDate() + 1)) {
+    for (const s of cap.shifts) for (const [a, b] of s.def.windows) {
+      for (const m of [a, b < a ? b + 1440 : b]) {
+        const t = new Date(day); t.setMinutes(m, 0, 0);
+        const ms = t.getTime();
+        if (ms > start && ms < end) out.push(ms);
+      }
+    }
+  }
+  return out;
 }
 
 export const EMPTY_CREW_SETUP: CrewSetup = { enabled: false, pools: [], lines: {} };
@@ -106,14 +183,44 @@ export function normaliseCrewSetup(input: any): CrewSetup | string {
   return { enabled: input.enabled === true, pools, lines };
 }
 
-/** Engine lookup, or undefined when crews are off or nothing is assigned. */
-export function crewLookupFrom(setup: CrewSetup | undefined | null): CrewLookup | undefined {
+/**
+ * Engine lookup, or undefined when crews are off or nothing is assigned.
+ * With `employees` (SYSPRO codes + ShiftId) and `shifts` (CRUX shift
+ * templates), each mapped employee counts only while their shift works;
+ * employees without a known shift, and manual headcounts, count always.
+ */
+export function crewLookupFrom(
+  setup: CrewSetup | undefined | null,
+  employees?: Array<{ code: string; shiftId?: string }>,
+  shifts?: ShiftTemplateLike[],
+): CrewLookup | undefined {
   if (!setup?.enabled) return undefined;
   const headcount = new Map(setup.pools.map((p) => [p.id, effectiveHeadcount(p)] as const));
+  const capacity = new Map<string, CrewCapacity>();
+  if (employees?.length && shifts?.length) {
+    const shiftOf = new Map(employees.map((e) => [e.code, (e.shiftId || '').trim().toLowerCase()] as const));
+    const findShift = (code: string) => shifts.find((t) =>
+      t.shiftId.toLowerCase() === code || t.name.trim().toLowerCase() === code);
+    for (const p of setup.pools) {
+      if (!p.employees?.length) continue;
+      const cap: CrewCapacity = { constant: 0, shifts: [] };
+      const byShift = new Map<string, { count: number; def: ShiftWindowDef; name: string }>();
+      for (const code of p.employees) {
+        const sc = shiftOf.get(code);
+        const tpl = sc ? findShift(sc) : undefined;
+        if (!tpl) { cap.constant++; continue; }
+        const entry = byShift.get(tpl.shiftId) || { count: 0, def: shiftDefFromTemplate(tpl), name: tpl.name };
+        entry.count++;
+        byShift.set(tpl.shiftId, entry);
+      }
+      cap.shifts = [...byShift.values()];
+      if (cap.shifts.length) capacity.set(p.id, cap);
+    }
+  }
   const poolName = new Map(setup.pools.map((p) => [p.id, p.name] as const));
   const lineNeeds = new Map<string, CrewLine>();
   for (const [wc, line] of Object.entries(setup.lines || {})) {
     if (headcount.has(line.poolId) && line.operators > 0) lineNeeds.set(wc, line);
   }
-  return lineNeeds.size ? { lineNeeds, headcount, poolName } : undefined;
+  return lineNeeds.size ? { lineNeeds, headcount, poolName, ...(capacity.size ? { capacity } : {}) } : undefined;
 }
