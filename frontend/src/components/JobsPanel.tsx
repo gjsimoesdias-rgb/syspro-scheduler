@@ -280,6 +280,16 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                   ? <>These SYSPRO MRP suggestions are <strong>planned</strong> with the production jobs — they take line capacity and materials, and supply sales orders. They are never sent to SYSPRO; create the job in SYSPRO to release one.</>
                   : <>SYSPRO MRP suggestions, <strong>not planned</strong>. Include them to schedule them with the production jobs (capacity, materials and sales orders). They are never sent to SYSPRO.</>}
               </span>
+              {(() => {
+                // Every suggestion due over a month ago → MRP has not been run lately.
+                const dues = filteredJobs.map((j) => new Date(j.dueDate).getTime()).filter(Number.isFinite);
+                const latest = dues.length ? Math.max(...dues) : NaN;
+                return Number.isFinite(latest) && latest < Date.now() - 30 * 86400000 ? (
+                  <span className="grid-flag grid-flag-warn" title="The newest suggestion is due more than a month ago — run Requirements Calculation in SYSPRO to refresh them">
+                    ⚠ Stale: newest due {new Date(latest).toLocaleDateString()}
+                  </span>
+                ) : null;
+              })()}
               <button className={`btn btn-sm ${mrpIncluded ? '' : 'btn-primary'}`} onClick={onToggleMrpPlanning} disabled={mrpBusy}>
                 {mrpBusy ? 'Saving…' : mrpIncluded ? 'Stop planning them' : 'Include in planning'}
               </button>
