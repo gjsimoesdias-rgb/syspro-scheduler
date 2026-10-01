@@ -232,3 +232,23 @@ body, :root .app { font-family: var(--font-sans); }
 /* Keyboard focus on grid rows */
 :root .app tr[data-job-row]:focus { outline: none; }
 :root .app tr[data-job-row]:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; background: var(--bg-hover); }
+
+/* ---------- Resource tree (left panel) ---------- */
+:root .app .resource-tree { font-size: 12px; overflow: auto; }
+.rt-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border-default); }
+.rt-actions { display: inline-flex; align-items: center; gap: 6px; }
+.rt-link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 4px; }
+.rt-link:disabled { color: var(--text-muted); cursor: default; }
+.rt-icon { background: none; border: none; color: var(--text-muted); cursor: pointer; display: inline-flex; padding: 2px; }
+.rt-icon:hover { color: var(--text-primary); }
+.rt-hint { padding: 6px 10px; color: var(--text-muted); font-size: 11px; border-bottom: 1px solid var(--border-subtle); }
+.rt-list, .rt-children { list-style: none; margin: 0; padding: 0; }
+.rt-row { display: flex; align-items: center; gap: 4px; padding: 3px 8px; min-height: 26px; }
+.rt-line:hover, .rt-machine:hover { background: var(--bg-hover); }
+.rt-line.is-selected { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.rt-caret { background: none; border: none; color: var(--text-muted); cursor: pointer; display: inline-flex; padding: 0; }
+.rt-name { flex: 1; text-align: left; background: none; border: none; color: var(--text-primary); font-weight: 600; cursor: pointer; padding: 2px 4px; font-size: 12px; }
+.rt-machine { padding-left: 46px; color: var(--text-secondary); }
+.rt-machine-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-count { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 11px; min-width: 22px; text-align: right; }
+.rt-clear { margin: 8px 10px; background: none; border: 1px dashed var(--border-strong); color: var(--text-secondary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }

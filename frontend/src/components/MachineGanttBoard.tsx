@@ -11,8 +11,9 @@ import { buildParentMap, getMasterRootJobId } from '../utils/masterSub';
 import toast from 'react-hot-toast';
 import { pinService, apiErrorMessage, type PinnedOperationDto } from '../services/api';
 import { useScheduleStore } from '../stores/scheduleStore';
+import { useUiStore } from '../stores/uiStore';
 import './MachineGanttBoard.css';
-import { BarChart3, List, LocateFixed, Lock, Unlock } from 'lucide-react';
+import { BarChart3, List, LocateFixed, Lock, Unlock, PanelLeft } from 'lucide-react';
 
 /** Reload locks from the server into the store (after a bulk lock/unlock). */
 const refreshPins = async () => {
@@ -390,9 +391,14 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       })()
     : workcentres;
 
-  // Every production line is always shown — selection/focus only highlights and
-  // scrolls, it does not filter lanes out of the board.
-  const displayWorkcentres = visibleWorkcentres;
+  // Every production line is shown unless unticked in the resource tree;
+  // selection/focus only highlights and scrolls, it never hides lanes.
+  const hiddenLanes = useUiStore((s) => s.hiddenLanes);
+  const setShowResourceTree = useUiStore((s) => s.setShowResourceTree);
+  const showResourceTree = useUiStore((s) => s.showResourceTree);
+  const displayWorkcentres = hiddenLanes.length
+    ? visibleWorkcentres.filter((wc) => !hiddenLanes.includes(wc))
+    : visibleWorkcentres;
 
   // Calendar per workcentre lane (representative = first resource of the workcentre).
   const workcentreCalendars = useMemo(() => {
@@ -1186,6 +1192,17 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
           <p>Drag jobs/ops onto machine lanes. Ctrl+Click bars to multi-select, then drag to move the group. Hold Ctrl and scroll to zoom.</p>
         </div>
         <div className="gantt-toolbar">
+          <div className="gantt-toolbar-group">
+            <button
+              className={`zoom-btn ${showResourceTree ? 'active' : ''}`}
+              onClick={() => setShowResourceTree(!showResourceTree)}
+              title="Show or hide the resource tree (tick lines to choose the lanes)"
+              aria-pressed={showResourceTree}
+            >
+              <PanelLeft size={13} className="ui-icon" aria-hidden="true" />
+              Lanes {hiddenLanes.length ? `${displayWorkcentres.length}/${visibleWorkcentres.length}` : ''}
+            </button>
+          </div>
           <div className="gantt-toolbar-group">
             <span className="gantt-toolbar-label">Color:</span>
             <select className="gantt-select" value={colorMode} onChange={(e) => setColorMode(e.target.value as ColorMode)}>

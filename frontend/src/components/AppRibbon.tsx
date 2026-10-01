@@ -91,6 +91,8 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
   const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
   const setShowSchemaModal = useUiStore((s) => s.setShowSchemaModal);
   const jobPaneMode = useUiStore((s) => s.jobPaneMode);
+  const showResourceTree = useUiStore((s) => s.showResourceTree);
+  const setShowResourceTree = useUiStore((s) => s.setShowResourceTree);
   const setJobPaneMode = useUiStore((s) => s.setJobPaneMode);
   const workflowJobFilter = useUiStore((s) => s.workflowJobFilter);
   const schedulingRule = useUiStore((s) => s.schedulingRule);
@@ -268,6 +270,7 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
             <button className="btn btn-sm" onClick={() => { setManageTab('none'); setJobPaneMode('production'); }}>Production Jobs</button>
             <button className="btn btn-sm" onClick={() => { setManageTab('none'); setJobPaneMode('master'); }}>Master Jobs</button>
             <button className="btn btn-sm" onClick={() => { setManageTab('none'); setJobPaneMode('mrp'); }} title="SYSPRO MRP suggested jobs">MRP Jobs</button>
+            <button className={`btn btn-sm ${showResourceTree ? 'active-tab-btn' : ''}`} onClick={() => setShowResourceTree(!showResourceTree)} title="Lines and machines; tick lines to choose the Gantt lanes">Resource tree</button>
           </div>
           <div className="aps-ribbon-group">
             <span className="aps-ribbon-title">INTERVAL</span>

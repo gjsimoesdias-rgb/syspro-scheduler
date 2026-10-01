@@ -85,6 +85,12 @@ interface UiState {
   // ── Sidebar / workcentre panel ───────────────────────────────────────────
   /** Whether the sidebar with workcentres is collapsed */
   sidebarCollapsed: boolean;
+  /** Left resource tree (lines → machines); ticks choose the Gantt lanes. */
+  showResourceTree: boolean;
+  setShowResourceTree: (v: boolean) => void;
+  /** Production lines whose Gantt lane is hidden (unticked in the tree). */
+  hiddenLanes: string[];
+  setHiddenLanes: (v: string[]) => void;
   setSidebarCollapsed: (v: boolean) => void;
 
   /** Gantt bar colouring scheme selection */
@@ -229,6 +235,10 @@ export const useUiStore = create<UiState>()(
       setShowShortcutsHelp: (v) => set({ showShortcutsHelp: v }),
 
       sidebarCollapsed: false,
+      showResourceTree: false,
+      setShowResourceTree: (v) => set({ showResourceTree: v }),
+      hiddenLanes: [],
+      setHiddenLanes: (v) => set({ hiddenLanes: v }),
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
 
       ganttColorScheme: 'lateness',
@@ -341,6 +351,8 @@ export const useUiStore = create<UiState>()(
       partialize: (s) => ({
         isDarkMode: s.isDarkMode,
         sidebarCollapsed: s.sidebarCollapsed,
+        showResourceTree: s.showResourceTree,
+        hiddenLanes: s.hiddenLanes,
         ganttColorScheme: s.ganttColorScheme,
         violationsPanelExpanded: s.violationsPanelExpanded,
         kpiVisible: s.kpiVisible,

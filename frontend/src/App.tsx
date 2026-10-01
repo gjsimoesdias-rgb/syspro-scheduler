@@ -13,6 +13,7 @@ import MainTabs from './components/MainTabs';
 import ShortcutsHelpModal from './components/ShortcutsHelpModal';
 import AppRibbon from './components/AppRibbon';
 import ConnectionModal from './components/ConnectionModal';
+import ResourceTree from './components/ResourceTree';
 import SchemaExplorer from './components/SchemaExplorer';
 import ContentTabPanel from './components/ContentTabPanel';
 // Type-only import (no runtime value used)
@@ -140,6 +141,7 @@ const App: React.FC = () => {
   const advancedSort = useUiStore((s) => s.advancedSort);
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const jobPaneMode = useUiStore((s) => s.jobPaneMode) as JobPaneMode;
+  const showResourceTree = useUiStore((s) => s.showResourceTree);
   const setJobPaneMode = useUiStore((s) => s.setJobPaneMode);
   const scheduleAroundMode = useUiStore((s) => s.scheduleAroundMode) as ScheduleAroundMode;
   const setScheduleAroundMode = useUiStore((s) => s.setScheduleAroundMode);
@@ -1450,8 +1452,16 @@ const App: React.FC = () => {
         <section
           ref={workspaceRef}
           className="aps-workspace"
-          style={{ gridTemplateColumns: '1fr' }}
+          style={{ gridTemplateColumns: showResourceTree ? '220px 1fr' : '1fr' }}
         >
+          {showResourceTree && (
+            <ResourceTree
+              resources={resources}
+              schedule={schedule}
+              selectedWorkcentre={selectedWorkcentre}
+              onSelectLine={setSelectedWorkcentre}
+            />
+          )}
           <div
             ref={centerPanelRef}
             className="aps-center-panel"
