@@ -2539,22 +2539,22 @@
 }
 
 :root.dark-mode .job-filter-clear {
-  background: #7f1d1d;
-  color: #fca5a5;
+  background: var(--status-bad-soft);
+  color: var(--status-bad);
 }
 
 :root.dark-mode .job-count-badge {
-  background: #374151;
-  color: #93c5fd;
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
 }
 
 :root.dark-mode .column-picker-panel {
-  background: #1f2937;
+  background: var(--bg-elevated);
   border-color: var(--text-secondary);
 }
 
 :root.dark-mode .column-picker-item {
-  color: #d1d5db;
+  color: var(--text-primary);
 }
 
 :root.dark-mode .app-header,
@@ -2566,8 +2566,8 @@
 :root.dark-mode .guide-card,
 :root.dark-mode .ops-wrap,
 :root.dark-mode .job-context-menu {
-  background: #0f172a;
-  color: #e5edf9;
+  background: var(--bg-surface);
+  color: var(--text-primary);
   border-color: var(--border-default);
 }
 
@@ -2578,33 +2578,33 @@
 :root.dark-mode .guide-card,
 :root.dark-mode .modal-header {
   border-color: var(--border-default);
-  color: #e5edf9;
+  color: var(--text-primary);
 }
 
 :root.dark-mode .aps-grid tbody tr:hover,
 :root.dark-mode .master-job-row {
-  background: #132034;
+  background: var(--bg-hover);
 }
 
 :root.dark-mode .feature-tab,
 :root.dark-mode .aps-main-tab,
 :root.dark-mode .expand-btn,
 :root.dark-mode .btn-info {
-  background: #1e293b;
-  color: #dbeafe;
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
   border-color: var(--text-secondary);
 }
 
 :root.dark-mode .feature-tab.active,
 :root.dark-mode .aps-main-tab.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 :root.dark-mode .guide-card h4,
 :root.dark-mode .ops-header strong,
 :root.dark-mode .master-job-meta small {
-  color: #dbeafe;
+  color: var(--text-primary);
 }
 
 .connection-modal .btn {

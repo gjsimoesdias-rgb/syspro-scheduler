@@ -14,57 +14,66 @@
 
 :root,
 :root[data-theme='dark'] {
-  /* ---------- Surfaces ---------- */
-  --bg-base:        #0b1020;   /* page background */
-  --bg-canvas:      #0f1530;   /* gantt canvas, large panels */
-  --bg-surface:     #131a37;   /* cards, modals, table bodies */
-  --bg-surface-2:   #182143;   /* table headers, sub-panels */
-  --bg-elevated:    #1d2752;   /* popovers, context menus */
-  --bg-hover:       rgba(255, 255, 255, 0.04);
-  --bg-pressed:     rgba(255, 255, 255, 0.08);
+  /* ---------- Surfaces (LYNQ Gen 3 charcoal) ---------- */
+  --bg-base:        #1e1e1e;   /* page background */
+  --bg-canvas:      #232323;   /* gantt canvas, large panels */
+  --bg-surface:     #2a2a2a;   /* cards, modals, table bodies */
+  --bg-surface-2:   #313131;   /* table headers, sub-panels, inactive tabs */
+  --bg-elevated:    #383838;   /* popovers, context menus */
+  --bg-hover:       rgba(255, 255, 255, 0.06);
+  --bg-pressed:     rgba(255, 255, 255, 0.10);
+  --bg-topbar:      #000000;   /* top navigation bar (both themes) */
+  --text-topbar:    #ffffff;
+  --text-topbar-muted: #9c9c9c;
 
   /* ---------- Borders ---------- */
-  --border-subtle:  rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.12);
-  --border-strong:  rgba(255, 255, 255, 0.20);
-  --border-divider: rgba(255, 255, 255, 0.08);
+  --border-subtle:  #333333;
+  --border-default: #404040;
+  --border-strong:  #555555;
+  --border-divider: #383838;
 
   /* ---------- Text ---------- */
-  --text-primary:   #e6ebf5;
-  --text-secondary: #9aa6c2;
-  --text-muted:     #828fb0;
-  --text-inverse:   #0b1020;
-  --text-on-accent: #ffffff;
+  --text-primary:   #dedede;
+  --text-secondary: #afafaf;
+  --text-muted:     #8a8a8a;
+  --text-inverse:   #1e1e1e;
+  --text-on-accent: #161616;
 
-  /* ---------- Accent (single brand colour, restrained) ---------- */
-  --accent:         #4f8bff;
-  --accent-strong:  #3b78f0;
-  --accent-soft:    rgba(79, 139, 255, 0.16);
-  --accent-ring:    rgba(79, 139, 255, 0.45);
+  /* ---------- Accent (CRUX logo green) ---------- */
+  --accent:         #c5f23a;
+  --accent-strong:  #b2dc2a;
+  --accent-soft:    rgba(197, 242, 58, 0.09);
+  --accent-ring:    rgba(197, 242, 58, 0.45);
+  --accent-fill:    #c5f23a;   /* primary button background */
+  --accent-fill-hover: #b2dc2a;
+  --text-on-accent-fill: #161616;
 
   /* ---------- Semantic status ---------- */
-  --status-ok:        #2ec27e;     /* available, on-time */
-  --status-ok-soft:   rgba(46, 194, 126, 0.14);
-  --status-warn:      #f5a524;     /* partial, at-risk */
-  --status-warn-soft: rgba(245, 165, 36, 0.14);
-  --status-bad:       #e35d6a;     /* short, overdue */
-  --status-bad-soft:  rgba(227, 93, 106, 0.14);
-  --status-info:      #38bdf8;
-  --status-info-soft: rgba(56, 189, 248, 0.14);
+  --status-ok:        #2fae74;     /* available, on-time (LYNQ bar green #198754, lifted for text) */
+  --status-ok-soft:   rgba(25, 135, 84, 0.22);
+  --status-warn:      #f5b02e;     /* partial, at-risk */
+  --status-warn-soft: rgba(245, 176, 46, 0.16);
+  --status-bad:       #f4524d;     /* short, overdue */
+  --status-bad-soft:  rgba(244, 47, 47, 0.16);
+  --status-info:      #5aaeff;
+  --status-info-soft: rgba(90, 174, 255, 0.14);
+  --status-success:   var(--status-ok);
+  --status-warning:   var(--status-warn);
+  --status-error:     var(--status-bad);
 
   /* ---------- Lateness gradient (Gantt) ---------- */
   --gantt-on-time:    var(--status-ok);
   --gantt-at-risk:    var(--status-warn);
   --gantt-late:       var(--status-bad);
-  --gantt-locked:     #8a93b3;
-  --gantt-grid:       rgba(255, 255, 255, 0.05);
-  --gantt-grid-major: rgba(255, 255, 255, 0.10);
-  --gantt-non-shift:  rgba(255, 255, 255, 0.025);
+  --gantt-locked:     #8a8a8a;
+  --gantt-grid:       rgba(255, 255, 255, 0.06);
+  --gantt-grid-major: rgba(255, 255, 255, 0.12);
+  --gantt-non-shift:  rgba(255, 255, 255, 0.03);
 
   /* ---------- Type ---------- */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+  --font-sans: 'IBM Plex Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
                'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
                Consolas, monospace;
 
   --fs-2xs: 11px;
@@ -120,48 +129,55 @@
 
 /* Light theme override — keeps the same variable names, swaps values. */
 :root[data-theme='light'] {
-  --bg-base:        #f6f7fb;
+  /* LYNQ Gen 3 light: neutral greys, same black top bar and orange accent */
+  --bg-base:        #ececec;
   --bg-canvas:      #ffffff;
   --bg-surface:     #ffffff;
-  --bg-surface-2:   #f1f3f9;
+  --bg-surface-2:   #f4f4f4;
   --bg-elevated:    #ffffff;
-  --bg-hover:       rgba(15, 23, 42, 0.04);
-  --bg-pressed:     rgba(15, 23, 42, 0.08);
+  --bg-hover:       rgba(0, 0, 0, 0.04);
+  --bg-pressed:     rgba(0, 0, 0, 0.08);
+  --bg-topbar:      #000000;
+  --text-topbar:    #ffffff;
+  --text-topbar-muted: #9c9c9c;
 
-  --border-subtle:  rgba(15, 23, 42, 0.06);
-  --border-default: rgba(15, 23, 42, 0.12);
-  --border-strong:  rgba(15, 23, 42, 0.20);
-  --border-divider: rgba(15, 23, 42, 0.08);
+  --border-subtle:  #ececec;
+  --border-default: #dcdcdc;
+  --border-strong:  #bdbdbd;
+  --border-divider: #e4e4e4;
 
-  --text-primary:   #0f172a;
-  --text-secondary: #475569;
-  --text-muted:     #64748b;
+  --text-primary:   #1e1e1e;
+  --text-secondary: #555555;
+  --text-muted:     #6e6e6e;
   --text-inverse:   #ffffff;
   --text-on-accent: #ffffff;
 
-  --accent:         #2563eb;
-  --accent-strong:  #1d4ed8;
-  --accent-soft:    rgba(37, 99, 235, 0.10);
-  --accent-ring:    rgba(37, 99, 235, 0.30);
+  --accent:         #4d7c0f;   /* deeper logo green: readable on white */
+  --accent-strong:  #3f6a0a;
+  --accent-soft:    rgba(77, 124, 15, 0.10);
+  --accent-ring:    rgba(77, 124, 15, 0.35);
+  --accent-fill:    #c5f23a;
+  --accent-fill-hover: #b2dc2a;
+  --text-on-accent-fill: #161616;
 
-  --status-ok:        #047857;
-  --status-ok-soft:   rgba(16, 185, 129, 0.12);
-  --status-warn:      #b45309;
-  --status-warn-soft: rgba(251, 191, 36, 0.16);
-  --status-bad:       #b91c1c;
-  --status-bad-soft:  rgba(220, 38, 38, 0.12);
-  --status-info:      #0369a1;
-  --status-info-soft: rgba(56, 189, 248, 0.12);
+  --status-ok:        #157347;
+  --status-ok-soft:   rgba(25, 135, 84, 0.12);
+  --status-warn:      #a35a00;
+  --status-warn-soft: rgba(245, 176, 46, 0.18);
+  --status-bad:       #c62828;
+  --status-bad-soft:  rgba(244, 47, 47, 0.10);
+  --status-info:      #0b62b5;
+  --status-info-soft: rgba(90, 174, 255, 0.14);
 
-  --gantt-grid:       rgba(15, 23, 42, 0.06);
-  --gantt-grid-major: rgba(15, 23, 42, 0.12);
-  --gantt-non-shift:  rgba(15, 23, 42, 0.03);
+  --gantt-grid:       rgba(0, 0, 0, 0.06);
+  --gantt-grid-major: rgba(0, 0, 0, 0.12);
+  --gantt-non-shift:  rgba(0, 0, 0, 0.03);
   /* gantt-on-time / at-risk / late inherit via var(--status-*) — already correct */
-  --gantt-locked:     #64748b;   /* slate-500 — readable on light backgrounds */
+  --gantt-locked:     #6e6e6e;
 
-  --shadow-1: 0 1px 0 rgba(15, 23, 42, 0.04);
-  --shadow-2: 0 6px 18px rgba(15, 23, 42, 0.10);
-  --shadow-3: 0 12px 32px rgba(15, 23, 42, 0.16);
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.04);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, 0.10);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.16);
 
   --bg-primary:    var(--bg-base);
   --bg-secondary:  var(--bg-surface);
