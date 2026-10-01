@@ -1,12 +1,15 @@
 /**
- * ShopFloorView — mobile-first read-only shop-floor schedule (#65).
+ * ShopFloorView — read-only shop-floor board (#65), at /shopfloor.
  *
- * Accessible at the /shopfloor route. Designed for phones/tablets on the
- * factory floor. Shows today's ops per workcentre in a simple card layout.
- *
- * No drag, no editing — purely informational.
+ * Built for tablets and wall screens on the factory floor, still fine on a
+ * phone: one column per line (wraps — 1 on a phone, 2 on a tablet, 3–4 on a
+ * big screen), large type and touch targets, and each operation marked
+ * Now / Next / Done against the clock. Refreshes every 5 minutes; the
+ * Now/Next marks update every minute. No editing.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Clock } from 'lucide-react';
+import CruxLogo from './CruxLogo';
 import './ShopFloorView.css';
 
 interface ShopOp {
@@ -27,22 +30,43 @@ interface ShopFloorData {
   workcentres: ShopWorkcentre[];
 }
 
+type OpState = 'now' | 'next' | 'done' | 'later';
+
 const API_BASE = (window as any).__APS_CONFIG__?.apiUrl ?? '/api';
 
-function fmt(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return iso;
-  }
+/** HH:MM, with the weekday when it is not today (multi-day operations). */
+const time = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? hm : `${d.toLocaleDateString([], { weekday: 'short' })} ${hm}`;
+};
+const shortJob = (id: string) => String(id).replace(/^(MRP-)?0+(?=\d)/, '$1');
+const opNo = (opId: string) => (/-OP(\d+)$/i.exec(opId)?.[1] ?? opId);
+const STATE_LABEL: Record<OpState, string> = { now: 'Now', next: 'Next', done: 'Done', later: '' };
+
+/** Now = running; Next = first one not started yet on that line; Done = ended. */
+export function opStates(ops: ShopOp[], now: number): OpState[] {
+  let nextGiven = false;
+  return ops.map((op) => {
+    const s = new Date(op.plannedStartDate).getTime();
+    const e = new Date(op.plannedEndDate).getTime();
+    if (e <= now) return 'done';
+    if (s <= now) return 'now';
+    if (!nextGiven) { nextGiven = true; return 'next'; }
+    return 'later';
+  });
 }
 
 const ShopFloorView: React.FC = () => {
   const [data, setData] = useState<ShopFloorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [showDone, setShowDone] = useState<Record<string, boolean>>({});
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/shopfloor/today`)
@@ -50,44 +74,89 @@ const ShopFloorView: React.FC = () => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((d: ShopFloorData) => { setData(d); setLoading(false); })
+      .then((d: ShopFloorData) => { setData(d); setLoadedAt(new Date()); setLoading(false); })
       .catch((e: any) => { setError(e.message); setLoading(false); });
-  };
+  }, []);
 
   useEffect(() => {
     load();
-    // Auto-refresh every 5 minutes
-    const id = setInterval(load, 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, []);
+    const refresh = setInterval(load, 5 * 60 * 1000);
+    const tick = setInterval(() => setNow(Date.now()), 60 * 1000);
+    return () => { clearInterval(refresh); clearInterval(tick); };
+  }, [load]);
 
-  if (loading) return <div className="sf-loading">Loading today&apos;s schedule…</div>;
-  if (error)   return <div className="sf-error">Error: {error} <button onClick={load}>Retry</button></div>;
-  if (!data || !data.workcentres.length) {
-    return <div className="sf-empty">No operations scheduled for today.</div>;
-  }
+  const lines = useMemo(
+    () => [...(data?.workcentres || [])].sort((a, b) => a.workcentreId.localeCompare(b.workcentreId)),
+    [data]
+  );
 
   return (
     <div className="sf-root">
       <header className="sf-header">
-        <h1>Shop Floor — {data.date}</h1>
-        <button className="sf-refresh" onClick={load} aria-label="Refresh">↺</button>
+        <CruxLogo variant="inline" height={22} className="sf-logo" />
+        <div className="sf-title">
+          <h1>Shop floor</h1>
+          <span className="sf-date">
+            {data?.date ? new Date(`${data.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) : ''}
+          </span>
+        </div>
+        <span className="sf-clock" aria-label="Current time">
+          <Clock size={16} aria-hidden="true" /> {new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
+        <button className="sf-refresh" onClick={load} aria-label="Refresh" disabled={loading}>
+          <RefreshCw size={18} aria-hidden="true" className={loading ? 'sf-spin' : ''} />
+          <span>Refresh</span>
+        </button>
       </header>
 
-      {data.workcentres.map((wc) => (
-        <section key={wc.workcentreId} className="sf-wc">
-          <h2 className="sf-wc-title">{wc.workcentreId}</h2>
-          <ul className="sf-op-list">
-            {wc.operations.map((op) => (
-              <li key={`${op.jobId}-${op.opId}`} className="sf-op-card">
-                <div className="sf-op-job">Job {op.jobId}</div>
-                <div className="sf-op-time">{fmt(op.plannedStartDate)} – {fmt(op.plannedEndDate)}</div>
-                {op.resourceId && <div className="sf-op-resource">{op.resourceId}</div>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {error && (
+        <div className="sf-message sf-error" role="alert">
+          Could not load the schedule ({error}). <button onClick={load}>Try again</button>
+        </div>
+      )}
+      {!error && loading && !data && <div className="sf-message">Loading today&apos;s schedule…</div>}
+      {!error && data && lines.length === 0 && <div className="sf-message">No operations scheduled for today.</div>}
+
+      <main className="sf-board">
+        {lines.map((wc) => {
+          const states = opStates(wc.operations, now);
+          const running = states.includes('now');
+          const doneCount = states.filter((x) => x === 'done').length;
+          return (
+            <section key={wc.workcentreId} className={`sf-line ${running ? 'is-running' : ''}`} aria-label={`Line ${wc.workcentreId}`}>
+              <h2 className="sf-line-title">
+                <span>{wc.workcentreId}</span>
+                <span className="sf-line-meta">{wc.operations.length} op{wc.operations.length === 1 ? '' : 's'}{running ? ' · running' : ''}</span>
+              </h2>
+              <ol className="sf-op-list">
+                {doneCount > 0 && (
+                  <li className="sf-done-toggle">
+                    <button onClick={() => setShowDone((m) => ({ ...m, [wc.workcentreId]: !m[wc.workcentreId] }))} aria-expanded={!!showDone[wc.workcentreId]}>
+                      {showDone[wc.workcentreId] ? 'Hide' : 'Show'} {doneCount} done earlier today
+                    </button>
+                  </li>
+                )}
+                {wc.operations.map((op, i) => {
+                  const st = states[i];
+                  if (st === 'done' && !showDone[wc.workcentreId]) return null;
+                  return (
+                    <li key={`${op.jobId}-${op.opId}`} className={`sf-op sf-op--${st}`}>
+                      <div className="sf-op-time">{time(op.plannedStartDate)} – {time(op.plannedEndDate)}</div>
+                      {STATE_LABEL[st] && <span className={`sf-badge sf-badge--${st}`}>{STATE_LABEL[st]}</span>}
+                      <div className="sf-op-job">Job {shortJob(op.jobId)} <span className="sf-op-no">op {opNo(op.opId)}</span></div>
+                      {op.resourceId && <div className="sf-op-machine">{op.resourceId}</div>}
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          );
+        })}
+      </main>
+
+      <footer className="sf-footer">
+        {loadedAt ? `Updated ${loadedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · refreshes every 5 minutes` : ''}
+      </footer>
     </div>
   );
 };

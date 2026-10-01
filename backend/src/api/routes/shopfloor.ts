@@ -14,6 +14,10 @@ import { planDbFor } from '../../services/planStore';
 
 const router = Router();
 
+/** Plant-local YYYY-MM-DD (toISOString() would give the UTC date). */
+const localDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 /**
  * GET /api/shopfloor/today
  * Returns operations scheduled for today grouped by workcentreId.
@@ -32,7 +36,7 @@ router.get('/today', async (req: Request, res: Response) => {
     );
 
     if (!scheduleResult.recordset?.length) {
-      return res.json({ date: new Date().toISOString().slice(0, 10), workcentres: [] });
+      return res.json({ date: localDate(new Date()), workcentres: [] });
     }
 
     const schedule = JSON.parse(scheduleResult.recordset[0].ScheduleData);
@@ -69,7 +73,7 @@ router.get('/today', async (req: Request, res: Response) => {
       ),
     }));
 
-    res.json({ date: todayStart.toISOString().slice(0, 10), workcentres });
+    res.json({ date: localDate(todayStart), workcentres });
   } catch (err) {
     req.log.error({ err }, 'Error fetching shop-floor schedule');
     res.status(500).json({ error: (err as any).message });
