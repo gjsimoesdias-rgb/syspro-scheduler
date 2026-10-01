@@ -156,7 +156,9 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
   onLockChange,
   focusWorkcentre,
 }) => {
-  const prefs: GanttSettingsState = { ...GANTT_SETTINGS_DEFAULTS, ...ganttPrefs };
+  const basePrefs: GanttSettingsState = { ...GANTT_SETTINGS_DEFAULTS, ...ganttPrefs };
+  // LYNQ-style blocks: bars are 26 px, so stacked sub-rows need at least 30 px.
+  const prefs: GanttSettingsState = { ...basePrefs, rowHeight: Math.max(basePrefs.rowHeight || 0, 30) };
 
   // Derive a Set of affected opIds from constraint violations for fast bar lookup
   const violatedOpIds = useMemo(
@@ -316,6 +318,13 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
   // Lane metadata keyed by worcentreId. Kept under the historical name
   // `resourceMetaById` so existing lookups continue to resolve; here a "lane"
   // is a workcentre, so name === worcentreId.
+  /** Machines (resources) on each production line, for the lane cards. */
+  const machinesByLine = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    resources.forEach((r) => { (map[r.worcentreId] ||= []).push(r.resourceId); });
+    return map;
+  }, [resources]);
+
   const resourceMetaById = useMemo(() => {
     const map: Record<string, { name: string; worcentreId: string }> = {};
     resources.forEach((resource) => {
@@ -940,6 +949,26 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     return `linear-gradient(90deg, ${stops.join(', ')})`;
   }, []);
 
+  /** Productive / overtime / break windows of a day (minutes), for the lane shift strip. */
+  const getShiftBlocks = useCallback((calendar: Resource['calendar'] | undefined, day: Date): Array<{ start: number; end: number; kind: 'work' | 'overtime' | 'break' }> => {
+    const workingDays = calendar?.workingDays || [1, 2, 3, 4, 5];
+    if (!workingDays.includes(day.getDay())) return [];
+    const shift = (calendar?.shifts?.[0] || {}) as any;
+    const diversions = Array.isArray(shift.diversions) ? shift.diversions : [];
+    if (!diversions.length) {
+      return [{ start: timeToMinutes(shift.startTime || '08:00'), end: timeToMinutes(shift.endTime || '16:00'), kind: 'work' }];
+    }
+    return diversions
+      .map((d: any) => {
+        const key = String(d.type || '').toLowerCase();
+        const kind = key.includes('overtime') ? 'overtime'
+          : (key.includes('break') || key.includes('lunch')) ? 'break'
+          : (key.includes('non') || d.schedulable === false) ? null : 'work';
+        return kind ? { start: timeToMinutes(d.startTime), end: timeToMinutes(d.endTime), kind } : null;
+      })
+      .filter((b: any) => b && b.end > b.start);
+  }, []);
+
   const daySlots = useMemo(() => {
     return Array.from({ length: totalDays }).map((_, i) => addDays(timelineStart, i));
   }, [totalDays, timelineStart]);
@@ -1094,7 +1123,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       const st = jobStatusById.get(op.jobId);
       if (st === 'ConstraintViolation') return '#ef4444';
       if (st === 'Unschedulable') return '#6b7280';
-      return '#10b981';
+      return '#3b8fdc'; // LYNQ-style operation blue (green is the shift strip)
     }
     if (colorMode === 'critical') {
       // Highlight jobs with 0 or negative slack as critical
@@ -1314,7 +1343,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                 const i = date.getTime();
                 return (
                   <div key={i} className="time-cell" style={{ width: slotWidth, minWidth: slotWidth }}>
-                    {zoom === 'week' ? format(date, 'EEE') : format(date, 'HH:mm')}
+                    {zoom === 'week' ? format(date, 'EEE') : slotWidth < 34 ? format(date, 'HH') : format(date, 'HH:mm')}
                   </div>
                 );
               })}
@@ -1387,7 +1416,9 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                 </div>
                 <div className="machine-name" style={{ width: prefs.machineColWidth, minWidth: prefs.machineColWidth, left: prefs.wcColWidth }}>
                   <strong>{wcId}</strong>
-                  <span>Production Line</span>
+                  <span className="lane-machines" title={(machinesByLine[wcId] || []).join(', ')}>
+                    {(machinesByLine[wcId] || []).join(' · ') || 'Production line'}
+                  </span>
                   {showShift && (
                     <span>
                       {workcentreCalendars[wc]?.shifts?.[0]
@@ -1428,12 +1459,29 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                             width: pxPerDay,
                             background: prefs.highlightWeekends && isWeekend
                               ? 'var(--gantt-cal-weekend)'
-                              : getCalendarDayBackground(workcentreCalendars[wc], day)
+                              : isWorkingDay ? 'transparent' : 'var(--gantt-cal-off)'
                           }}
                         />
                       );
                     })}
                   </div>
+
+                  {/* Shift strip (LYNQ style): working time as blocks along the lane top */}
+                  {showShift && (
+                    <div className="lane-shift-strip" aria-hidden="true">
+                      {Array.from({ length: lastVisDay - firstVisDay }).flatMap((_, j) => {
+                        const i = firstVisDay + j;
+                        const day = addDays(timelineStart, i);
+                        return getShiftBlocks(workcentreCalendars[wc], day).map((b, k) => (
+                          <span
+                            key={`${i}-${k}`}
+                            className={`lane-shift-block lane-shift-${b.kind}`}
+                            style={{ left: (i + b.start / 1440) * pxPerDay + 1, width: Math.max(2, ((b.end - b.start) / 1440) * pxPerDay - 2) }}
+                          />
+                        ));
+                      })}
+                    </div>
+                  )}
 
                   {/* Today line */}
                   {prefs.showNowLine && nowPx !== null && (
@@ -1493,6 +1541,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                           opId={op.opId}
                           sequence={(op as any).sequence || '?'}
                           workcentreId={op.workcentreId}
+                          resourceId={op.resourceId}
                           isLocked={isLocked}
                           isHighlit={isHighlit}
                           isViolated={violatedOpIds.has(op.opId)}

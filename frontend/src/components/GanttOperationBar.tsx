@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { format } from 'date-fns';
-import { Lock, Settings, Unlock } from 'lucide-react';
+import { Lock, Unlock } from 'lucide-react';
 import type { GanttSettingsState } from './GanttSettings';
 
 export interface GanttOperationBarProps {
@@ -18,6 +18,8 @@ export interface GanttOperationBarProps {
   opId: string;
   sequence: number | string;
   workcentreId: string;
+  /** Machine the operation is booked on (shown in the tooltip). */
+  resourceId?: string;
 
   // Flags
   isLocked: boolean;
@@ -115,6 +117,8 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
   jobId,
   opId,
   sequence,
+  workcentreId,
+  resourceId,
   isLocked,
   isHighlit,
   isViolated,
@@ -156,12 +160,12 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
   onToggleLock,
 }) => {
   // Display the SYSPRO job number without its leading zeros (e.g. 000000000038443 → 38443).
-  const jobLabel = jobId.replace(/^0+/, '') || jobId;
+  const jobLabel = jobId.replace(/^(MRP-)?0+(?=\d)/, '$1') || jobId;
 
-  // Glossy, line-coloured fills: a top-lit gradient for the run phase and a
-  // striped, lighter gradient for the setup phase.
-  const runFill = `linear-gradient(180deg, ${lighten(opColor, 0.30)} 0%, ${opColor} 72%)`;
-  const setupFill = `repeating-linear-gradient(-45deg, rgba(255,255,255,0.30) 0 3px, transparent 3px 6px), linear-gradient(180deg, ${lighten(opColor, 0.42)}, ${lighten(opColor, 0.18)})`;
+  // Flat fills (LYNQ style): solid run phase; setup is a lighter tint with a
+  // faint stripe so the two phases stay distinguishable.
+  const runFill = opColor;
+  const setupFill = `repeating-linear-gradient(-45deg, rgba(255,255,255,0.22) 0 3px, transparent 3px 6px), ${lighten(opColor, 0.35)}`;
 
   // Lateness of this operation's end against the job's due date.
   const lateMin = dueDate ? Math.round((displayEnd.getTime() - dueDate.getTime()) / 60000) : null;
@@ -173,61 +177,54 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
     return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m % 60}m` : `${m % 60}m`;
   };
 
+  // Compact LYNQ-style summary: what, where, when, how long — then due / wait detail.
+  const hm = (min: number) => {
+    const m = Math.max(0, Math.round(min));
+    const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), r = m % 60;
+    return d ? `${d}d${h ? `${h}h` : ''}` : h ? `${h}h${r ? `${r}m` : ''}` : `${r}m`;
+  };
+  const spanMin = (displayEnd.getTime() - displayStart.getTime()) / 60000;
   const tooltipContent = (
-    <div className="gantt-tooltip-content">
-      <div className="gantt-tt-row"><span>Job</span><strong>{jobLabel}</strong></div>
-      {itemCode && <div className="gantt-tt-row"><span>Item</span><strong>{itemCode} {qty}</strong></div>}
-      {itemDesc && <div className="gantt-tt-row gantt-tt-desc"><span>Desc</span><span>{itemDesc}</span></div>}
-      <div className="gantt-tt-row"><span>Op</span><strong>{opId} (Seq {sequence || '?'})</strong></div>
-      {depRole && (
-        <div className="gantt-tt-row">
-          <span>Family</span>
-          <strong>
-            {depRole === 'master'
-              ? 'Master job — starts after its sub-jobs'
-              : depRole === 'sub'
-                ? `Sub-job of ${masterJobId ?? 'master'}`
-                : `Master job · sub of ${masterJobId ?? '?'}`}
-          </strong>
+    <div className="gantt-tooltip-content gtt">
+      <div className="gtt-title">
+        <strong>{jobLabel}</strong>
+        {itemCode && <> | {itemCode}</>}
+        {itemDesc && <> - {itemDesc}</>}
+      </div>
+      <div className="gtt-sub">
+        {resourceId && resourceId !== workcentreId ? `${workcentreId} · ${resourceId}` : workcentreId} · Op {sequence || '?'}
+        {depRole && (
+          <> · {depRole === 'master' ? 'Master job' : depRole === 'sub' ? `Sub-job of ${(masterJobId ?? '').replace(/^0+/, '')}` : 'Master + sub'}</>
+        )}
+      </div>
+      <div className="gtt-line">
+        <span>Start: <b>{format(displayStart, 'dd/MM, HH:mm')}</b></span>
+        <span>End: <b>{format(displayEnd, 'dd/MM, HH:mm')}</b></span>
+        <span>Span: <b>{hm(spanMin)}</b></span>
+      </div>
+      <div className="gtt-line">
+        {qty && <span>Qty: <b>{qty.replace(/^×\s*/, '')}</b></span>}
+        <span>Setup: <b>{hm(setupMin)}</b></span>
+        <span>Run: <b>{hm(runMin)}</b></span>
+        {queueMin > 0 && <span>Queue: <b>{hm(queueMin)}</b></span>}
+        {moveMin > 0 && <span>Move: <b>{hm(moveMin)}</b></span>}
+        {displaySegments.length > 1 && <span>Split: <b>{displaySegments.length}</b></span>}
+      </div>
+      {dueDate && (
+        <div className={`gtt-line ${isLate ? 'gtt-late' : 'gtt-ok'}`}>
+          <span>Due: <b>{format(dueDate, 'dd/MM, HH:mm')}</b></span>
+          <span><b>{isLate ? `${fmtSpan(lateMin!)} late` : `${fmtSpan(lateMin!)} slack`}</b></span>
         </div>
       )}
-      <div className="gantt-tt-divider" />
-      <div className="gantt-tt-row phase-setup"><span><Settings size={13} className="ui-icon" aria-hidden="true" /> Setup</span><strong>{Math.round(setupMin)}m</strong></div>
-      <div className="gantt-tt-row phase-run"><span>▶ Run</span><strong>{Math.round(runMin)}m</strong></div>
-      <div className="gantt-tt-row phase-queue"><span>Queue</span><strong>{Math.round(queueMin)}m</strong></div>
-      <div className="gantt-tt-row phase-move"><span>Move</span><strong>{Math.round(moveMin)}m</strong></div>
-      <div className="gantt-tt-divider" />
-      <div className="gantt-tt-row"><span>Start</span><strong>{format(displayStart, 'dd/MM HH:mm')}</strong></div>
-      <div className="gantt-tt-row"><span>End</span><strong>{format(displayEnd, 'dd/MM HH:mm')}</strong></div>
-      <div className="gantt-tt-row"><span>Split</span><strong>{displaySegments.length} segment(s)</strong></div>
-      <div className="gantt-tt-row"><span>Total</span><strong>{durationH}h</strong></div>
       {wait && (
-        <>
-          <div className="gantt-tt-divider" />
-          <div className="gantt-tt-row"><span>Ready</span><strong>{format(wait.readyAt, 'dd/MM HH:mm')}</strong></div>
-          <div className="gantt-tt-row gantt-tt-wait">
-            <span>Waited</span>
-            <strong>
-              {fmtSpan(wait.minutes)}
-              {wait.reason === 'line' ? ' — line busy' : wait.reason === 'crew' ? ' — no free operators in crew' : wait.reason === 'calendar' ? ' — no shift time' : wait.reason === 'mixed' ? ' — line busy + no shift time' : ''}
-            </strong>
-          </div>
-          {wait.blockedBy && wait.blockedBy.length > 0 && (
-            <div className="gantt-tt-row gantt-tt-desc"><span>Behind</span><span>{wait.blockedBy.map((j) => j.replace(/^0+/, '')).join(', ')}</span></div>
-          )}
-        </>
+        <div className="gtt-line gtt-wait">
+          <span>Ready {format(wait.readyAt, 'dd/MM, HH:mm')} · waited <b>{fmtSpan(wait.minutes)}</b>
+            {wait.reason === 'line' ? ' — line busy' : wait.reason === 'crew' ? ' — no free operators' : wait.reason === 'calendar' ? ' — no shift time' : wait.reason === 'mixed' ? ' — line busy + no shift time' : ''}
+            {wait.blockedBy && wait.blockedBy.length > 0 ? ` (behind ${wait.blockedBy.map((j) => j.replace(/^0+/, '')).join(', ')})` : ''}
+          </span>
+        </div>
       )}
-      {dueDate && (
-        <>
-          <div className="gantt-tt-divider" />
-          <div className="gantt-tt-row"><span>Due</span><strong>{format(dueDate, 'dd/MM HH:mm')}</strong></div>
-          <div className={`gantt-tt-row ${isLate ? 'gantt-tt-late' : 'gantt-tt-ontime'}`}>
-            <span>{isLate ? 'Late' : 'Slack'}</span>
-            <strong>{isLate ? `${fmtSpan(lateMin!)} after due` : `${fmtSpan(lateMin!)} before due`}</strong>
-          </div>
-        </>
-      )}
-      {isLocked && <div className="gantt-tt-locked"><Lock size={11} aria-hidden="true" /> LOCKED</div>}
+      {isLocked && <div className="gtt-line gtt-locked"><Lock size={11} aria-hidden="true" /> Locked</div>}
     </div>
   );
 

@@ -252,3 +252,101 @@ body, :root .app { font-family: var(--font-sans); }
 .rt-machine-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rt-count { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 11px; min-width: 22px; text-align: right; }
 .rt-clear { margin: 8px 10px; background: none; border: 1px dashed var(--border-strong); color: var(--text-secondary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+
+/* ============================================================
+   Gantt — LYNQ Gen 3 planning board look
+   near-black board (dark) / white (light), lane cards, dashed lane
+   rules, shift strip along each lane top, flat bars, pale tooltip.
+   ============================================================ */
+:root { --gantt-board: #ffffff; --gantt-board-header: #f4f4f4; --gantt-lane-rule: #d4d4d4; }
+:root[data-theme='dark'] { --gantt-board: #0b0b0b; --gantt-board-header: #1c1c1c; --gantt-lane-rule: #3a3a3a; }
+
+:root .app .machine-gantt,
+:root .app .machine-gantt-grid,
+:root .app .machine-lanes { background: var(--gantt-board); }
+
+/* Timeline header: month/week, day, hour rows */
+:root .app .machine-timeline-header { background: var(--gantt-board-header); border-bottom: 1px solid var(--border-default); }
+:root .app .wc-col-label,
+:root .app .machine-col-label { background: var(--gantt-board-header); color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; }
+:root .app .week-cell { background: var(--gantt-board-header); color: var(--text-primary); font-weight: 700; font-size: 12px; border-color: var(--border-default); }
+:root .app .date-cell { color: var(--text-primary); font-weight: 600; font-size: 11px; border-color: var(--border-default); }
+:root .app .date-cell.today-date-cell { background: var(--accent-soft); color: var(--text-primary); border-bottom: 2px solid var(--accent-fill, var(--accent)); }
+:root .app .time-cell { color: var(--text-muted); font-size: 10px; border-color: var(--border-subtle); font-variant-numeric: tabular-nums; }
+
+/* Lanes: dashed rules between lanes, room for the shift strip */
+:root .app .machine-row { border-bottom: 1px dashed var(--gantt-lane-rule); background: var(--gantt-board); }
+:root .app .machine-lane { background: transparent; }
+:root .app .machine-lane:hover { background: var(--bg-hover); }
+
+/* Lane header: slim colour stripe + load %, then a resource card */
+:root .app .wc-cell {
+  background: var(--gantt-board);
+  border-right: none;
+  color: var(--text-secondary);
+  gap: 2px;
+}
+:root .app .wc-cell:hover { background: var(--bg-hover); }
+:root .app .wc-cell.active { background: var(--accent-soft); color: var(--text-primary); }
+:root .app .machine-name {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  margin: 4px 6px;
+  padding: 6px 10px;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  box-sizing: border-box;
+}
+:root[data-theme='dark'] .app .machine-name { background: #1f1f1f; border-color: #333; }
+:root .app .machine-name strong { color: var(--text-primary); font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+:root .app .machine-name .lane-machines { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Shift strip — working time as blocks along the lane top */
+.lane-shift-strip { position: absolute; top: 3px; left: 0; right: 0; height: 6px; pointer-events: none; z-index: 1; }
+.lane-shift-block { position: absolute; top: 0; height: 6px; border-radius: 1px; }
+.lane-shift-work { background: #198754; }
+.lane-shift-overtime { background: #3e7fe7; }
+.lane-shift-break { background: #d4a017; opacity: 0.8; }
+:root[data-theme='dark'] .lane-shift-work { background: #1e9a5f; }
+
+/* Bars: flat, square-ish, no gloss; clear of the shift strip */
+:root .app .machine-op-bar {
+  border-radius: 2px;
+  box-shadow: none;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  margin-top: 6px;
+}
+:root .app .machine-op-bar:hover { filter: brightness(1.12); box-shadow: 0 0 0 1px var(--text-primary); }
+:root .app .machine-op-bar.selected { box-shadow: 0 0 0 2px var(--accent-fill, var(--accent)); }
+:root .app .now-line { background: var(--accent-fill, var(--accent)); width: 2px; }
+
+/* Tooltip: LYNQ's pale, translucent card */
+:root .gantt-tooltip {
+  background: rgba(236, 236, 236, 0.96);
+  color: #1e1e1e;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  padding: 10px 14px;
+  max-width: 460px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+:root .gantt-tooltip .gtt { gap: 4px; }
+:root .gantt-tooltip .gtt-title { font-size: 13px; line-height: 1.35; }
+:root .gantt-tooltip .gtt-title strong { color: #000; }
+:root .gantt-tooltip .gtt-sub { color: #444; font-size: 12px; }
+:root .gantt-tooltip .gtt-line { display: flex; flex-wrap: wrap; gap: 2px 14px; color: #333; font-size: 12px; }
+:root .gantt-tooltip .gtt-line b { color: #000; font-weight: 600; }
+:root .gantt-tooltip .gtt-late b { color: #c62828; }
+:root .gantt-tooltip .gtt-ok b { color: #157347; }
+:root .gantt-tooltip .gtt-wait { color: #7a5200; }
+:root .gantt-tooltip .gtt-locked { color: #c62828; font-weight: 600; align-items: center; gap: 4px; }
+
+/* Weekends dimmed, not yellow (LYNQ) */
+:root .app .machine-gantt { --gantt-cal-weekend: rgba(0, 0, 0, 0.04); --gantt-cal-off: rgba(0, 0, 0, 0.04); }
+:root[data-theme='dark'] .app .machine-gantt { --gantt-cal-weekend: rgba(255, 255, 255, 0.035); --gantt-cal-off: rgba(255, 255, 255, 0.035); }
+/* Taller bars, closer to LYNQ's blocks */
+:root .app .machine-op-bar { height: 26px; }

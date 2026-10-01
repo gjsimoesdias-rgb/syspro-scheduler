@@ -66,7 +66,7 @@ const GanttLegend: React.FC<Props> = ({ show, colorMode, workcentres, onClose })
       {colorMode === 'status' && (
         <>
           <div className="gantt-legend-item">
-            <span className="gantt-legend-dot" style={{ background: '#10b981' }} />
+            <span className="gantt-legend-dot" style={{ background: '#3b8fdc' }} />
             Scheduled OK
           </div>
           <div className="gantt-legend-item">
@@ -120,6 +120,10 @@ const GanttLegend: React.FC<Props> = ({ show, colorMode, workcentres, onClose })
       <div className="gantt-legend-item">
         <span className="gantt-legend-dot" style={{ outline: '2px dashed var(--status-bad, #dc2626)', outlineOffset: -2, background: 'transparent' }} />
         Finishes after due date (dashed border)
+      </div>
+      <div className="gantt-legend-item">
+        <span className="gantt-legend-dot" style={{ background: '#198754', borderRadius: 1, height: 5 }} />
+        Shift time (strip along the lane top)
       </div>
 
       <button className="gantt-legend-close" onClick={onClose}>
