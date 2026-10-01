@@ -117,6 +117,10 @@ const GanttLegend: React.FC<Props> = ({ show, colorMode, workcentres, onClose })
         <span className="gantt-legend-dot phase-legend-move" />
         Move (purple)
       </div>
+      <div className="gantt-legend-item">
+        <span className="gantt-legend-dot" style={{ outline: '2px dashed var(--status-bad, #dc2626)', outlineOffset: -2, background: 'transparent' }} />
+        Finishes after due date (dashed border)
+      </div>
 
       <button className="gantt-legend-close" onClick={onClose}>
         ✕

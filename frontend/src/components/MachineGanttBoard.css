@@ -1051,3 +1051,10 @@
 
 /* Horizontal virtualisation: stands in for the off-screen cells */
 .gantt-virtual-spacer { flex-shrink: 0; height: 1px; }
+
+/* Late bars also get a dashed border, so lateness does not rely on colour
+   alone (colour-blind safe; review 7-12). Setup already uses stripes. */
+.machine-op-bar.gantt-bar--late {
+  outline: 2px dashed var(--status-bad, #dc2626);
+  outline-offset: -2px;
+}
