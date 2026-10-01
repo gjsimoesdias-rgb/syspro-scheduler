@@ -245,6 +245,11 @@ export const versionService = {
 };
 
 export const jobService = {
+  /** SYSPRO MRP suggested jobs (MRP- ids) and whether the company plans them. */
+  getSuggested: async (): Promise<{ included: boolean; jobs: Job[]; warning?: string }> => {
+    const response = await apiClient.get('/jobs/suggested');
+    return { included: !!response.data.included, jobs: response.data.jobs || [], warning: response.data.warning };
+  },
   getAll: async (): Promise<{ items: Job[]; warning?: string }> => {
     const response = await apiClient.get('/jobs');
     return {
@@ -720,6 +725,12 @@ export const settingsService = {
   getCompany: async (): Promise<CompanySettingsDto> => {
     const res = await apiClient.get('/settings/company');
     return res.data;
+  },
+  /** Turn planning of MRP suggested jobs on/off (company admin). */
+  setIncludeMrpSuggestedJobs: async (on: boolean): Promise<void> => {
+    const current: any = (await apiClient.get('/settings/company')).data || {};
+    const next = { ...current, fcs: { ...(current.fcs || {}), schedulingRules: { ...(current.fcs?.schedulingRules || {}), includeMrpSuggestedJobs: on } } };
+    await apiClient.put('/settings/company', next);
   },
 };
 

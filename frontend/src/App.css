@@ -2619,3 +2619,8 @@
 .grid-flag-warn { color: var(--status-warning, #b45309); }
 .grid-flag-info { color: var(--status-info, #4f46e5); }
 .grid-flag-bad { color: var(--status-error, #dc2626); }
+
+/* ── MRP Jobs tab banner ── */
+.mrp-banner { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 12px; line-height: 1.4;
+  background: rgba(79, 70, 229, 0.08); border-top: 1px solid rgba(79, 70, 229, 0.25); border-bottom: 1px solid rgba(79, 70, 229, 0.25); }
+.mrp-banner.on { background: rgba(22, 163, 74, 0.08); border-color: rgba(22, 163, 74, 0.3); }

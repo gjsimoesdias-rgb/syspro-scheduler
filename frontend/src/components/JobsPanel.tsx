@@ -48,6 +48,11 @@ export interface JobsPanelProps {
   jobLatenessMap: Map<string, Lateness>;
   jobPage: number;
   jobPaneMode: JobPaneMode;
+  /** MRP Jobs tab: whether suggested jobs are planned, how many, and the toggle. */
+  mrpIncluded: boolean;
+  mrpJobCount: number;
+  mrpBusy: boolean;
+  onToggleMrpPlanning: () => void;
   jobSearch: string;
   jobStatusFilter: string;
   jobWcFilter: string;
@@ -129,6 +134,10 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
   jobLatenessMap,
   jobPage,
   jobPaneMode,
+  mrpIncluded,
+  mrpJobCount,
+  mrpBusy,
+  onToggleMrpPlanning,
   jobSearch,
   jobStatusFilter,
   jobWcFilter,
@@ -203,6 +212,10 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
             <button className={`feature-tab ${jobPaneMode === 'master' ? 'active' : ''}`} onClick={() => setJobPaneMode('master')}>
               Master Jobs
             </button>
+            <button className={`feature-tab ${jobPaneMode === 'mrp' ? 'active' : ''}`} onClick={() => setJobPaneMode('mrp')}
+              title="SYSPRO MRP suggested jobs">
+              MRP Jobs{mrpJobCount ? ` (${mrpJobCount})` : ''}
+            </button>
             <button
               className="btn btn-primary"
               style={{ marginLeft: 'auto' }}
@@ -214,7 +227,7 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
           </div>
           <div className="aps-panel-title aps-panel-title-searchbar">
             <span>
-              {jobPaneMode === 'production' ? 'Production Jobs' : 'Master Jobs'} {selectedWorkcentre.length ? `(Filter: ${selectedWorkcentre.length === 1 ? selectedWorkcentre[0] : `${selectedWorkcentre.length} selected`})` : ''}
+              {jobPaneMode === 'production' ? 'Production Jobs' : jobPaneMode === 'mrp' ? 'MRP Suggested Jobs' : 'Master Jobs'} {selectedWorkcentre.length ? `(Filter: ${selectedWorkcentre.length === 1 ? selectedWorkcentre[0] : `${selectedWorkcentre.length} selected`})` : ''}
             </span>
             <div className="job-filter-bar">
               <input
@@ -254,12 +267,24 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                 Export
               </button>
               <span className="job-count-badge">
-                {jobPaneMode === 'production'
+                {jobPaneMode !== 'master'
                   ? `${filteredJobs.length} jobs`
                   : `${masterJobGroups.length} master jobs`}
               </span>
             </div>
           </div>
+          {jobPaneMode === 'mrp' && (
+            <div className={`mrp-banner ${mrpIncluded ? 'on' : ''}`} role="status">
+              <span style={{ flex: 1 }}>
+                {mrpIncluded
+                  ? <>These SYSPRO MRP suggestions are <strong>planned</strong> with the production jobs — they take line capacity and materials, and supply sales orders. They are never sent to SYSPRO; create the job in SYSPRO to release one.</>
+                  : <>SYSPRO MRP suggestions, <strong>not planned</strong>. Include them to schedule them with the production jobs (capacity, materials and sales orders). They are never sent to SYSPRO.</>}
+              </span>
+              <button className={`btn btn-sm ${mrpIncluded ? '' : 'btn-primary'}`} onClick={onToggleMrpPlanning} disabled={mrpBusy}>
+                {mrpBusy ? 'Saving…' : mrpIncluded ? 'Stop planning them' : 'Include in planning'}
+              </button>
+            </div>
+          )}
           {jobPaneMode === 'production' && scheduleShortfall && scheduleShortfall.jobCount > 0 && (
             <div
               role="status"
@@ -369,7 +394,7 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {jobPaneMode === 'production' ? (
+                {jobPaneMode !== 'master' ? (
                   <>
                     {filteredJobs.length === 0 && (
                       <tr>

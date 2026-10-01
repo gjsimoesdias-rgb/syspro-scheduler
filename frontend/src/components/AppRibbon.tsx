@@ -267,6 +267,7 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
             <span className="aps-ribbon-title">VISUAL APS</span>
             <button className="btn btn-sm" onClick={() => { setManageTab('none'); setJobPaneMode('production'); }}>Production Jobs</button>
             <button className="btn btn-sm" onClick={() => { setManageTab('none'); setJobPaneMode('master'); }}>Master Jobs</button>
+            <button className="btn btn-sm" onClick={() => { setManageTab('none'); setJobPaneMode('mrp'); }} title="SYSPRO MRP suggested jobs">MRP Jobs</button>
           </div>
           <div className="aps-ribbon-group">
             <span className="aps-ribbon-title">INTERVAL</span>

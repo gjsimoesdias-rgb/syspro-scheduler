@@ -4,7 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import SysproDatabaseService from '../../services/SysproDatabaseService';
-import { sysproServiceFor } from '../sysproServiceFor';
+import { sysproServiceFor, includeSuggestedJobsFor } from '../sysproServiceFor';
 import { Job, Operation } from '../../types';
 import { setLocal } from '../../utils/setLocal';
 import { validateBody } from '../middleware/validateBody';
@@ -186,6 +186,23 @@ router.get('/', async (req: Request, res: Response) => {
  * POST /api/jobs/bulk-import
  * Import jobs from CSV payload
  */
+/**
+ * GET /api/jobs/suggested — SYSPRO MRP suggested jobs (MRP- ids) for the MRP
+ * Jobs grid, whether or not the company plans them (`included`).
+ */
+router.get('/suggested', async (req: Request, res: Response) => {
+  const sysproDb = req.app.locals.sysproDb;
+  if (!sysproDb) return res.json({ included: false, count: 0, jobs: [], warning: 'Database not connected' });
+  try {
+    const included = await includeSuggestedJobsFor(req);
+    const jobs = await new SysproDatabaseService(sysproDb).getSuggestedJobs();
+    res.json({ included, count: jobs.length, jobs });
+  } catch (error) {
+    req.log.error({ err: error }, 'Error fetching MRP suggested jobs');
+    res.status(500).json({ error: 'Failed to fetch MRP suggested jobs' });
+  }
+});
+
 router.post('/bulk-import', requirePlanner, validateBody(bulkImportJobsSchema), async (req: Request, res: Response) => {
   try {
     const payload: ImportedJobPayload[] = req.body.jobs;

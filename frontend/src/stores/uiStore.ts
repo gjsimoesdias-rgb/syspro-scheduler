@@ -31,7 +31,7 @@ export type ContentTab =
   | 'settings' | 'scenarios' | 'dispatch' | 'ctp' | 'changeovers' | 'optimize' | 'bomtree' | 'salesorders';
 
 export type WorkflowJobFilter = 'all' | 'unscheduled' | 'past-due' | 'short-term' | 'long-term';
-export type JobPaneMode = 'production' | 'master';
+export type JobPaneMode = 'production' | 'master' | 'mrp';
 export type ScheduleAroundMode = 'left' | 'right' | 'both' | 'master';
 
 /** Manage-panel sub-tabs */

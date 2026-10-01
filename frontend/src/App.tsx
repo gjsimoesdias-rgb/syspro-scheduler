@@ -25,7 +25,7 @@ import exportService from './services/exportService';
 import { createShortcutManager } from './services/keyboardShortcuts';
 import BulkImportService from './services/bulkImportService';
 import { Schedule, ConstraintViolation, Job, Resource, Operation } from './types';
-import { scheduleService, versionService, apiClient, pinService, settingsService, type PinnedOperationDto, apiErrorMessage } from './services/api';
+import { scheduleService, jobService, versionService, apiClient, pinService, settingsService, type PinnedOperationDto, apiErrorMessage } from './services/api';
 import { getUserGuideHtml } from './userGuideHtml';
 import ScheduleSetupModal, { ScheduleConfig } from './components/ScheduleSetupModal';
 import { useSseEvents } from './hooks/useSseEvents';
@@ -874,11 +874,38 @@ const App: React.FC = () => {
   useEffect(() => { setJobPage(0); }, [debouncedJobSearch, jobStatusFilter, jobWcFilter, scheduleFilter, workflowJobFilter, jobPaneMode]);
   useEffect(() => { setMasterJobPage(0); }, [debouncedJobSearch, jobStatusFilter, jobWcFilter, scheduleFilter, workflowJobFilter]);
 
+  // MRP Jobs tab: SYSPRO suggested jobs. When the company plans them they are
+  // already in openJobs; otherwise they are fetched read-only for the tab.
+  const [mrpPreview, setMrpPreview] = useState<{ included: boolean; jobs: Job[] } | null>(null);
+  const [mrpBusy, setMrpBusy] = useState(false);
+  const loadMrpPreview = useCallback(async () => {
+    try { setMrpPreview(await jobService.getSuggested()); }
+    catch { setMrpPreview({ included: false, jobs: [] }); }
+  }, []);
+  useEffect(() => { if (jobPaneMode === 'mrp') void loadMrpPreview(); }, [jobPaneMode, loadMrpPreview]);
+  const suggestedInPlan = useMemo(() => visibleJobSource.filter((j) => (j as any).isSuggested), [visibleJobSource]);
+  const mrpIncluded = mrpPreview?.included ?? suggestedInPlan.length > 0;
+  const mrpJobCount = suggestedInPlan.length || mrpPreview?.jobs.length || 0;
+  const toggleMrpPlanning = useCallback(async () => {
+    setMrpBusy(true);
+    try {
+      await settingsService.setIncludeMrpSuggestedJobs(!mrpIncluded);
+      await loadJobsAndResources();
+      await loadMrpPreview();
+      toast.success(!mrpIncluded ? 'MRP suggested jobs are now part of the plan — generate a schedule to place them' : 'MRP suggested jobs removed from the plan');
+    } catch (e: any) {
+      toast.error(e?.response?.status === 403 ? 'Only a company admin can change this setting' : 'Could not change the setting');
+    } finally { setMrpBusy(false); }
+  }, [mrpIncluded, loadJobsAndResources, loadMrpPreview]);
+
   // Gen3 multi-criteria job filtering
   const filteredJobs = useMemo(() => {
+    const paneSource = jobPaneMode === 'mrp'
+      ? (suggestedInPlan.length ? suggestedInPlan : (mrpPreview?.jobs || []))
+      : visibleJobSource.filter((j) => !(j as any).isSuggested);
     let list = selectedWorkcentre.length
-      ? visibleJobSource.filter((job) => job.operations.some((op) => selectedWorkcentre.includes(op.workcentreId)))
-      : visibleJobSource;
+      ? paneSource.filter((job) => job.operations.some((op) => selectedWorkcentre.includes(op.workcentreId)))
+      : paneSource;
 
     if (debouncedJobSearch.trim()) {
       const q = debouncedJobSearch.trim().toLowerCase();
@@ -939,7 +966,7 @@ const App: React.FC = () => {
     }
 
     return list;
-  }, [visibleJobSource, selectedWorkcentre, debouncedJobSearch, jobStatusFilter, jobWcFilter, scheduleFilter, workflowJobFilter, getJobScheduleStatus, advancedFilter, advancedSort, getJobMaterialStatus]);
+  }, [visibleJobSource, jobPaneMode, suggestedInPlan, mrpPreview, selectedWorkcentre, debouncedJobSearch, jobStatusFilter, jobWcFilter, scheduleFilter, workflowJobFilter, getJobScheduleStatus, advancedFilter, advancedSort, getJobMaterialStatus]);
 
   const masterJobGroups = useMemo(() => {
     const jobsById = new Map(visibleJobSource.map((job) => [job.jobId, job] as const));
@@ -1454,6 +1481,10 @@ const App: React.FC = () => {
               jobLatenessMap={jobLatenessMap}
               jobPage={jobPage}
               jobPaneMode={jobPaneMode}
+              mrpIncluded={mrpIncluded}
+              mrpJobCount={mrpJobCount}
+              mrpBusy={mrpBusy}
+              onToggleMrpPlanning={toggleMrpPlanning}
               jobSearch={jobSearch}
               jobStatusFilter={jobStatusFilter}
               jobWcFilter={jobWcFilter}
