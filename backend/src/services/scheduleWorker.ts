@@ -8,6 +8,7 @@ import { parentPort, workerData } from 'worker_threads';
 import { randomUUID } from 'crypto';
 import { createSchedulingEngine } from './ISchedulingEngine';
 import ConstraintManager from './ConstraintManager';
+import { crewLookupFrom } from '../utils/crews';
 
 // Reconstruct non-serialisable types (Maps, Dates) from the plain-object payload
 const ctx = workerData as any;
@@ -52,6 +53,7 @@ const context = {
   cpSatTimeLimitSeconds: ctx.cpSatTimeLimitSeconds,
   productionMode: ctx.productionMode,
   ruleToggles: ctx.ruleToggles,
+  crews: crewLookupFrom(ctx.crewSetup),
 };
 
 (async () => {

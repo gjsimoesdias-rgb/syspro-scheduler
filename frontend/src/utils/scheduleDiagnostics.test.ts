@@ -57,4 +57,12 @@ describe('scheduleDiagnostics', () => {
     expect(fmtSpan(125)).toBe('2h 5m');
     expect(fmtSpan(3000)).toBe('2d 2h');
   });
+
+  it('explains crew waits separately from line waits', () => {
+    const sched: any = { jobSchedules: [js('A', '2026-10-06T00:00:00Z', [
+      { readyAt: '2026-10-01T00:00:00Z', waitMinutes: 120, waitReason: 'crew', blockedBy: ['B'] },
+    ])] };
+    const why = lateReasons(sched, [job('A', '2026-10-05T00:00:00Z')], jobLateness(sched, [job('A', '2026-10-05T00:00:00Z')]), () => 'DATE');
+    expect(why.get('A')).toContain('Waited 2h 0m for free operators in its crew.');
+  });
 });

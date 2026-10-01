@@ -371,6 +371,22 @@ export const resourceService = {
   }
 };
 
+/** Crew (labour) pools — Manage → Crews (see backend utils/crews.ts). */
+export interface CrewPool { id: string; name: string; headcount: number }
+export interface CrewLine { poolId: string; operators: number }
+export interface CrewSetup { enabled: boolean; pools: CrewPool[]; lines: Record<string, CrewLine> }
+
+export const crewService = {
+  get: async (): Promise<CrewSetup> => {
+    const response = await apiClient.get('/resources/crews');
+    return response.data.setup;
+  },
+  save: async (setup: CrewSetup): Promise<CrewSetup> => {
+    const response = await apiClient.put('/resources/crews', setup);
+    return response.data.setup;
+  },
+};
+
 /** Holiday, shutdown, short day or extra working day (see backend utils/calendarExceptions.ts). */
 export interface CalendarException {
   id: string;

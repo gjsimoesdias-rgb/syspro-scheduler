@@ -7,6 +7,7 @@ import SysproDatabaseService from '../../services/SysproDatabaseService';
 import { setLocal } from '../../utils/setLocal';
 import { requirePlanner } from '../middleware/requireAuth';
 import { CalendarException, normaliseException } from '../../utils/calendarExceptions';
+import { normaliseCrewSetup, EMPTY_CREW_SETUP, type CrewSetup } from '../../utils/crews';
 
 const router = Router();
 
@@ -504,6 +505,23 @@ router.delete('/calendar-exceptions/:id', requirePlanner, (req: Request, res: Re
   const next = list.filter((e) => e.id !== req.params.id);
   setLocal(req.app.locals, 'calendarExceptions', next);
   res.json({ deleted: next.length !== list.length });
+});
+
+/**
+ * Crews (labour pools) — Manage → Crews.
+ * GET /api/resources/crews  → { setup }
+ * PUT /api/resources/crews  { enabled, pools: [{ id?, name, headcount }], lines: { [wc]: { poolId, operators } } }
+ */
+router.get('/crews', (req: Request, res: Response) => {
+  const setup: CrewSetup = (req.app.locals as any).crewSetup || EMPTY_CREW_SETUP;
+  res.json({ setup });
+});
+
+router.put('/crews', requirePlanner, (req: Request, res: Response) => {
+  const result = normaliseCrewSetup(req.body);
+  if (typeof result === 'string') return res.status(400).json({ error: result });
+  setLocal(req.app.locals, 'crewSetup', result);
+  res.json({ setup: result });
 });
 
 /**

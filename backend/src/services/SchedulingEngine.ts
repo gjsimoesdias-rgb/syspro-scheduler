@@ -4,6 +4,8 @@
  */
 
 import { localDayKey, exceptionForDay, exceptionWindowMinutes } from '../utils/calendarExceptions';
+import type { CrewLookup } from '../utils/crews';
+import { CrewLoad } from './crewLoad';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Job,
@@ -67,6 +69,11 @@ export interface SchedulingContext {
    * The scheduler books these slots before running and won't re-schedule them.
    */
   pinnedOperations?: Map<string, PinnedOperation>;
+  /**
+   * Crew (labour) pools — Manage → Crews. When set, operations on a line in a
+   * pool only run while the pool has enough free operators. Forward scheduling.
+   */
+  crews?: CrewLookup;
   /**
    * Company rule toggles (Settings → FCS → Scheduling Rules). Each defaults
    * to true; setting one to false removes that time component from every
@@ -236,6 +243,10 @@ export class SchedulingEngine {
   private searchCapHit: Set<string> = new Set();
   /** Ops whose earliest free slot would end after the planning horizon. */
   private beyondHorizon: Set<string> = new Set();
+  /** Crew bookings for this run (null when crews are off). */
+  private crewLoad: CrewLoad | null = null;
+  /** opIds whose line needs more operators than its whole crew has. */
+  private crewTooSmall: Set<string> = new Set();
   /**
    * Per-workcentre overtime budget, populated in initializeLoads from
    * workcentre.maxOvertimePerDay (with env default fallback). Read on each
@@ -513,6 +524,8 @@ export class SchedulingEngine {
       this.materialViolationsSeen.clear();
       this.searchCapHit.clear();
       this.beyondHorizon.clear();
+      this.crewTooSmall.clear();
+      this.crewLoad = context.crews ? new CrewLoad(context.crews) : null;
 
       // Step 1: Sort jobs by rule and due date
       const ordered = this.prioritizeJobs(context.jobs, context.schedulingRule || 'priority');
@@ -1020,12 +1033,16 @@ export class SchedulingEngine {
             severity: 'Warning',
             affectedJobId: job.jobId,
             affectedOperationId: operation.opId,
-            description: this.searchCapHit.has(operation.opId)
+            description: this.crewTooSmall.has(operation.opId)
+              ? (() => { const n = this.crewLoad?.needFor(operation.workcentreId); return `Operation ${operation.opId} (seq ${operation.sequence}) needs ${n?.operators} operators on ${operation.workcentreId} but the ${n?.poolName} crew has only ${n?.headcount}`; })()
+              : this.searchCapHit.has(operation.opId)
               ? `Could not find a slot for operation ${operation.opId} (seq ${operation.sequence}): search stopped after ${MAX_SLOT_ITERATIONS} attempts — the line is booked almost solid over the horizon`
               : this.beyondHorizon.has(operation.opId)
               ? `Operation ${operation.opId} (seq ${operation.sequence}) needs ${(((operation.setupTime || 0) + (operation.duration || 0)) / 60).toFixed(1)} h of machine time and would finish after the planning horizon ends`
               : `Could not find available slot for operation ${operation.opId} (seq ${operation.sequence})`,
-            suggestedAction: this.searchCapHit.has(operation.opId)
+            suggestedAction: this.crewTooSmall.has(operation.opId)
+              ? 'Raise the crew headcount or lower the operators needed on this line (Manage → Crews)'
+              : this.searchCapHit.has(operation.opId)
               ? 'Extend the horizon, add shift time on this line, or move lower-priority jobs out'
               : this.beyondHorizon.has(operation.opId)
               ? 'Extend the planning horizon (week range) so the operation can finish inside it'
@@ -1320,7 +1337,7 @@ export class SchedulingEngine {
    */
   private explainWait(
     workcentreId: string, resourceId: string, jobId: string, readyAt: Date, start: Date
-  ): { readyAt: Date; waitMinutes: number; waitReason?: 'line' | 'calendar' | 'mixed'; blockedBy?: string[] } {
+  ): { readyAt: Date; waitMinutes: number; waitReason?: 'line' | 'crew' | 'calendar' | 'mixed'; blockedBy?: string[] } {
     const waitMs = start.getTime() - readyAt.getTime();
     const waitMinutes = Math.max(0, Math.round(waitMs / 60000));
     if (waitMinutes < 1) return { readyAt, waitMinutes: 0 };
@@ -1347,7 +1364,14 @@ export class SchedulingEngine {
     }
     if (curB > curA) busyMs += curB - curA;
     const lineShare = busyMs / Math.max(1, waitMs);
-    const waitReason = blockers.size === 0 ? 'calendar' : lineShare >= 0.9 ? 'line' : 'mixed';
+    // Crew: other jobs holding the operators of this line's pool during the wait.
+    const crewBlockers = lineShare >= 0.9 ? [] :
+      (this.crewLoad?.overlapping(workcentreId, readyAt, start) ?? []).filter((b) => b.jobId !== jobId);
+    for (const b of crewBlockers) blockers.add(b.jobId);
+    const waitReason: 'line' | 'crew' | 'calendar' | 'mixed' =
+      lineShare >= 0.9 ? 'line'
+        : crewBlockers.length ? 'crew'
+          : blockers.size === 0 ? 'calendar' : 'mixed';
     return {
       readyAt,
       waitMinutes,
@@ -1517,6 +1541,13 @@ export class SchedulingEngine {
     const queueMinutes = operation.queueTime || 0;
     const moveMinutes = operation.moveTime || 0;
 
+    // A line that needs more operators than its whole crew has can never run.
+    const crewNeed = this.crewLoad?.needFor(operation.workcentreId);
+    if (crewNeed && crewNeed.operators > crewNeed.headcount) {
+      this.crewTooSmall.add(operation.opId);
+      return null;
+    }
+
     // Only setup + run occupy the machine. Queue and move are timing constraints.
     const bookedMinutes = setupMinutes + runMinutes;
     const capacityMs = bookedMinutes * 60 * 1000;
@@ -1558,12 +1589,14 @@ export class SchedulingEngine {
 
       const resourceBlocked = overlappingResource.length >= resourceCapacity;
       const workcentreBlocked = overlappingWorkcentre.length >= workcentreCapacity;
+      // Crew: enough free operators in the line's pool for the whole booking?
+      const crewNext = this.crewLoad?.nextFreeAt(operation.workcentreId, candidateStart, candidateEnd) ?? null;
 
-      if (!resourceBlocked && !workcentreBlocked) {
+      if (!resourceBlocked && !workcentreBlocked && !crewNext) {
         return null;
       }
 
-      let nextEnd: Date | null = null;
+      let nextEnd: Date | null = crewNext;
 
       if (resourceBlocked) {
         for (const slot of overlappingResource) {
@@ -1909,6 +1942,7 @@ export class SchedulingEngine {
   }
 
   private recordOperationInLoads(slot: OperationSlot): void {
+    this.crewLoad?.book(slot.workcentreId, slot.capacityStart, slot.capacityEnd, slot.jobId);
     const resourceSlots = this.resourceLoads.get(slot.resourceId) || [];
     resourceSlots.push(slot);
     resourceSlots.sort((a, b) => a.capacityStart.getTime() - b.capacityStart.getTime());

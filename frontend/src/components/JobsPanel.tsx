@@ -11,6 +11,7 @@ import type { JobColumnDef } from '../hooks/useColumnManager';
 import type { AlternativeGroup, DbStatus, NewAlternativeGroup } from '../hooks/useJobsData';
 import type { JobPaneMode, ManageTab, WorkflowJobFilter } from '../stores/uiStore';
 import type { Lateness, ScheduleShortfall } from '../utils/scheduleDiagnostics';
+import CrewsPanel from './CrewsPanel';
 
 const ResourceDefinitionTab = lazy(() => import('./ResourceDefinitionTab'));
 const ShiftManagementTab = lazy(() => import('./ShiftManagementTab'));
@@ -18,7 +19,7 @@ const ShiftManagementTab = lazy(() => import('./ShiftManagementTab'));
 const JOB_PAGE_SIZE = 120;
 
 const MANAGE_TITLES: Partial<Record<ManageTab, string>> = {
-  workcenters: 'Work centres', machines: 'Machines', shifts: 'Shifts', alternatives: 'Alternatives',
+  workcenters: 'Work centres', machines: 'Machines', shifts: 'Shifts', crews: 'Crews', alternatives: 'Alternatives',
   constraints: 'Constraints', import: 'Bulk import', mapping: 'Field mapping', interval: 'Planning interval',
 };
 
@@ -804,6 +805,8 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
         <Suspense fallback={<div className="tab-loading-spinner" role="status">Loading…</div>}>
           <ShiftManagementTab onShiftsChanged={loadJobsAndResources} />
         </Suspense>
+      ) : manageTab === 'crews' ? (
+        <CrewsPanel workcentreIds={allWorkcentreIds} />
       ) : manageTab === 'mapping' ? (
         <div className="tab-placeholder">
           <h3>Mapping</h3>

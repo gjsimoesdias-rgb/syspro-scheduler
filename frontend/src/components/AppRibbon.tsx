@@ -154,6 +154,7 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
           <button className={`btn btn-sm ${manageTab === 'machines' ? 'active-tab-btn' : ''}`} onClick={() => setManageTab('machines')}>Machines</button>
           <button className={`btn btn-sm ${manageTab === 'alternatives' ? 'active-tab-btn' : ''}`} onClick={() => setManageTab('alternatives')}>Alternatives</button>
           <button className={`btn btn-sm ${manageTab === 'shifts' ? 'active-tab-btn' : ''}`} onClick={() => setManageTab('shifts')}>Shifts</button>
+          <button className={`btn btn-sm ${manageTab === 'crews' ? 'active-tab-btn' : ''}`} onClick={() => setManageTab('crews')}>Crews</button>
         </div>
       )}
 

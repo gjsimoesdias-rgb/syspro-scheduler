@@ -353,3 +353,11 @@
 .calendar-exc-name { flex: 1 1 200px; }
 .calendar-exc-add { align-self: flex-end; }
 .calendar-exc-past { margin-top: 8px; }
+
+/* Manage → Crews (CrewsPanel.tsx) */
+.crews-panel { padding: 12px; }
+.crews-enable { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-weight: 600; }
+.crews-heading { margin: 16px 0 6px; font-size: var(--fs-md, 14px); }
+.crews-input { height: 30px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--bg-surface); color: var(--text-primary); font: inherit; }
+.crews-num { width: 90px; }
+.crews-actions { display: flex; gap: 8px; margin-top: 14px; }

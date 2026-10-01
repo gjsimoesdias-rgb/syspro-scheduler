@@ -71,14 +71,17 @@ export function lateReasons(
     if (firstReady && firstReady.getTime() >= due.getTime()) {
       lines.push(`The due date had already passed when the job could start (ready ${fmtDate(firstReady)}).`);
     }
-    let lineMin = 0; let calMin = 0; const behind = new Set<string>();
+    let lineMin = 0; let calMin = 0; let crewMin = 0; const behind = new Set<string>();
     for (const o of ops) {
       const w = Number(o.waitMinutes) || 0;
       if (w <= 0) continue;
-      if (o.waitReason === 'calendar') calMin += w; else lineMin += w;
+      if (o.waitReason === 'calendar') calMin += w;
+      else if (o.waitReason === 'crew') crewMin += w;
+      else lineMin += w;
       for (const b of o.blockedBy || []) behind.add(String(b).replace(/^0+/, ''));
     }
     if (lineMin > 0) lines.push(`Waited ${fmtSpan(lineMin)} for busy lines${behind.size ? ` (behind ${[...behind].slice(0, 6).join(', ')})` : ''}.`);
+    if (crewMin > 0) lines.push(`Waited ${fmtSpan(crewMin)} for free operators in its crew.`);
     if (calMin > 0) lines.push(`Waited ${fmtSpan(calMin)} for shift time.`);
     if (lines.length === 1 && !ops.some((o) => 'readyAt' in o)) lines.push('Regenerate to see what delayed it.');
     out.set(js.jobId, lines.join('\n'));

@@ -392,6 +392,8 @@ router.post('/generate', requirePlanner, async (req: Request, res: Response) => 
       lineGroupOverrides: lineGroupOverrides,
       // Company rule toggles (Settings → FCS → Scheduling Rules)
       ruleToggles,
+      // Crew pools (Manage → Crews); the worker builds the engine lookup.
+      crewSetup: req.app.locals.crewSetup,
       // Pinned operations — serialised as [key, PinnedOperation][] for the worker.
       // Frozen-zone auto-pins are merged first; manual pins override them.
       pinnedOperations: (() => {
@@ -623,6 +625,8 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
       productionMode: productionMode || 'job-shop',
       lineGroupOverrides,
       ruleToggles,
+      // Crew pools (Manage → Crews); the worker builds the engine lookup.
+      crewSetup: req.app.locals.crewSetup,
     };
 
     const runWorker = (schedulingRule: SchedulingRule) =>

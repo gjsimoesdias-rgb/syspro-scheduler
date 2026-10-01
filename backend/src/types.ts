@@ -183,8 +183,8 @@ export interface OperationSchedule {
   readyAt?: Date;
   /** Minutes between readyAt and the actual start. */
   waitMinutes?: number;
-  /** Why it waited: the line/machine was busy, no shift time, or both. */
-  waitReason?: 'line' | 'calendar' | 'mixed';
+  /** Why it waited: the line/machine was busy, no free operators in its crew, no shift time, or a mix. */
+  waitReason?: 'line' | 'crew' | 'calendar' | 'mixed';
   /** Other jobs holding the line or machine during the wait (up to 5). */
   blockedBy?: string[];
 }

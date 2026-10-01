@@ -56,7 +56,7 @@ export interface GanttOperationBarProps {
   /** The job's due date — shown in the tooltip; bars ending after it get a red marker */
   dueDate?: Date;
   /** Why the op starts later than it was ready (from the engine). */
-  wait?: { readyAt: Date; minutes: number; reason?: 'line' | 'calendar' | 'mixed'; blockedBy?: string[] };
+  wait?: { readyAt: Date; minutes: number; reason?: 'line' | 'crew' | 'calendar' | 'mixed'; blockedBy?: string[] };
 
   /** Operation-level status from SYSPRO WipJobAllLab — drives the status strip colour */
   opStatus?: 'NotStarted' | 'InProgress' | 'Complete';
@@ -209,7 +209,7 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
             <span>Waited</span>
             <strong>
               {fmtSpan(wait.minutes)}
-              {wait.reason === 'line' ? ' — line busy' : wait.reason === 'calendar' ? ' — no shift time' : wait.reason === 'mixed' ? ' — line busy + no shift time' : ''}
+              {wait.reason === 'line' ? ' — line busy' : wait.reason === 'crew' ? ' — no free operators in crew' : wait.reason === 'calendar' ? ' — no shift time' : wait.reason === 'mixed' ? ' — line busy + no shift time' : ''}
             </strong>
           </div>
           {wait.blockedBy && wait.blockedBy.length > 0 && (
