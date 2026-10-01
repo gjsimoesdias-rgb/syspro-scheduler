@@ -235,6 +235,7 @@ describe('AppStateStore.hydrateAppLocals', () => {
         'crewSetup',
         'autoSchedule',
         'lastGenerateOptions',
+        'jobMarkers',
       ])
     );
 

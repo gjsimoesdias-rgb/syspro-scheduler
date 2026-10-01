@@ -35,7 +35,7 @@ export type JobPaneMode = 'production' | 'master' | 'mrp';
 export type ScheduleAroundMode = 'left' | 'right' | 'both' | 'master';
 
 /** Manage-panel sub-tabs */
-export type ManageTab = 'none' | 'workcenters' | 'machines' | 'shifts' | 'crews' | 'alternatives' | 'constraints' | 'import' | 'mapping' | 'interval';
+export type ManageTab = 'none' | 'workcenters' | 'machines' | 'shifts' | 'crews' | 'markers' | 'alternatives' | 'constraints' | 'import' | 'mapping' | 'interval';
 
 /** Scheduling engine sequencing rule */
 export type SchedulingRule = 'priority' | 'edd' | 'fifo' | 'spt' | 'critical-ratio';

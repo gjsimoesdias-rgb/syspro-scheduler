@@ -6,6 +6,7 @@ import React from 'react';
 import { Lock, Unlock } from 'lucide-react';
 import type { Job, Operation } from '../types';
 import type { JobColumnDef } from '../hooks/useColumnManager';
+import { useMarkerStore } from '../stores/markerStore';
 import type { JobScheduleStatus, Lateness, ScheduleShortfall } from '../utils/scheduleDiagnostics';
 
 export interface JobGridRenderContext {
@@ -48,6 +49,8 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
     toggleOperationColumn,
     visibleOperationColumns,
   } = ctx;
+  const markerDefs = useMarkerStore((s) => s.definitions);
+  const markerAssignments = useMarkerStore((s) => s.assignments);
 
   const renderJobCellContent = (job: Job, column: JobColumnDef): React.ReactNode => {
     if (column.key === 'validForScheduling') {
@@ -77,6 +80,14 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
       if (state === 'at-risk') return <span className="grid-flag grid-flag-warn" title="Finishes less than 8 h before the due date">At risk</span>;
       if (!state && pastDue) return <span className="grid-flag grid-flag-bad" title="Due date has passed and the job is not scheduled">Past due</span>;
       return state ? <span className="grid-flag grid-flag-ok">On time</span> : <span className="grid-flag">—</span>;
+    }
+
+    if (column.key === 'marker') {
+      const id = markerAssignments[job.jobId];
+      const def = id ? markerDefs.find((d) => d.id === id) : undefined;
+      return def
+        ? <span className="marker-chip" style={{ ['--mk' as any]: def.color }} title={`Marker: ${def.name} (right-click the job to change)`}>{def.name}</span>
+        : <span className="grid-flag">—</span>;
     }
 
     if (column.key === 'lockedOps') {

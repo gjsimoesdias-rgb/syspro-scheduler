@@ -12,6 +12,8 @@ import type { AlternativeGroup, DbStatus, NewAlternativeGroup } from '../hooks/u
 import type { JobPaneMode, ManageTab, WorkflowJobFilter } from '../stores/uiStore';
 import type { Lateness, ScheduleShortfall } from '../utils/scheduleDiagnostics';
 import CrewsPanel from './CrewsPanel';
+import MarkersPanel from './MarkersPanel';
+import { useMarkerStore } from '../stores/markerStore';
 import { AlertTriangle } from 'lucide-react';
 
 const ResourceDefinitionTab = lazy(() => import('./ResourceDefinitionTab'));
@@ -20,7 +22,7 @@ const ShiftManagementTab = lazy(() => import('./ShiftManagementTab'));
 const JOB_PAGE_SIZE = 120;
 
 const MANAGE_TITLES: Partial<Record<ManageTab, string>> = {
-  workcenters: 'Work centres', machines: 'Machines', shifts: 'Shifts', crews: 'Crews', alternatives: 'Alternatives',
+  workcenters: 'Work centres', machines: 'Machines', shifts: 'Shifts', crews: 'Crews', markers: 'Markers', alternatives: 'Alternatives',
   constraints: 'Constraints', import: 'Bulk import', mapping: 'Field mapping', interval: 'Planning interval',
 };
 
@@ -194,6 +196,9 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
   workcentreRows,
   workflowJobFilter,
 }) => {
+  const markerDefs = useMarkerStore((s) => s.definitions);
+  const markerFilter = useMarkerStore((s) => s.filter);
+  const setMarkerFilter = useMarkerStore((s) => s.setFilter);
   /**
    * Keyboard access for grid rows: Enter/Space = select (as a click),
    * Up/Down = previous/next row, Right/Left = expand/collapse operations,
@@ -280,8 +285,15 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                 <option value="partial">Partially Scheduled</option>
                 <option value="not-scheduled">Not Scheduled</option>
               </select>
-              {(jobSearch || jobStatusFilter !== 'all' || jobWcFilter !== 'all' || scheduleFilter !== 'all' || workflowJobFilter !== 'all') && (
-                <button className="job-filter-clear" onClick={() => { setJobSearch(''); setDebouncedJobSearch(''); setJobStatusFilter('all'); setJobWcFilter('all'); setScheduleFilter('all'); setWorkflowJobFilter('all'); }}>✕</button>
+              {markerDefs.length > 0 && (
+                <select className="job-filter-select" value={markerFilter} onChange={(e) => setMarkerFilter(e.target.value)} aria-label="Filter by marker">
+                  <option value="">All markers</option>
+                  {markerDefs.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  <option value="__none">No marker</option>
+                </select>
+              )}
+              {(jobSearch || jobStatusFilter !== 'all' || jobWcFilter !== 'all' || scheduleFilter !== 'all' || workflowJobFilter !== 'all' || markerFilter) && (
+                <button className="job-filter-clear" onClick={() => { setJobSearch(''); setDebouncedJobSearch(''); setJobStatusFilter('all'); setJobWcFilter('all'); setScheduleFilter('all'); setWorkflowJobFilter('all'); setMarkerFilter(''); }}>✕</button>
               )}
               <button className="job-filter-select" onClick={() => setShowColumnPicker((s) => !s)}>
                 Columns ({visibleJobColumns.length}/{allJobColumns.length})
@@ -877,6 +889,8 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
         </Suspense>
       ) : manageTab === 'crews' ? (
         <CrewsPanel workcentreIds={allWorkcentreIds} />
+      ) : manageTab === 'markers' ? (
+        <MarkersPanel />
       ) : manageTab === 'mapping' ? (
         <div className="tab-placeholder">
           <h3>Mapping</h3>

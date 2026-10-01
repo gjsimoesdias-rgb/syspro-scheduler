@@ -10,6 +10,7 @@ import { setLocal } from '../../utils/setLocal';
 import { validateBody } from '../middleware/validateBody';
 import { bulkImportJobsSchema, bulkImportOperationsSchema } from '../validators/jobValidators';
 import { requirePlanner } from '../middleware/requireAuth';
+import { normaliseMarkers, EMPTY_MARKERS } from '../../utils/jobMarkers';
 
 const router = Router();
 
@@ -186,6 +187,23 @@ router.get('/', async (req: Request, res: Response) => {
  * POST /api/jobs/bulk-import
  * Import jobs from CSV payload
  */
+/**
+ * GET /api/jobs/markers — marker definitions + job assignments.
+ * PUT /api/jobs/markers — replace them (planner). See utils/jobMarkers.ts.
+ */
+router.get('/markers', (req: Request, res: Response) => {
+  res.json(req.app.locals.jobMarkers || EMPTY_MARKERS);
+});
+router.put('/markers', requirePlanner, (req: Request, res: Response) => {
+  try {
+    const markers = normaliseMarkers(req.body);
+    setLocal(req.app.locals, 'jobMarkers', markers);
+    res.json(markers);
+  } catch (err: any) {
+    res.status(400).json({ error: err?.message || 'Invalid markers' });
+  }
+});
+
 /**
  * GET /api/jobs/suggested — SYSPRO MRP suggested jobs (MRP- ids) for the MRP
  * Jobs grid, whether or not the company plans them (`included`).

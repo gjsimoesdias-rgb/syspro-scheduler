@@ -255,6 +255,13 @@ export const versionService = {
     (await apiClient.post('/versions/purge', { olderThanDays, keepAtLeast })).data.deleted,
 };
 
+export interface MarkerDef { id: string; name: string; color: string }
+export interface JobMarkers { definitions: MarkerDef[]; assignments: Record<string, string> }
+export const markerService = {
+  get: async (): Promise<JobMarkers> => (await apiClient.get('/jobs/markers')).data,
+  save: async (m: JobMarkers): Promise<JobMarkers> => (await apiClient.put('/jobs/markers', m)).data,
+};
+
 export const jobService = {
   /** SYSPRO MRP suggested jobs (MRP- ids) and whether the company plans them. */
   getSuggested: async (): Promise<{ included: boolean; jobs: Job[]; warning?: string }> => {

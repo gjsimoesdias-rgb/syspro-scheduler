@@ -10,6 +10,7 @@ import React from 'react';
 import { format } from 'date-fns';
 import { Lock, Unlock } from 'lucide-react';
 import type { GanttSettingsState } from './GanttSettings';
+import { useMarkerStore } from '../stores/markerStore';
 
 export interface GanttOperationBarProps {
   // Keys / identifiers
@@ -161,6 +162,10 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
 }) => {
   // Display the SYSPRO job number without its leading zeros (e.g. 000000000038443 → 38443).
   const jobLabel = jobId.replace(/^(MRP-)?0+(?=\d)/, '$1') || jobId;
+  const marker = useMarkerStore((s) => {
+    const id = s.assignments[jobId];
+    return id ? s.definitions.find((d) => d.id === id) : undefined;
+  });
 
   // Flat fills (LYNQ style): solid run phase; setup is a lighter tint with a
   // faint stripe so the two phases stay distinguishable.
@@ -191,6 +196,9 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
         {itemCode && <> | {itemCode}</>}
         {itemDesc && <> - {itemDesc}</>}
       </div>
+      {marker && (
+        <div className="gtt-marker"><span className="marker-chip" style={{ ['--mk' as any]: marker.color }}>{marker.name}</span></div>
+      )}
       <div className="gtt-sub">
         {resourceId && resourceId !== workcentreId ? `${workcentreId} · ${resourceId}` : workcentreId} · Op {sequence || '?'}
         {depRole && (
@@ -304,6 +312,10 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
                 {itemCode && <small> · {itemCode}</small>}
                 {prefs.showOperationSeq && <small> · Op{sequence || ''}</small>}
               </span>
+            )}
+
+            {segmentIndex === 0 && marker && (
+              <span className="op-marker-flag" style={{ ['--mk' as any]: marker.color }} title={`Marker: ${marker.name}`} aria-label={`Marker ${marker.name}`} />
             )}
 
             {segmentIndex === 0 && depRole && (

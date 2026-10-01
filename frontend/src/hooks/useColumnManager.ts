@@ -18,6 +18,7 @@ export interface JobColumnDef {
 
 export const DEFAULT_JOB_COLUMNS: JobColumnDef[] = [
   { key: 'jobId', label: 'Job' },
+  { key: 'marker', label: 'Marker' },
   { key: 'itemCode', label: 'Item' },
   { key: 'description', label: 'Description' },
   { key: 'quantity', label: 'Qty' },

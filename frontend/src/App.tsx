@@ -20,6 +20,7 @@ import ContentTabPanel from './components/ContentTabPanel';
 // Lazy tab panels still used directly in App.tsx (manage tab)
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
+import { useMarkerStore, passesMarkerFilter } from './stores/markerStore';
 import { useUiStore, type MainTab, type WorkflowJobFilter, type JobPaneMode, type ScheduleAroundMode } from './stores/uiStore';
 import { useScheduleStore } from './stores/scheduleStore';
 import exportService from './services/exportService';
@@ -304,6 +305,14 @@ const App: React.FC = () => {
   // SYSPRO column: reload after jobs reload (e.g. after Send to SYSPRO) or a new plan.
   useEffect(() => { if (dbStatus.sysproConnected) refreshPublishState(); }, [openJobs, schedule?.scheduleId, dbStatus.sysproConnected, refreshPublishState]);
 
+  // Job markers (LYNQ-style coloured tags) — grid column, Gantt flag, filter.
+  const markerDefs = useMarkerStore((s) => s.definitions);
+  const markerAssignments = useMarkerStore((s) => s.assignments);
+  const markerFilter = useMarkerStore((s) => s.filter);
+  const loadMarkers = useMarkerStore((s) => s.load);
+  const assignMarker = useMarkerStore((s) => s.assign);
+  useEffect(() => { if (user?.id !== undefined) void loadMarkers(); }, [user?.id, loadMarkers]);
+
   // ─── Cell renderers for the jobs grid (use formatters from useColumnManager) ──
 
   /** Export the jobs grid as shown (filtered rows, visible columns) for Excel. */
@@ -315,6 +324,7 @@ const App: React.FC = () => {
         case 'lateness': return jobLatenessMap.get(job.jobId) ?? '';
         case 'lockedOps': return (job.operations || []).filter((o) => pinnedOps.has(`${job.jobId}::${o.opId}`)).length;
         case 'publishState': return publishByJob.get(String(job.jobId).trim()) ?? '';
+        case 'marker': return markerDefs.find((d) => d.id === markerAssignments[job.jobId])?.name ?? '';
         case 'validForScheduling': return job.operations?.length ? 'Yes' : 'No operations';
         default: {
           // Numbers go out raw (not "1,960") so Excel can sum them.
@@ -959,6 +969,10 @@ const App: React.FC = () => {
       });
     }
 
+    if (markerFilter) {
+      list = list.filter((j) => passesMarkerFilter(markerFilter, markerAssignments, j.jobId));
+    }
+
     if (advancedFilter || advancedSort.length) {
       const advCtx = {
         scheduleStatus: (job: Job) => { const st = getJobScheduleStatus(job); return st === 'scheduled' ? 'Scheduled' : st === 'partial' ? 'Partial' : 'Not Scheduled'; },
@@ -969,7 +983,7 @@ const App: React.FC = () => {
     }
 
     return list;
-  }, [visibleJobSource, jobPaneMode, suggestedInPlan, mrpPreview, selectedWorkcentre, debouncedJobSearch, jobStatusFilter, jobWcFilter, scheduleFilter, workflowJobFilter, getJobScheduleStatus, advancedFilter, advancedSort, getJobMaterialStatus]);
+  }, [visibleJobSource, jobPaneMode, suggestedInPlan, mrpPreview, selectedWorkcentre, debouncedJobSearch, jobStatusFilter, jobWcFilter, scheduleFilter, workflowJobFilter, getJobScheduleStatus, advancedFilter, advancedSort, getJobMaterialStatus, markerFilter, markerAssignments]);
 
   const masterJobGroups = useMemo(() => {
     const jobsById = new Map(visibleJobSource.map((job) => [job.jobId, job] as const));
@@ -1672,6 +1686,35 @@ const App: React.FC = () => {
           <div className="ctx-sep" />
 
           <button className="ctx-item" onClick={() => executeJobContextCommand('edit-job')}>Edit Job</button>
+          <div className="ctx-sep" />
+          <div className="ctx-marker-row" role="group" aria-label="Marker">
+            <span className="ctx-marker-label">Marker</span>
+            {markerDefs.map((d) => (
+              <button
+                key={d.id}
+                className={`ctx-marker-swatch${markerAssignments[jobContextMenu.jobId || ''] === d.id ? ' is-on' : ''}`}
+                style={{ ['--mk' as any]: d.color }}
+                title={d.name}
+                aria-label={`Marker ${d.name}`}
+                onClick={() => {
+                  const id = jobContextMenu.jobId;
+                  setJobContextMenu((p) => ({ ...p, visible: false }));
+                  if (id) assignMarker([id], markerAssignments[id] === d.id ? null : d.id).catch(() => toast.error('Could not set the marker'));
+                }}
+              />
+            ))}
+            {markerAssignments[jobContextMenu.jobId || ''] && (
+              <button className="ctx-marker-clear" title="Clear marker" onClick={() => {
+                const id = jobContextMenu.jobId;
+                setJobContextMenu((p) => ({ ...p, visible: false }));
+                if (id) assignMarker([id], null).catch(() => toast.error('Could not clear the marker'));
+              }}>Clear</button>
+            )}
+            <button className="ctx-marker-clear" title="Add or edit markers" onClick={() => {
+              setJobContextMenu((p) => ({ ...p, visible: false }));
+              setMainTab('manage'); setManageTab('markers');
+            }}>{markerDefs.length ? 'Edit…' : 'Create markers…'}</button>
+          </div>
           <div className="ctx-sep" />
           <button className="ctx-item" onClick={() => executeJobContextCommand('load-required-machines')}>Load Required Machines</button>
           <button className="ctx-item" onClick={() => executeJobContextCommand('unload-all-machines')}>Unload All Machines</button>
