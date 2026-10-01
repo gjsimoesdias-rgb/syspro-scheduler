@@ -142,9 +142,12 @@ export function useColumnManager({ openJobs, userId }: Params): ColumnManagerRes
     return visibleJobColumns.map((key) => colMap.get(key)).filter((c): c is JobColumnDef => !!c);
   }, [allJobColumns, visibleJobColumns]);
 
-  // Sync visible columns when the column list changes
+  // Sync visible columns when the column list changes. Wait for the jobs:
+  // columns that come from SYSPRO fields (e.g. Version) only exist once the
+  // data is loaded, and filtering before that silently dropped them from a
+  // saved column profile whenever the profile loaded first.
   useEffect(() => {
-    if (allJobColumns.length === 0) return;
+    if (allJobColumns.length === 0 || openJobs.length === 0) return;
     const availableKeys = new Set(allJobColumns.map((c) => c.key));
     setVisibleJobColumns((prev) => {
       const preferredKeys = (columnsInitialized ? prev : DEFAULT_JOB_COLUMNS.map((c) => c.key)).filter(
@@ -155,10 +158,10 @@ export function useColumnManager({ openJobs, userId }: Params): ColumnManagerRes
         : allJobColumns.slice(0, DEFAULT_JOB_COLUMNS.length).map((c) => c.key);
     });
     if (!columnsInitialized) setColumnsInitialized(true);
-  }, [allJobColumns, columnsInitialized]);
+  }, [allJobColumns, columnsInitialized, openJobs.length]);
 
   useEffect(() => {
-    if (allOperationColumns.length === 0) return;
+    if (allOperationColumns.length === 0 || openJobs.length === 0) return;
     const availableKeys = new Set(allOperationColumns.map((c) => c.key));
     setVisibleOperationColumns((prev) => {
       const preferredKeys = (
@@ -169,7 +172,7 @@ export function useColumnManager({ openJobs, userId }: Params): ColumnManagerRes
         : allOperationColumns.slice(0, DEFAULT_OPERATION_COLUMNS.length).map((c) => c.key);
     });
     if (!operationColumnsInitialized) setOperationColumnsInitialized(true);
-  }, [allOperationColumns, operationColumnsInitialized]);
+  }, [allOperationColumns, operationColumnsInitialized, openJobs.length]);
 
   // Close column pickers when the job pane mode changes
   useEffect(() => {

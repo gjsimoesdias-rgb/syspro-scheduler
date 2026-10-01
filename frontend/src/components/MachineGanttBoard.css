@@ -1,3 +1,25 @@
+/* Gantt calendar background (MachineGanttBoard getCalendarDayBackground).
+   Light values are the original ones; dark mode gets muted equivalents so
+   weekends and shift time don't glare behind the bars. */
+:root {
+  --gantt-cal-off: rgba(226, 232, 240, 0.72);
+  --gantt-cal-shift-off: rgba(220, 230, 245, 0.25);
+  --gantt-cal-productive: rgba(134, 239, 172, 0.55);
+  --gantt-cal-overtime: rgba(147, 197, 253, 0.55);
+  --gantt-cal-break: rgba(253, 230, 138, 0.7);
+  --gantt-cal-nonprod: rgba(180, 180, 180, 0.55);
+  --gantt-cal-weekend: #fff3cd;
+}
+:root.dark-mode {
+  --gantt-cal-off: rgba(255, 255, 255, 0.035);
+  --gantt-cal-shift-off: rgba(255, 255, 255, 0.015);
+  --gantt-cal-productive: rgba(46, 194, 126, 0.11);
+  --gantt-cal-overtime: rgba(79, 139, 255, 0.16);
+  --gantt-cal-break: rgba(245, 165, 36, 0.14);
+  --gantt-cal-nonprod: rgba(255, 255, 255, 0.05);
+  --gantt-cal-weekend: rgba(245, 165, 36, 0.07);
+}
+
 .machine-gantt {
   display: flex;
   flex-direction: column;

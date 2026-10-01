@@ -888,8 +888,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
   };
 
   const getCalendarDayBackground = useCallback((calendar: Resource['calendar'] | undefined, day: Date): string => {
-    const offColor = 'rgba(226,232,240,0.72)';
-    const shiftOffColor = 'rgba(220,230,245,0.25)';
+    const offColor = 'var(--gantt-cal-off)';
+    const shiftOffColor = 'var(--gantt-cal-shift-off)';
     const workingDays = calendar?.workingDays || [1, 2, 3, 4, 5];
     if (!workingDays.includes(day.getDay())) {
       return offColor;
@@ -898,11 +898,11 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     const shift = (calendar?.shifts?.[0] || {}) as any;
     const getTypeColor = (type?: string, schedulable?: boolean) => {
       const key = String(type || '').toLowerCase();
-      if (key.includes('overtime')) return 'rgba(147,197,253,0.55)';
-      if (key.includes('lunch')) return 'rgba(253,230,138,0.7)';
-      if (key.includes('break')) return 'rgba(252,211,77,0.7)';
-      if (key.includes('non')) return 'rgba(180,180,180,0.55)';
-      return schedulable === false ? 'rgba(180,180,180,0.55)' : 'rgba(134,239,172,0.55)';
+      if (key.includes('overtime')) return 'var(--gantt-cal-overtime)';
+      if (key.includes('lunch')) return 'var(--gantt-cal-break)';
+      if (key.includes('break')) return 'var(--gantt-cal-break)';
+      if (key.includes('non')) return 'var(--gantt-cal-nonprod)';
+      return schedulable === false ? 'var(--gantt-cal-nonprod)' : 'var(--gantt-cal-productive)';
     };
 
     const pushRange = (stops: string[], color: string, start: number, end: number) => {
@@ -917,7 +917,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     if (!diversions.length) {
       const startPct = (timeToMinutes(shift.startTime || '08:00') / 1440) * 100;
       const endPct = (timeToMinutes(shift.endTime || '16:00') / 1440) * 100;
-      return `linear-gradient(90deg, ${shiftOffColor} 0%, ${shiftOffColor} ${startPct}%, rgba(134,239,172,0.55) ${startPct}%, rgba(134,239,172,0.55) ${endPct}%, ${shiftOffColor} ${endPct}%, ${shiftOffColor} 100%)`;
+      return `linear-gradient(90deg, ${shiftOffColor} 0%, ${shiftOffColor} ${startPct}%, var(--gantt-cal-productive) ${startPct}%, var(--gantt-cal-productive) ${endPct}%, ${shiftOffColor} ${endPct}%, ${shiftOffColor} 100%)`;
     }
 
     const stops: string[] = [];
@@ -1409,7 +1409,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                           style={{
                             width: pxPerDay,
                             background: prefs.highlightWeekends && isWeekend
-                              ? '#fff3cd'
+                              ? 'var(--gantt-cal-weekend)'
                               : getCalendarDayBackground(workcentreCalendars[wc], day)
                           }}
                         />
