@@ -8,6 +8,7 @@ import { validate, ctpRequestSchema } from '../validators/scheduleValidators';
 import { computeCtp } from '../../services/CtpService';
 import { buildBomTree } from '../../services/BomTreeService';
 import { applyAssignedShiftCalendars } from './scheduleShared';
+import { planDbFor } from '../../services/planStore';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ router.post('/ctp', async (req: Request, res: Response) => {
     // Committed load = busy intervals from the latest saved schedule.
     const busyByResource = new Map<string, { start: number; end: number }[]>();
     try {
-      const latest = await sysproDb.query(
+      const latest = await (await planDbFor(req.app)).query(
         `IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData; ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`
       );
       if (latest.recordset?.length) {

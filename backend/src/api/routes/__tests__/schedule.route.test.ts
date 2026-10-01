@@ -17,6 +17,16 @@
  *   - POST /save: 400 missing schedule.scheduleId, 200 happy path
  */
 
+// Plan tables now live in the SCHEDULER DB (services/planStore.ts). In these
+// tests the plan store is the same fake DB the route sees as sysproDb.
+jest.mock('../../../services/planStore', () => ({
+  planDbFor: jest.fn(async (appArg: any) => {
+    const db = appArg.locals.sysproDb;
+    if (!db) throw Object.assign(new Error('Database not connected'), { status: 503 });
+    return db;
+  }),
+}));
+
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../../app';

@@ -6,7 +6,8 @@
  * "UPDATE IsLatest = 0" and the INSERT as separate statements: a failure in
  * between left NO latest schedule, so the Gantt came up empty after a reload.
  */
-import type { DatabaseConnection, DbExecutor } from '../database/connection';
+import type { DbExecutor } from '../database/connection';
+import type { PlanExecutor } from './planStore';
 
 export interface SaveLatestOptions {
   status?: string;
@@ -54,7 +55,7 @@ const toDateOrNull = (v: unknown): Date | null => {
 
 /** Insert/replace `schedule` and make it the single latest row, atomically. */
 export async function saveAsLatest(
-  db: DatabaseConnection,
+  db: PlanExecutor,
   schedule: any,
   opts: SaveLatestOptions = {}
 ): Promise<{ scheduleId: string; jobCount: number; operationCount: number }> {
@@ -97,7 +98,7 @@ export async function saveAsLatest(
 }
 
 /** Make an existing saved schedule the latest one, atomically. Returns false if it doesn't exist. */
-export async function promoteToLatest(db: DatabaseConnection, scheduleId: string): Promise<boolean> {
+export async function promoteToLatest(db: PlanExecutor, scheduleId: string): Promise<boolean> {
   return db.withTransaction(async (tx: DbExecutor) => {
     const exists = await tx.queryWithParams(
       `SELECT 1 AS ok FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
@@ -267,7 +268,7 @@ export async function saveIntoWhatIf(db: DbExecutor, versionId: string, schedule
 }
 
 /** Make a what-if the master. The old master becomes history. Needs re-approval before export. */
-export async function commitWhatIf(db: DatabaseConnection, versionId: string): Promise<void> {
+export async function commitWhatIf(db: PlanExecutor, versionId: string): Promise<void> {
   await db.withTransaction(async (tx: DbExecutor) => {
     const r = await tx.queryWithParams(
       `SELECT VersionKind FROM aps.SavedSchedules WITH (UPDLOCK) WHERE ScheduleID = @versionId`, { versionId });
@@ -282,7 +283,7 @@ export async function commitWhatIf(db: DatabaseConnection, versionId: string): P
 }
 
 /** Make an earlier master the master again. Needs re-approval before export. */
-export async function revertToVersion(db: DatabaseConnection, versionId: string): Promise<void> {
+export async function revertToVersion(db: PlanExecutor, versionId: string): Promise<void> {
   await db.withTransaction(async (tx: DbExecutor) => {
     const r = await tx.queryWithParams(
       `SELECT VersionKind, IsLatest FROM aps.SavedSchedules WITH (UPDLOCK) WHERE ScheduleID = @versionId`, { versionId });

@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { logger } from '../utils/logger';
 import { setLocal } from '../utils/setLocal';
 import { getVersion, createWhatIf } from './ScheduleStore';
+import { planDbFor } from './planStore';
 import SysproDatabaseService from './SysproDatabaseService';
 import { AuditLogService } from './AuditLogService';
 
@@ -149,8 +150,9 @@ export class AutoScheduler {
     const started = Date.now();
     try {
       if (!db) throw new Error('SYSPRO database not connected');
-      if (!(await getVersion(db, AUTO_PLAN_VERSION_ID))) {
-        await createWhatIf(db, { name: AUTO_PLAN_NAME, createdBy: 'auto-schedule', newId: AUTO_PLAN_VERSION_ID });
+      const plan = await planDbFor(this.app);
+      if (!(await getVersion(plan, AUTO_PLAN_VERSION_ID))) {
+        await createWhatIf(plan, { name: AUTO_PLAN_NAME, createdBy: 'auto-schedule', newId: AUTO_PLAN_VERSION_ID });
       }
       const opts = { ...(this.app.locals.lastGenerateOptions || {}) };
       const horizonDays = Number(opts.horizonDays) > 0 ? Number(opts.horizonDays) : 14;

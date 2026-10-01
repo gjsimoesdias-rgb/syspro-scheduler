@@ -23,13 +23,18 @@ import {
   renameVersion, deleteVersion, purgeHistory, VersionError,
 } from '../../services/ScheduleStore';
 import { AuditLogService } from '../../services/AuditLogService';
+import { planDbFor } from '../../services/planStore';
 
 const router = Router();
 
-const dbOf = (req: AuthRequest, res: Response) => {
-  const db = req.app.locals.sysproDb;
-  if (!db) res.status(503).json({ error: 'Database not connected' });
-  return db;
+/** Plan versions live in the SCHEDULER DB, per SYSPRO company (services/planStore.ts). */
+const dbOf = async (req: AuthRequest, res: Response) => {
+  try {
+    return await planDbFor(req.app);
+  } catch (err: any) {
+    res.status(err?.status || 503).json({ error: err?.message || 'Database not connected' });
+    return null;
+  }
 };
 
 const fail = (req: AuthRequest, res: Response, err: unknown) => {
@@ -54,7 +59,7 @@ const audit = (req: AuthRequest, action: string, details: Record<string, unknown
 };
 
 router.get('/', async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   try {
     const limit = Number(req.query.historyLimit) || 30;
     res.json(await listVersions(db, limit));
@@ -62,7 +67,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/purge', requireCompanyAdmin, async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   const olderThanDays = Number(req.body?.olderThanDays);
   const keepAtLeast = Number(req.body?.keepAtLeast ?? 20);
   if (!Number.isFinite(olderThanDays) || olderThanDays < 1) {
@@ -76,7 +81,7 @@ router.post('/purge', requireCompanyAdmin, async (req: AuthRequest, res: Respons
 });
 
 router.post('/whatif', requirePlanner, async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   const name = String(req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'A name is required' });
   try {
@@ -90,7 +95,7 @@ router.post('/whatif', requirePlanner, async (req: AuthRequest, res: Response) =
 });
 
 router.get('/:id', async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   try {
     const found = await getVersion(db, req.params.id);
     if (!found) return res.status(404).json({ error: 'Version not found' });
@@ -99,7 +104,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 router.put('/:id/schedule', requirePlanner, async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   const schedule = req.body?.schedule;
   if (!schedule || !Array.isArray(schedule.jobSchedules)) {
     return res.status(400).json({ error: 'Body must be { schedule } with jobSchedules' });
@@ -112,7 +117,7 @@ router.put('/:id/schedule', requirePlanner, async (req: AuthRequest, res: Respon
 });
 
 router.post('/:id/commit', requirePlanner, async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   try {
     await commitWhatIf(db, req.params.id);
     audit(req, 'commit', { versionId: req.params.id });
@@ -121,7 +126,7 @@ router.post('/:id/commit', requirePlanner, async (req: AuthRequest, res: Respons
 });
 
 router.post('/:id/revert', requirePlanner, async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   try {
     await revertToVersion(db, req.params.id);
     audit(req, 'revert', { versionId: req.params.id });
@@ -130,7 +135,7 @@ router.post('/:id/revert', requirePlanner, async (req: AuthRequest, res: Respons
 });
 
 router.patch('/:id', requirePlanner, async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   const name = String(req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'A name is required' });
   try {
@@ -140,7 +145,7 @@ router.patch('/:id', requirePlanner, async (req: AuthRequest, res: Response) => 
 });
 
 router.delete('/:id', requirePlanner, async (req: AuthRequest, res: Response) => {
-  const db = dbOf(req, res); if (!db) return;
+  const db = await dbOf(req, res); if (!db) return;
   try {
     await deleteVersion(db, req.params.id);
     audit(req, 'delete', { versionId: req.params.id });

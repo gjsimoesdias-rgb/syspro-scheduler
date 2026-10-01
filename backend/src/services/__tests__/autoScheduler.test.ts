@@ -1,3 +1,4 @@
+jest.mock('../planStore', () => ({ planDbFor: jest.fn(async () => ({ schema: 'co_test' })) }));
 jest.mock('../ScheduleStore', () => ({
   getVersion: jest.fn(async () => null),
   createWhatIf: jest.fn(async () => ({ versionId: 'whatif-auto-plan' })),

@@ -27,6 +27,7 @@ import { saveAsLatest, promoteToLatest, saveIntoWhatIf } from '../../services/Sc
 import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordError, resetPublish, jobIdFromExportError } from '../../services/publishStatus';
 import { mapEmployeeRow } from '../../utils/crews';
 import { AUTO_PLAN_VERSION_ID } from '../../services/autoScheduler';
+import { planDbFor } from '../../services/planStore';
 
 /**
  * Operation overlap from Settings → Transfer/Overlap: "Use transfer" on and
@@ -362,7 +363,7 @@ export async function generateHandler(req: Request, res: Response) {
     const freezeDays = typeof freezeHorizonDays === 'number' && freezeHorizonDays > 0 ? freezeHorizonDays : 0;
     if (freezeDays > 0) {
       try {
-        const latest = await sysproDb.query(
+        const latest = await (await planDbFor(req.app)).query(
           `IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData; ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`
         );
         if (latest.recordset?.length) {
@@ -492,7 +493,7 @@ export async function generateHandler(req: Request, res: Response) {
     const targetVersionId = typeof req.body?.versionId === 'string' ? req.body.versionId : undefined;
     if (targetVersionId) {
       try {
-        await saveIntoWhatIf(sysproDb, targetVersionId, schedule);
+        await saveIntoWhatIf(await planDbFor(req.app), targetVersionId, schedule);
         schedule.scheduleId = targetVersionId;
         req.log.info({ versionId: targetVersionId }, 'Schedule saved into what-if version');
       } catch (saveErr: any) {
@@ -500,7 +501,7 @@ export async function generateHandler(req: Request, res: Response) {
       }
     } else {
       try {
-        const { jobCount } = await saveAsLatest(sysproDb, schedule, {
+        const { jobCount } = await saveAsLatest(await planDbFor(req.app), schedule, {
           status: 'Draft', generatedAt: new Date(), createdBy: (req as any).user?.username,
         });
         req.log.info({ jobCount }, 'Schedule auto-saved to DB');
@@ -752,7 +753,7 @@ router.get('/latest', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const result = await sysproDb.query(`
+    const result = await (await planDbFor(req.app)).query(`
       IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS int) AS x;
       ELSE
       SELECT TOP 1 ScheduleID, ScheduleData, Status, JobCount, OperationCount,
@@ -809,7 +810,7 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
 
     // Any saved change is a new Draft: an edit made after approval must be
     // approved again before it can be sent to SYSPRO. Atomic — see ScheduleStore.
-    const { jobCount, operationCount } = await saveAsLatest(sysproDb, schedule, { status: 'Draft' });
+    const { jobCount, operationCount } = await saveAsLatest(await planDbFor(req.app), schedule, { status: 'Draft' });
 
     req.log.info({ scheduleId: schedule.scheduleId, jobCount, operationCount }, 'Schedule saved');
     res.json({ saved: true, scheduleId: schedule.scheduleId });
@@ -832,7 +833,7 @@ router.post('/load-version/:scheduleId', requirePlanner, async (req: Request, re
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const result = await sysproDb.queryWithParams(
+    const result = await (await planDbFor(req.app)).queryWithParams(
       `SELECT ScheduleData, GeneratedAt FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
       { scheduleId }
     );
@@ -845,7 +846,7 @@ router.post('/load-version/:scheduleId', requirePlanner, async (req: Request, re
     const restoredAt = new Date().toISOString();
 
     // Promote this version as the new latest (demote all others) — atomically.
-    await promoteToLatest(sysproDb, scheduleId);
+    await promoteToLatest(await planDbFor(req.app), scheduleId);
 
     req.log.info({ scheduleId, restoredAt }, 'version_restore');
 
@@ -878,7 +879,7 @@ router.post('/pins/time-fence', requireAuth, requirePlanner, async (req: AuthReq
   try {
     const sysproDb = req.app.locals.sysproDb;
     if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
-    const latest = await sysproDb.query(`
+    const latest = await (await planDbFor(req.app)).query(`
       IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData;
       ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`);
     const data = latest.recordset?.[0]?.ScheduleData;
@@ -941,12 +942,12 @@ router.get('/publish-status', async (req: Request, res: Response) => {
   try {
     const sysproDb = req.app.locals.sysproDb;
     if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
-    const latest = await sysproDb.query(`
+    const latest = await (await planDbFor(req.app)).query(`
       IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData;
       ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`);
     const data = latest.recordset?.[0]?.ScheduleData;
     if (!data) return res.json({ jobs: [], counts: { Published: 0, Pending: 0, Error: 0 } });
-    const jobs = publishStateFor(JSON.parse(data), await loadPublishRows(sysproDb));
+    const jobs = publishStateFor(JSON.parse(data), await loadPublishRows(await planDbFor(req.app)));
     const counts = { Published: 0, Pending: 0, Error: 0 } as Record<string, number>;
     for (const j of jobs) counts[j.state]++;
     res.json({ jobs, counts });
@@ -966,7 +967,7 @@ router.post('/publish-status/reset', requirePlanner, async (req: Request, res: R
   try {
     const sysproDb = req.app.locals.sysproDb;
     if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
-    res.json({ reset: await resetPublish(sysproDb, jobIds) });
+    res.json({ reset: await resetPublish(await planDbFor(req.app), jobIds) });
   } catch (error) {
     res.status(500).json({ error: (error as any).message });
   }
@@ -980,7 +981,7 @@ router.get('/:scheduleId', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const result = await sysproDb.queryWithParams(
+    const result = await (await planDbFor(req.app)).queryWithParams(
       `SELECT ScheduleData FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
       { scheduleId }
     );
@@ -1010,7 +1011,7 @@ router.post('/:scheduleId/approve', requireAuth, requirePlanner, async (req: Req
     }
 
     // Verify the schedule exists
-    const existing = await sysproDb.queryWithParams(
+    const existing = await (await planDbFor(req.app)).queryWithParams(
       `SELECT ScheduleID, Status FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
       { scheduleId }
     );
@@ -1020,7 +1021,7 @@ router.post('/:scheduleId/approve', requireAuth, requirePlanner, async (req: Req
     }
 
     // Persist the Approved status
-    await sysproDb.queryWithParams(
+    await (await planDbFor(req.app)).queryWithParams(
       `UPDATE aps.SavedSchedules SET Status = 'Approved', SavedAt = GETDATE() WHERE ScheduleID = @scheduleId`,
       { scheduleId }
     );
@@ -1053,7 +1054,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
       });
     }
 
-    const saved = await sysproDb.queryWithParams(
+    const saved = await (await planDbFor(req.app)).queryWithParams(
       `SELECT ScheduleData, Status FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
       { scheduleId }
     );
@@ -1071,12 +1072,12 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
     // Incremental publish: only jobs whose machine or dates changed since the
     // last successful send. { full: true } re-sends every scheduled job.
     const full = req.body?.full === true;
-    const publishRows = await loadPublishRows(sysproDb);
+    const publishRows = await loadPublishRows(await planDbFor(req.app));
     const { toPublish, unchanged } = planPublish(schedule, publishRows, full);
     const user = (req as any).user?.username;
 
     if (toPublish.length === 0) {
-      await sysproDb.queryWithParams(
+      await (await planDbFor(req.app)).queryWithParams(
         `UPDATE aps.SavedSchedules SET Status = 'Exported' WHERE ScheduleID = @scheduleId`, { scheduleId });
       return res.json({
         scheduleId, status: 'Exported',
@@ -1093,14 +1094,14 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
 
     if (exportResult.success) {
       try {
-        await recordPublished(sysproDb, toPublish, scheduleId, user);
+        await recordPublished(await planDbFor(req.app), toPublish, scheduleId, user);
       } catch (statusErr) {
         req.log.warn({ err: statusErr }, 'Export succeeded but per-job publish status could not be recorded');
       }
       req.log.info({ schedulesWritten: exportResult.schedulesWritten, operationsWritten: exportResult.operationsWritten }, 'Schedule export succeeded');
       
       try {
-        await sysproDb.queryWithParams(
+        await (await planDbFor(req.app)).queryWithParams(
           `UPDATE aps.SavedSchedules SET Status = 'Exported' WHERE ScheduleID = @scheduleId`,
           { scheduleId }
         );
@@ -1135,7 +1136,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
         const message = exportResult.errorMessages.join('; ');
         const culprit = jobIdFromExportError(message, toPublish.map((j: any) => j.jobId));
         const job = culprit ? toPublish.find((j: any) => j.jobId === culprit) : null;
-        if (job) await recordError(sysproDb, job, scheduleId, message);
+        if (job) await recordError(await planDbFor(req.app), job, scheduleId, message);
       } catch (statusErr) {
         req.log.warn({ err: statusErr }, 'Could not record per-job publish error');
       }
@@ -1222,7 +1223,7 @@ router.get('/constraints/violations', async (req: Request, res: Response) => {
 
     // Violations live inside the saved schedule JSON — read them from the
     // latest saved schedule so they survive page reloads.
-    const result = await sysproDb.query(`
+    const result = await (await planDbFor(req.app)).query(`
       IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS int) AS x;
       ELSE
       SELECT TOP 1 ScheduleID, ScheduleData

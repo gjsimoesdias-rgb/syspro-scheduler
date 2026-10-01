@@ -12,6 +12,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { saveAsLatest } from '../../services/ScheduleStore';
 import { requireAuth, requirePlanner } from '../middleware/requireAuth';
+import { planDbFor } from '../../services/planStore';
 
 const router = Router();
 
@@ -26,13 +27,13 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
   try {
     const result = baseScheduleId
-      ? await sysproDb.queryWithParams(
+      ? await (await planDbFor(req.app)).queryWithParams(
           `IF OBJECT_ID('aps.Scenarios', 'U') IS NULL SELECT TOP 0 CAST(NULL AS int) AS x;
            ELSE SELECT ScenarioId, BaseScheduleId, Name, Description, Status, CreatedBy, CreatedAt, PromotedAt
            FROM aps.Scenarios WHERE BaseScheduleId = @baseScheduleId ORDER BY CreatedAt DESC`,
           { baseScheduleId }
         )
-      : await sysproDb.query(
+      : await (await planDbFor(req.app)).query(
           `IF OBJECT_ID('aps.Scenarios', 'U') IS NULL SELECT TOP 0 CAST(NULL AS int) AS x;
            ELSE SELECT ScenarioId, BaseScheduleId, Name, Description, Status, CreatedBy, CreatedAt, PromotedAt
            FROM aps.Scenarios ORDER BY CreatedAt DESC`
@@ -63,7 +64,7 @@ router.post('/', requireAuth, requirePlanner, async (req: Request, res: Response
 
   try {
     // Fetch the base schedule's data
-    const base = await sysproDb.queryWithParams(
+    const base = await (await planDbFor(req.app)).queryWithParams(
       `SELECT ScheduleData FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
       { scheduleId: baseScheduleId }
     );
@@ -72,7 +73,7 @@ router.post('/', requireAuth, requirePlanner, async (req: Request, res: Response
     const scenarioId = uuidv4();
     const createdBy = (req as any).user?.username ?? 'anonymous';
 
-    await sysproDb.queryWithParams(
+    await (await planDbFor(req.app)).queryWithParams(
       `INSERT INTO aps.Scenarios (ScenarioId, BaseScheduleId, Name, Description, ScheduleData, CreatedBy)
        VALUES (@scenarioId, @baseScheduleId, @name, @description, @scheduleData, @createdBy)`,
       {
@@ -103,7 +104,7 @@ router.get('/:scenarioId', requireAuth, async (req: Request, res: Response) => {
   if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
 
   try {
-    const result = await sysproDb.queryWithParams(
+    const result = await (await planDbFor(req.app)).queryWithParams(
       `SELECT * FROM aps.Scenarios WHERE ScenarioId = @scenarioId`,
       { scenarioId }
     );
@@ -127,7 +128,7 @@ router.post('/:scenarioId/promote', requireAuth, requirePlanner, async (req: Req
   if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
 
   try {
-    const scenario = await sysproDb.queryWithParams(
+    const scenario = await (await planDbFor(req.app)).queryWithParams(
       `SELECT * FROM aps.Scenarios WHERE ScenarioId = @scenarioId`,
       { scenarioId }
     );
@@ -145,9 +146,9 @@ router.post('/:scenarioId/promote', requireAuth, requirePlanner, async (req: Req
     // Becomes the live schedule as a Draft: it still goes through Approve
     // before it can be sent to SYSPRO. Atomic — see ScheduleStore.
     scheduleData.status = 'Draft';
-    await saveAsLatest(sysproDb, scheduleData, { status: 'Draft' });
+    await saveAsLatest(await planDbFor(req.app), scheduleData, { status: 'Draft' });
 
-    await sysproDb.queryWithParams(
+    await (await planDbFor(req.app)).queryWithParams(
       `UPDATE aps.Scenarios SET Status = 'Promoted', PromotedAt = SYSUTCDATETIME() WHERE ScenarioId = @scenarioId`,
       { scenarioId }
     );
@@ -170,7 +171,7 @@ router.delete('/:scenarioId', requireAuth, requirePlanner, async (req: Request, 
   if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
 
   try {
-    await sysproDb.queryWithParams(
+    await (await planDbFor(req.app)).queryWithParams(
       `UPDATE aps.Scenarios SET Status = 'Archived' WHERE ScenarioId = @scenarioId`,
       { scenarioId }
     );

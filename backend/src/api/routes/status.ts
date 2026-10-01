@@ -8,6 +8,7 @@ import path from 'path';
 import DatabaseConnection from '../../database/connection';
 import { MigrationRunner } from '../../database/MigrationRunner';
 import { ensureSysproObjects } from '../../database/ensureSysproObjects';
+import { planDbFor } from '../../services/planStore';
 import AuthService from '../../services/AuthService';
 import AppStateStore from '../../services/AppStateStore';
 import { validateBody } from '../middleware/validateBody';
@@ -411,6 +412,13 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
       } catch (stateErr: any) {
         req.log.warn({ err: stateErr }, 'AppState warning during connect');
       }
+    }
+
+    // Plan store for the newly connected company (SCHEDULER DB schema co_<db>).
+    try {
+      await planDbFor(req.app);
+    } catch (planErr: any) {
+      req.log.warn({ err: planErr }, 'Plan store warning during connect');
     }
 
     req.app.locals.connectionProfile = {

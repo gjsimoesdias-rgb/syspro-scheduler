@@ -19,6 +19,7 @@ import { generateHandler } from './api/routes/schedule';
 import AuthService from './services/AuthService';
 import MigrationRunner from './database/MigrationRunner';
 import ensureSysproObjects from './database/ensureSysproObjects';
+import { planDbFor } from './services/planStore';
 import path from 'path';
 
 let sysproDb: DatabaseConnection;
@@ -120,6 +121,17 @@ async function startServer() {
           console.log('✓ Migrations checked');
         } catch (migErr: any) {
           console.warn('  Migration warning:', migErr.message);
+        }
+
+        // Plan versions + publish status live in the SCHEDULER DB per SYSPRO
+        // company; provision now (and copy any legacy SYSPRO aps rows once).
+        if (app.locals.sysproDb) {
+          try {
+            const plan = await planDbFor(app);
+            console.log(`✓ Plan store ready (SCHEDULER schema ${plan.schema})`);
+          } catch (planErr: any) {
+            console.warn('  Plan store warning:', planErr.message);
+          }
         }
 
         // Seed default super admin if no users exist
