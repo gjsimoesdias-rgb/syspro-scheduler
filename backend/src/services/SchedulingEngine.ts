@@ -247,6 +247,8 @@ export class SchedulingEngine {
   private crewLoad: CrewLoad | null = null;
   /** opIds whose line needs more operators than its whole crew has. */
   private crewTooSmall: Set<string> = new Set();
+  /** opIds that found no slot because their crew stayed busy to the end of the window. */
+  private crewBlocked: Set<string> = new Set();
   /**
    * Per-workcentre overtime budget, populated in initializeLoads from
    * workcentre.maxOvertimePerDay (with env default fallback). Read on each
@@ -525,6 +527,7 @@ export class SchedulingEngine {
       this.searchCapHit.clear();
       this.beyondHorizon.clear();
       this.crewTooSmall.clear();
+      this.crewBlocked.clear();
       this.crewLoad = context.crews ? new CrewLoad(context.crews) : null;
 
       // Step 1: Sort jobs by rule and due date
@@ -1033,14 +1036,18 @@ export class SchedulingEngine {
             severity: 'Warning',
             affectedJobId: job.jobId,
             affectedOperationId: operation.opId,
-            description: this.crewTooSmall.has(operation.opId)
+            description: this.crewBlocked.has(operation.opId) && !this.crewTooSmall.has(operation.opId)
+              ? (() => { const n = this.crewLoad?.needFor(operation.workcentreId); return `Operation ${operation.opId} (seq ${operation.sequence}) could not start inside the planning window: the ${n?.poolName} crew (${n?.headcount} operators) is busy on other lines the whole time`; })()
+              : this.crewTooSmall.has(operation.opId)
               ? (() => { const n = this.crewLoad?.needFor(operation.workcentreId); return `Operation ${operation.opId} (seq ${operation.sequence}) needs ${n?.operators} operators on ${operation.workcentreId} but the ${n?.poolName} crew has only ${n?.headcount}`; })()
               : this.searchCapHit.has(operation.opId)
               ? `Could not find a slot for operation ${operation.opId} (seq ${operation.sequence}): search stopped after ${MAX_SLOT_ITERATIONS} attempts — the line is booked almost solid over the horizon`
               : this.beyondHorizon.has(operation.opId)
               ? `Operation ${operation.opId} (seq ${operation.sequence}) needs ${(((operation.setupTime || 0) + (operation.duration || 0)) / 60).toFixed(1)} h of machine time and would finish after the planning horizon ends`
               : `Could not find available slot for operation ${operation.opId} (seq ${operation.sequence})`,
-            suggestedAction: this.crewTooSmall.has(operation.opId)
+            suggestedAction: this.crewBlocked.has(operation.opId) && !this.crewTooSmall.has(operation.opId)
+              ? 'Add operators to the crew, extend the planning window, or lower the priority of other jobs on its lines'
+              : this.crewTooSmall.has(operation.opId)
               ? 'Raise the crew headcount or lower the operators needed on this line (Manage → Crews)'
               : this.searchCapHit.has(operation.opId)
               ? 'Extend the horizon, add shift time on this line, or move lower-priority jobs out'
@@ -1583,6 +1590,7 @@ export class SchedulingEngine {
     };
 
     // Capacity conflict checking uses the capacityStart/capacityEnd of existing slots
+    let lastConflictWasCrew = false;
     const findNextConflictEnd = (candidateStart: Date, candidateEnd: Date): Date | null => {
       const overlappingResource = resourceSlots(candidateStart, candidateEnd);
       const overlappingWorkcentre = workcentreSlots(candidateStart, candidateEnd);
@@ -1591,6 +1599,7 @@ export class SchedulingEngine {
       const workcentreBlocked = overlappingWorkcentre.length >= workcentreCapacity;
       // Crew: enough free operators in the line's pool for the whole booking?
       const crewNext = this.crewLoad?.nextFreeAt(operation.workcentreId, candidateStart, candidateEnd) ?? null;
+      lastConflictWasCrew = !!crewNext && !resourceBlocked && !workcentreBlocked;
 
       if (!resourceBlocked && !workcentreBlocked && !crewNext) {
         return null;
@@ -1705,6 +1714,7 @@ export class SchedulingEngine {
       searchDate = new Date(Math.max(nextConflictEnd.getTime(), searchDate.getTime() + 60 * 1000));
     }
 
+    if (lastConflictWasCrew) this.crewBlocked.add(operation.opId);
     return null;
   }
 

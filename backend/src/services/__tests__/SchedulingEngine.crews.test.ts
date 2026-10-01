@@ -60,4 +60,14 @@ describe('crew pools', () => {
     expect(msgs).toMatch(/needs 3 operators on L1 but the Packing crew has only 2/);
     expect(s.jobSchedules.every((j: any) => j.operationSchedules.length === 0)).toBe(true);
   });
+
+  it('says when the crew was busy for the whole window', async () => {
+    const c = ctx(crewOf(3)); // one 3-operator line at a time
+    c.planningHorizonEnd = new Date(2026, 9, 5, 1, 0); // 1-hour window
+    c.ruleToggles = { allowFinishAfterHorizon: true };
+    const s = await new SchedulingEngine().schedule(c);
+    expect(s.jobSchedules.find((j: any) => j.jobId === 'A')!.operationSchedules).toHaveLength(1);
+    const msgs = s.constraintViolations.filter((v: any) => v.affectedJobId === 'B').map((v: any) => v.description).join('\n');
+    expect(msgs).toMatch(/could not start inside the planning window: the Packing crew \(3 operators\) is busy/);
+  });
 });

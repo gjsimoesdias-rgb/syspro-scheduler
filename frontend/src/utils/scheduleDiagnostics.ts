@@ -145,7 +145,10 @@ export function scheduleShortfall(schedule: Schedule | null | undefined, jobs: J
     if (jid) {
       jobIds.add(jid);
       const label = info ? `Op ${info.seq} — ${wc}` : (v.description || v.type);
-      const line = `${label} (${HUMAN_VIOLATION[v.type] ?? v.type})`;
+      const reason = /crew \(\d+ operators\) is busy/.test(v.description || '') ? 'crew busy all window'
+        : /operators on .* crew has only/.test(v.description || '') ? 'crew too small'
+          : (HUMAN_VIOLATION[v.type] ?? v.type);
+      const line = `${label} (${reason})`;
       const arr = reasonsByJob.get(jid) || [];
       if (!arr.includes(line)) arr.push(line);
       reasonsByJob.set(jid, arr);

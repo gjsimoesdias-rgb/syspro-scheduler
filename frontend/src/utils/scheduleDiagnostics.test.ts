@@ -65,4 +65,12 @@ describe('scheduleDiagnostics', () => {
     const why = lateReasons(sched, [job('A', '2026-10-05T00:00:00Z')], jobLateness(sched, [job('A', '2026-10-05T00:00:00Z')]), () => 'DATE');
     expect(why.get('A')).toContain('Waited 2h 0m for free operators in its crew.');
   });
+
+  it('names crew causes in the unscheduled tip', () => {
+    const sched: any = { jobSchedules: [], constraintViolations: [
+      { type: 'CapacityExceeded', severity: 'Warning', affectedJobId: 'A', affectedOperationId: 'A-OP1',
+        description: 'Operation A-OP1 (seq 1) could not start inside the planning window: the Nut crew (4 operators) is busy on other lines the whole time' },
+    ] };
+    expect(scheduleShortfall(sched, [job('A', '')])!.tipByJob.get('A')).toContain('(crew busy all window)');
+  });
 });
