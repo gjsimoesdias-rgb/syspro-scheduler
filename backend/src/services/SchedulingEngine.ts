@@ -1036,7 +1036,9 @@ export class SchedulingEngine {
             severity: 'Warning',
             affectedJobId: job.jobId,
             affectedOperationId: operation.opId,
-            description: this.crewBlocked.has(operation.opId) && !this.crewTooSmall.has(operation.opId)
+            description: !context.workcentres.has(operation.workcentreId)
+              ? `Operation ${operation.opId} (seq ${operation.sequence}) is routed to work centre ${operation.workcentreId}, which is not a production line or a machine on one in CRUX`
+              : this.crewBlocked.has(operation.opId) && !this.crewTooSmall.has(operation.opId)
               ? (() => { const n = this.crewLoad?.needFor(operation.workcentreId); return `Operation ${operation.opId} (seq ${operation.sequence}) could not start inside the planning window: the ${n?.poolName} crew (${n?.headcount} operators) is busy on other lines the whole time`; })()
               : this.crewTooSmall.has(operation.opId)
               ? (() => { const n = this.crewLoad?.needFor(operation.workcentreId); return `Operation ${operation.opId} (seq ${operation.sequence}) needs ${n?.operators} operators on ${operation.workcentreId} but the ${n?.poolName} crew has only ${n?.headcount}`; })()
@@ -1045,7 +1047,9 @@ export class SchedulingEngine {
               : this.beyondHorizon.has(operation.opId)
               ? `Operation ${operation.opId} (seq ${operation.sequence}) needs ${(((operation.setupTime || 0) + (operation.duration || 0)) / 60).toFixed(1)} h of machine time and would finish after the planning horizon ends`
               : `Could not find available slot for operation ${operation.opId} (seq ${operation.sequence})`,
-            suggestedAction: this.crewBlocked.has(operation.opId) && !this.crewTooSmall.has(operation.opId)
+            suggestedAction: !context.workcentres.has(operation.workcentreId)
+              ? `Route the operation to a line in SYSPRO, or add ${operation.workcentreId} as a machine on a line (Manage → Machines)`
+              : this.crewBlocked.has(operation.opId) && !this.crewTooSmall.has(operation.opId)
               ? 'Add operators to the crew, extend the planning window, or lower the priority of other jobs on its lines'
               : this.crewTooSmall.has(operation.opId)
               ? 'Raise the crew headcount or lower the operators needed on this line (Manage → Crews)'

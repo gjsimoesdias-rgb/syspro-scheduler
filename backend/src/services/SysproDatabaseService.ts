@@ -48,6 +48,7 @@ import environment from '../config/environment';
 import { computeMaterialPlans, RequirementLine } from './materialPlan';
 import { projectInventory, ProjectionJob, ComponentProjection } from './inventoryProjection';
 import { isSuggestedJobId } from '../utils/suggestedJobs';
+import { remapMachineWorkcentres } from '../utils/remapMachineWorkcentres';
 import { pegSalesOrders, PegJob, PeggedLine, JobPeg, SoLine } from './salesPegging';
 
 /**
@@ -138,7 +139,7 @@ export class SysproDatabaseService {
         this.sysproDb.query(SYSPRO_QUERIES.getOperationsForSuggestedJobs),
       ]);
       const opsByJob = this.groupOperationsByJob(opsResult.recordset);
-      return (result.recordset || []).map((row: any) => {
+      const jobs = (result.recordset || []).map((row: any) => {
         const job: any = this.mapRowToJob(row, opsByJob.get(jobKey(row.jobId)) || []);
         job.isSuggested = true;
         job.suggestedJob = String(row.suggestedJob || '').trim();
@@ -146,6 +147,15 @@ export class SysproDatabaseService {
         job.masterJobId = null;
         return job as Job;
       });
+      // Suggestions may predate line routing (machine code in WorkCentre).
+      try {
+        const [wcs, res] = await Promise.all([this.getWorkcentres(), this.getResources()]);
+        const moved = remapMachineWorkcentres(jobs, wcs.map((w: any) => w.worcentreId), res as any);
+        if (moved) logger.info({ moved }, 'MRP suggested jobs: machine work centres mapped to their lines');
+      } catch (err) {
+        logger.debug({ err }, 'MRP suggested jobs: work-centre remap skipped');
+      }
+      return jobs;
     } catch (error) {
       logger.warn({ err: error }, 'Could not read MRP suggested jobs; continuing without them');
       return [];
