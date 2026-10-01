@@ -193,7 +193,29 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
   workcentrePage,
   workcentreRows,
   workflowJobFilter,
-}) => (
+}) => {
+  /**
+   * Keyboard access for grid rows: Enter/Space = select (as a click),
+   * Up/Down = previous/next row, Right/Left = expand/collapse operations,
+   * Shift+F10 or the Menu key = the row's context menu.
+   */
+  const rowKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>, jobId: string, expanded?: boolean) => {
+    const row = e.currentTarget;
+    const move = (dir: 1 | -1) => {
+      const rows = Array.from(row.closest('tbody')?.querySelectorAll<HTMLTableRowElement>('tr[data-job-row]') ?? []);
+      rows[rows.indexOf(row) + dir]?.focus();
+    };
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleJobRowClick(jobId); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+    else if (e.key === 'ArrowRight' && expanded === false) { e.preventDefault(); toggleJobExpanded(jobId); }
+    else if (e.key === 'ArrowLeft' && expanded === true) { e.preventDefault(); toggleJobExpanded(jobId); }
+    else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+      const r = row.getBoundingClientRect();
+      openJobContextMenu({ preventDefault: () => e.preventDefault(), clientX: r.left + 40, clientY: r.bottom } as any, jobId);
+    }
+  };
+  return (
   <>
     <section className="aps-grid-panel">
       {manageTab !== 'none' && (
@@ -442,6 +464,10 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                           }}
                           onDragEnd={() => setHighlightJobId(null)}
                           onClick={() => handleJobRowClick(job.jobId)}
+                          tabIndex={0}
+                          data-job-row
+                          aria-selected={highlightJobId === job.jobId}
+                          onKeyDown={(e) => rowKeyDown(e, job.jobId, !!expandedJobs[job.jobId])}
                           onContextMenu={(e) => openJobContextMenu(e, job.jobId)}
                           className={`${highlightJobId === job.jobId ? 'job-row-highlighted' : ''} ${latenessClass}`}
                         >
@@ -460,7 +486,7 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                                   aria-label={materialStatusByJob[job.jobId] === 'No Materials' ? 'Material shortage' : 'Partial material shortage'}
                                 />
                               )}
-                              <button className="expand-btn" onClick={(e) => { e.stopPropagation(); toggleJobExpanded(job.jobId); }}>
+                              <button className="expand-btn" tabIndex={-1} aria-label={expandedJobs[job.jobId] ? 'Hide operations' : 'Show operations'} onClick={(e) => { e.stopPropagation(); toggleJobExpanded(job.jobId); }}>
                                 {expandedJobs[job.jobId] ? '▾' : '▸'}
                               </button>
                             </div>
@@ -511,6 +537,10 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                           }}
                           onDragEnd={() => setHighlightJobId(null)}
                           onClick={() => handleJobRowClick(master.jobId)}
+                          tabIndex={0}
+                          data-job-row
+                          aria-selected={highlightJobId === master.jobId}
+                          onKeyDown={(e) => rowKeyDown(e, master.jobId)}
                           onContextMenu={(e) => openJobContextMenu(e, master.jobId)}
                           className={`master-job-row ${highlightJobId === master.jobId ? 'job-row-highlighted' : ''}`}
                         >
@@ -584,6 +614,10 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                                             }}
                                             onDragEnd={() => setHighlightJobId(null)}
                                             onClick={() => handleJobRowClick(subJob.jobId)}
+                          tabIndex={0}
+                          data-job-row
+                          aria-selected={highlightJobId === subJob.jobId}
+                          onKeyDown={(e) => rowKeyDown(e, subJob.jobId, !!expandedJobs[subJob.jobId])}
                                             onContextMenu={(e) => openJobContextMenu(e, subJob.jobId)}
                                             className={highlightJobId === subJob.jobId ? 'job-row-highlighted' : ''}
                                           >
@@ -916,6 +950,7 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
       )}
     </section>
   </>
-);
+  );
+};
 
 export default JobsPanel;

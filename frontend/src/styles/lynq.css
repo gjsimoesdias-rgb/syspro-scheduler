@@ -228,3 +228,7 @@ body, :root .app { font-family: var(--font-sans); }
 
 /* lucide icons inline with text (replaced emoji) */
 .ui-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; flex-shrink: 0; }
+
+/* Keyboard focus on grid rows */
+:root .app tr[data-job-row]:focus { outline: none; }
+:root .app tr[data-job-row]:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; background: var(--bg-hover); }
