@@ -965,3 +965,17 @@ textarea:disabled {
 }
 .feature-subtab:hover { color: var(--text-primary); }
 .feature-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Manage views: way back to the jobs grid (components/JobsPanel.tsx). */
+.manage-back-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface-2);
+}
+.manage-back-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
