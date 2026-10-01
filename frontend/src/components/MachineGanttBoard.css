@@ -640,6 +640,7 @@
 .gantt-tt-row.phase-move span { color: #c4b5fd; }
 .gantt-tt-row.gantt-tt-late strong { color: #fca5a5; }
 .gantt-tt-row.gantt-tt-ontime strong { color: #86efac; }
+.gantt-tt-row.gantt-tt-wait strong { color: #fcd34d; }
 
 /* Bar ends after the job due date: red marker on the right edge. */
 .machine-op-bar.gantt-bar--late::after {

@@ -178,6 +178,15 @@ export interface OperationSchedule {
   opStatus?: 'NotStarted' | 'InProgress' | 'Complete';
   /** True when this operation was pinned by the user and its time slot was frozen. */
   pinned?: boolean;
+  // ── Explainability (forward scheduling) ──
+  /** Earliest the op could start: release / previous op (+queue, move, wait, overlap). */
+  readyAt?: Date;
+  /** Minutes between readyAt and the actual start. */
+  waitMinutes?: number;
+  /** Why it waited: the line/machine was busy, no shift time, or both. */
+  waitReason?: 'line' | 'calendar' | 'mixed';
+  /** Other jobs holding the line or machine during the wait (up to 5). */
+  blockedBy?: string[];
 }
 
 /**

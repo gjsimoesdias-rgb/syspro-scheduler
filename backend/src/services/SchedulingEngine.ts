@@ -958,7 +958,11 @@ export class SchedulingEngine {
             const resource = context.resources.get(operationSlot.resourceId);
             lockedLineGroupId = resource?.lineGroupId ?? null;
           }
+          const why = !isPinned && !operation.isSubcontract
+            ? this.explainWait(operation.workcentreId, operationSlot.resourceId, job.jobId, earliestStart, operationSlot.start)
+            : undefined;
           operationSchedules.push({
+            ...(why || {}),
             opId: operation.opId,
             workcentreId: operation.workcentreId,
             resourceId: operationSlot.resourceId,
@@ -1307,6 +1311,49 @@ export class SchedulingEngine {
       if (s.capacityEnd <= time && (!best || s.capacityEnd > best.capacityEnd)) best = s;
     }
     return best?.itemCode;
+  }
+
+  /**
+   * Why an operation starts later than it was ready: other jobs holding the
+   * line or machine in [readyAt, start), and/or no productive shift time.
+   * Must run before the op's own slot is recorded in the loads.
+   */
+  private explainWait(
+    workcentreId: string, resourceId: string, jobId: string, readyAt: Date, start: Date
+  ): { readyAt: Date; waitMinutes: number; waitReason?: 'line' | 'calendar' | 'mixed'; blockedBy?: string[] } {
+    const waitMs = start.getTime() - readyAt.getTime();
+    const waitMinutes = Math.max(0, Math.round(waitMs / 60000));
+    if (waitMinutes < 1) return { readyAt, waitMinutes: 0 };
+    const from = readyAt.getTime();
+    const to = start.getTime();
+    const busy: Array<[number, number]> = [];
+    const blockers = new Set<string>();
+    const scan = (slots: OperationSlot[] | undefined) => {
+      for (const s of slots || []) {
+        if (s.jobId === jobId) continue;
+        const a = Math.max(from, s.capacityStart.getTime());
+        const b = Math.min(to, s.capacityEnd.getTime());
+        if (b > a) { busy.push([a, b]); blockers.add(s.jobId); }
+      }
+    };
+    scan(this.workcentreLoads.get(workcentreId));
+    scan(this.resourceLoads.get(resourceId));
+    // Merge busy intervals to see how much of the wait the line explains.
+    busy.sort((x, y) => x[0] - y[0]);
+    let busyMs = 0; let curA = -1; let curB = -1;
+    for (const [a, b] of busy) {
+      if (a > curB) { if (curB > curA) busyMs += curB - curA; curA = a; curB = b; }
+      else curB = Math.max(curB, b);
+    }
+    if (curB > curA) busyMs += curB - curA;
+    const lineShare = busyMs / Math.max(1, waitMs);
+    const waitReason = blockers.size === 0 ? 'calendar' : lineShare >= 0.9 ? 'line' : 'mixed';
+    return {
+      readyAt,
+      waitMinutes,
+      waitReason,
+      blockedBy: blockers.size ? [...blockers].slice(0, 5) : undefined,
+    };
   }
 
   /** Operation with its setup replaced by the changeover from `prevItemCode` (unchanged if none applies). */

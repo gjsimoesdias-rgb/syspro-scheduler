@@ -55,6 +55,8 @@ export interface GanttOperationBarProps {
 
   /** The job's due date — shown in the tooltip; bars ending after it get a red marker */
   dueDate?: Date;
+  /** Why the op starts later than it was ready (from the engine). */
+  wait?: { readyAt: Date; minutes: number; reason?: 'line' | 'calendar' | 'mixed'; blockedBy?: string[] };
 
   /** Operation-level status from SYSPRO WipJobAllLab — drives the status strip colour */
   opStatus?: 'NotStarted' | 'InProgress' | 'Complete';
@@ -138,6 +140,7 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
   itemDesc,
   qty,
   dueDate,
+  wait,
   opStatus,
   depRole,
   masterJobId,
@@ -198,6 +201,22 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
       <div className="gantt-tt-row"><span>End</span><strong>{format(displayEnd, 'dd/MM HH:mm')}</strong></div>
       <div className="gantt-tt-row"><span>Split</span><strong>{displaySegments.length} segment(s)</strong></div>
       <div className="gantt-tt-row"><span>Total</span><strong>{durationH}h</strong></div>
+      {wait && (
+        <>
+          <div className="gantt-tt-divider" />
+          <div className="gantt-tt-row"><span>Ready</span><strong>{format(wait.readyAt, 'dd/MM HH:mm')}</strong></div>
+          <div className="gantt-tt-row gantt-tt-wait">
+            <span>Waited</span>
+            <strong>
+              {fmtSpan(wait.minutes)}
+              {wait.reason === 'line' ? ' — line busy' : wait.reason === 'calendar' ? ' — no shift time' : wait.reason === 'mixed' ? ' — line busy + no shift time' : ''}
+            </strong>
+          </div>
+          {wait.blockedBy && wait.blockedBy.length > 0 && (
+            <div className="gantt-tt-row gantt-tt-desc"><span>Behind</span><span>{wait.blockedBy.map((j) => j.replace(/^0+/, '')).join(', ')}</span></div>
+          )}
+        </>
+      )}
       {dueDate && (
         <>
           <div className="gantt-tt-divider" />

@@ -1500,6 +1500,12 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                           itemDesc={itemDesc}
                           qty={qty}
                           dueDate={jobDueDates[op.jobId]}
+                          wait={(op as any).waitMinutes > 0 ? {
+                            readyAt: new Date((op as any).readyAt),
+                            minutes: (op as any).waitMinutes,
+                            reason: (op as any).waitReason,
+                            blockedBy: (op as any).blockedBy,
+                          } : undefined}
                           opStatus={op.opStatus}
                           displaySegments={displaySegments}
                           calculatePosition={calculatePosition}
