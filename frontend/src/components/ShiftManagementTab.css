@@ -361,3 +361,9 @@
 .crews-input { height: 30px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--bg-surface); color: var(--text-primary); font: inherit; }
 .crews-num { width: 90px; }
 .crews-actions { display: flex; gap: 8px; margin-top: 14px; }
+.crews-hint { margin-left: 6px; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.crews-manual { display: inline-flex; align-items: center; }
+.crews-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.crews-toolbar .crews-input:first-child { flex: 0 1 280px; }
+.crews-empty { padding: 10px 12px; }
+.crews-inactive td { opacity: 0.6; }

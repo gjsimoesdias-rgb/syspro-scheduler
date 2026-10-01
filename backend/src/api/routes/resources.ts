@@ -7,7 +7,7 @@ import SysproDatabaseService from '../../services/SysproDatabaseService';
 import { setLocal } from '../../utils/setLocal';
 import { requirePlanner } from '../middleware/requireAuth';
 import { CalendarException, normaliseException } from '../../utils/calendarExceptions';
-import { normaliseCrewSetup, EMPTY_CREW_SETUP, type CrewSetup } from '../../utils/crews';
+import { normaliseCrewSetup, EMPTY_CREW_SETUP, mapEmployeeRow, type CrewSetup, type SysproEmployee } from '../../utils/crews';
 
 const router = Router();
 
@@ -515,6 +515,28 @@ router.delete('/calendar-exceptions/:id', requirePlanner, (req: Request, res: Re
 router.get('/crews', (req: Request, res: Response) => {
   const setup: CrewSetup = (req.app.locals as any).crewSetup || EMPTY_CREW_SETUP;
   res.json({ setup });
+});
+
+/**
+ * GET /api/resources/employees — SYSPRO employees (BomEmployee) for crew
+ * mapping. Read-only; an empty list when the table is missing or empty.
+ */
+router.get('/employees', async (req: Request, res: Response) => {
+  const sysproDb = req.app.locals.sysproDb;
+  if (!sysproDb) return res.json({ employees: [], note: 'SYSPRO database is not connected' });
+  try {
+    const r = await sysproDb.query(
+      `IF OBJECT_ID('BomEmployee') IS NULL SELECT TOP 0 1 AS x ELSE SELECT TOP 5000 * FROM BomEmployee`
+    );
+    const employees = (r.recordset || [])
+      .map((row: Record<string, any>) => mapEmployeeRow(row))
+      .filter((e: SysproEmployee | null): e is SysproEmployee => !!e)
+      .sort((a: SysproEmployee, b: SysproEmployee) => a.name.localeCompare(b.name));
+    res.json({ employees });
+  } catch (err: any) {
+    req.log?.warn?.({ err }, 'Could not read BomEmployee');
+    res.json({ employees: [], note: `Could not read SYSPRO employees: ${err?.message || err}` });
+  }
 });
 
 router.put('/crews', requirePlanner, (req: Request, res: Response) => {

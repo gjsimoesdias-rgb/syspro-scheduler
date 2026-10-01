@@ -372,7 +372,9 @@ export const resourceService = {
 };
 
 /** Crew (labour) pools — Manage → Crews (see backend utils/crews.ts). */
-export interface CrewPool { id: string; name: string; headcount: number }
+export interface CrewPool { id: string; name: string; headcount: number; employees?: string[] }
+/** SYSPRO employee (BomEmployee: Employee, Name, WorkCentre, ShiftId). */
+export interface SysproEmployee { code: string; name: string; workCentre?: string; shiftId?: string; active: boolean }
 export interface CrewLine { poolId: string; operators: number }
 export interface CrewSetup { enabled: boolean; pools: CrewPool[]; lines: Record<string, CrewLine> }
 
@@ -380,6 +382,10 @@ export const crewService = {
   get: async (): Promise<CrewSetup> => {
     const response = await apiClient.get('/resources/crews');
     return response.data.setup;
+  },
+  employees: async (): Promise<{ employees: SysproEmployee[]; note?: string }> => {
+    const response = await apiClient.get('/resources/employees');
+    return { employees: response.data.employees || [], note: response.data.note };
   },
   save: async (setup: CrewSetup): Promise<CrewSetup> => {
     const response = await apiClient.put('/resources/crews', setup);

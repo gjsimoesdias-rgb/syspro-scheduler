@@ -1,14 +1,58 @@
 /**
  * Crew (labour) setup — pools of operators shared by an area's lines.
  *
- *   pools: { id, name, headcount }        e.g. "Packing crew", 6 operators
+ *   pools: { id, name, employees, headcount }   e.g. "Packing crew" with 6 employees
  *   lines: { [workcentreId]: { poolId, operators } }   NPCK-J needs 3 from Packing
+ *
+ * A crew's operators = the SYSPRO employees (BomEmployee) mapped to it. The
+ * manual headcount is only used for a crew with no employees mapped (e.g. a
+ * company that doesn't maintain BomEmployee).
  *
  * Stored in sch_AppState under 'crewSetup' (Manage → Crews). When enabled,
  * the scheduler never runs more operations at once in a pool than its
  * headcount can staff.
  */
-export interface CrewPool { id: string; name: string; headcount: number }
+export interface CrewPool {
+  id: string;
+  name: string;
+  /** Manual headcount — used only when no employees are mapped. */
+  headcount: number;
+  /** SYSPRO employee codes (BomEmployee) in this crew. */
+  employees?: string[];
+}
+
+/** Operators the crew can field: mapped employees, else the manual headcount. */
+export const effectiveHeadcount = (p: CrewPool): number =>
+  p.employees && p.employees.length ? p.employees.length : p.headcount;
+
+/** A SYSPRO employee as CRUX shows it (from BomEmployee). */
+export interface SysproEmployee { code: string; name: string; workCentre?: string; shiftId?: string; active: boolean }
+
+const pick = (row: Record<string, any>, keys: string[]): string => {
+  for (const k of keys) {
+    const v = row[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+};
+
+/**
+ * Map a BomEmployee row (SYSPRO: Employee, Name, WorkCentre, ShiftId, …),
+ * tolerating column-name differences between SYSPRO versions.
+ */
+export function mapEmployeeRow(row: Record<string, any>): SysproEmployee | null {
+  const code = pick(row, ['Employee', 'EmployeeCode', 'EmpNumber', 'Code']);
+  if (!code) return null;
+  const name = pick(row, ['Name', 'EmployeeName', 'Description'])
+    || [pick(row, ['FirstName', 'Forename']), pick(row, ['Surname', 'LastName'])].filter(Boolean).join(' ')
+    || code;
+  const workCentre = pick(row, ['WorkCentre', 'DefaultWorkCentre', 'WorkCenter']) || undefined;
+  const shiftId = pick(row, ['ShiftId', 'Shift']) || undefined;
+  const terminated = row.DateTerminated ?? row.TerminationDate ?? row.DateLeft;
+  const terminatedPast = terminated ? new Date(terminated).getTime() <= Date.now() : false;
+  const onHold = String(row.OnHold ?? row.Inactive ?? '').trim().toUpperCase() === 'Y';
+  return { code, name, workCentre, ...(shiftId ? { shiftId } : {}), active: !terminatedPast && !onHold };
+}
 export interface CrewLine { poolId: string; operators: number }
 export interface CrewSetup { enabled: boolean; pools: CrewPool[]; lines: Record<string, CrewLine> }
 
@@ -28,6 +72,7 @@ export function normaliseCrewSetup(input: any): CrewSetup | string {
   if (!input || typeof input !== 'object') return 'Body must be a crew setup';
   const pools: CrewPool[] = [];
   const seen = new Set<string>();
+  const employeeCrew = new Map<string, string>();
   for (const raw of Array.isArray(input.pools) ? input.pools : []) {
     const name = String(raw?.name ?? '').trim();
     if (!name) return 'Every crew needs a name';
@@ -38,7 +83,13 @@ export function normaliseCrewSetup(input: any): CrewSetup | string {
     let id = String(raw?.id ?? '').trim() || slug(name);
     while (seen.has(id)) id = `${id}-2`;
     seen.add(id);
-    pools.push({ id, name: name.slice(0, 80), headcount });
+    const employees = Array.from(new Set((Array.isArray(raw?.employees) ? raw.employees : [])
+      .map((e: unknown) => String(e ?? '').trim()).filter(Boolean))) as string[];
+    for (const e of employees) {
+      if (employeeCrew.has(e)) return `Employee ${e} is in two crews (${employeeCrew.get(e)} and ${name})`;
+      employeeCrew.set(e, name);
+    }
+    pools.push({ id, name: name.slice(0, 80), headcount, employees });
   }
   const lines: Record<string, CrewLine> = {};
   const lineInput = input.lines && typeof input.lines === 'object' ? input.lines : {};
@@ -58,7 +109,7 @@ export function normaliseCrewSetup(input: any): CrewSetup | string {
 /** Engine lookup, or undefined when crews are off or nothing is assigned. */
 export function crewLookupFrom(setup: CrewSetup | undefined | null): CrewLookup | undefined {
   if (!setup?.enabled) return undefined;
-  const headcount = new Map(setup.pools.map((p) => [p.id, p.headcount] as const));
+  const headcount = new Map(setup.pools.map((p) => [p.id, effectiveHeadcount(p)] as const));
   const poolName = new Map(setup.pools.map((p) => [p.id, p.name] as const));
   const lineNeeds = new Map<string, CrewLine>();
   for (const [wc, line] of Object.entries(setup.lines || {})) {
