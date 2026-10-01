@@ -47,6 +47,7 @@ export interface JobMaterialPlan {
 import environment from '../config/environment';
 import { computeMaterialPlans, RequirementLine } from './materialPlan';
 import { projectInventory, ProjectionJob, ComponentProjection } from './inventoryProjection';
+import { pegSalesOrders, PegJob, PeggedLine, JobPeg, SoLine } from './salesPegging';
 
 /**
  * Operation status from SYSPRO. On this install WipJobAllLab.OperationStatus is
@@ -811,6 +812,71 @@ export class SysproDatabaseService {
       })),
       poReceipts,
     });
+  }
+
+  /**
+   * Sales-order pegging for a plan (services/salesPegging.ts): open stocked
+   * SorDetail lines (OrderStatus not 8/9/cancelled), stock on hand, and the
+   * planned jobs; jobs raised for an order (WipMaster.SalesOrder) peg to it first.
+   */
+  async getSalesOrderPegging(jobs: PegJob[]): Promise<{ lines: PeggedLine[]; byJob: Record<string, JobPeg[]>; warning?: string }> {
+    const soSql = `
+      IF OBJECT_ID('SorDetail', 'U') IS NULL OR OBJECT_ID('SorMaster', 'U') IS NULL
+        SELECT TOP 0 CAST('' AS varchar(20)) AS salesOrder
+      ELSE
+      BEGIN
+        DECLARE @sql NVARCHAR(MAX) = N'
+          SELECT d.SalesOrder AS salesOrder, d.SalesOrderLine AS line,
+                 m.Customer AS customer,
+                 ' + CASE WHEN COL_LENGTH('SorMaster','CustomerName') IS NOT NULL THEN N'm.CustomerName' ELSE N'CAST('''' AS varchar(50))' END + N' AS customerName,
+                 ' + CASE WHEN COL_LENGTH('SorMaster','CustomerPoNumber') IS NOT NULL THEN N'm.CustomerPoNumber' ELSE N'CAST('''' AS varchar(30))' END + N' AS customerPo,
+                 d.MStockCode AS stockCode, d.MStockDes AS description, d.MWarehouse AS warehouse,
+                 ' + CASE WHEN COL_LENGTH('SorDetail','MOrderUom') IS NOT NULL THEN N'd.MOrderUom' ELSE N'CAST('''' AS varchar(10))' END + N' AS unitOfMeasure,
+                 ISNULL(d.MShipQty, 0) + ISNULL(d.MBackOrderQty, 0) AS openQty,
+                 ' + CASE WHEN COL_LENGTH('SorDetail','MLineShipDate') IS NOT NULL THEN N'ISNULL(d.MLineShipDate, m.ReqShipDate)' ELSE N'm.ReqShipDate' END + N' AS shipDate
+          FROM SorDetail d
+          JOIN SorMaster m ON m.SalesOrder = d.SalesOrder
+          WHERE d.LineType = ''1''
+            AND m.OrderStatus NOT IN (''8'', ''9'', ''*'', ''\\'')
+            AND ISNULL(d.MShipQty, 0) + ISNULL(d.MBackOrderQty, 0) > 0';
+        EXEC sp_executesql @sql;
+      END`;
+    const linkSql = `
+      IF COL_LENGTH('WipMaster','SalesOrder') IS NULL OR COL_LENGTH('WipMaster','SalesOrderLine') IS NULL
+        SELECT TOP 0 CAST('' AS varchar(20)) AS jobId
+      ELSE
+        EXEC sp_executesql N'SELECT Job AS jobId, SalesOrder AS salesOrder, ISNULL(SalesOrderLine, 0) AS salesOrderLine
+          FROM WipMaster WHERE Complete <> ''Y'' AND ISNULL(SalesOrder, '''') <> ''''';`;
+    let warning: string | undefined;
+    const [soRes, linkRes, stock] = await Promise.all([
+      this.sysproDb.query(soSql).catch((err: any) => { warning = `Sales orders could not be read: ${err?.message || err}`; return { recordset: [] }; }),
+      this.sysproDb.query(linkSql).catch(() => ({ recordset: [] })),
+      this.getInventoryByWarehouse(),
+    ]);
+    const links = new Map<string, { so: string; line: number }>();
+    for (const r of (linkRes as any).recordset || []) {
+      links.set(String(r.jobId || '').trim(), { so: String(r.salesOrder || '').trim(), line: Number(r.salesOrderLine) || 0 });
+    }
+    const onHand = new Map<string, number>();
+    for (const w of stock) onHand.set(w.code, (onHand.get(w.code) || 0) + (Number(w.qtyOnHand) || 0));
+    const lines: SoLine[] = ((soRes as any).recordset || []).map((r: any) => ({
+      salesOrder: String(r.salesOrder || '').trim(),
+      line: Number(r.line) || 0,
+      customer: String(r.customer || '').trim(),
+      customerName: String(r.customerName || '').trim(),
+      customerPo: String(r.customerPo || '').trim(),
+      stockCode: String(r.stockCode || '').trim(),
+      description: String(r.description || '').trim(),
+      warehouse: String(r.warehouse || '').trim(),
+      unitOfMeasure: String(r.unitOfMeasure || '').trim(),
+      openQty: Number(r.openQty) || 0,
+      shipDate: r.shipDate ? new Date(r.shipDate) : null,
+    }));
+    const pegJobs = jobs.map((j) => {
+      const l = links.get(String(j.jobId).trim());
+      return l ? { ...j, salesOrder: l.so, salesOrderLine: l.line } : j;
+    });
+    return { ...pegSalesOrders({ lines, jobs: pegJobs, onHand }), warning };
   }
 
   /** Jobs with no WipJobAllMat lines get their needs from the product BOM. */

@@ -399,12 +399,11 @@ router.get('/shortages', async (req: Request, res: Response) => {
 // Body: { jobs: [{ jobId, itemCode, quantity, start, end }] } — the planned
 // dates from the current schedule (jobs without dates count as unscheduled).
 // ─────────────────────────────────────────────────────────────
-router.post('/projection', async (req: Request, res: Response) => {
-  const db = getDb(req);
-  if (!db) return res.status(503).json({ error: 'Database not connected', components: [] });
+/** Planned jobs from the request body: [{ jobId, itemCode, quantity, start, end }]. */
+function planJobsFrom(req: Request) {
   const raw = Array.isArray(req.body?.jobs) ? req.body.jobs : null;
-  if (!raw || raw.length > 20000) return res.status(400).json({ error: 'jobs must be an array (max 20000)' });
-  const jobs = raw
+  if (!raw || raw.length > 20000) return null;
+  return raw
     .map((j: any) => ({
       jobId: String(j?.jobId ?? '').trim(),
       itemCode: String(j?.itemCode ?? '').trim(),
@@ -413,6 +412,13 @@ router.post('/projection', async (req: Request, res: Response) => {
       end: j?.end ?? null,
     }))
     .filter((j: any) => j.jobId);
+}
+
+router.post('/projection', async (req: Request, res: Response) => {
+  const db = getDb(req);
+  if (!db) return res.status(503).json({ error: 'Database not connected', components: [] });
+  const jobs = planJobsFrom(req);
+  if (!jobs) return res.status(400).json({ error: 'jobs must be an array (max 20000)' });
   try {
     const components = await new SysproDatabaseService(db as any).getInventoryProjection(jobs);
     return res.json({
@@ -424,6 +430,30 @@ router.post('/projection', async (req: Request, res: Response) => {
   } catch (err: any) {
     req.log.error({ err }, 'Inventory projection failed');
     return res.status(500).json({ error: err.message, components: [] });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/inventory/pegging
+// Open sales-order lines pegged to stock and planned jobs, with on-time /
+// late / short status. Body as /projection.
+// ─────────────────────────────────────────────────────────────
+router.post('/pegging', async (req: Request, res: Response) => {
+  const db = getDb(req);
+  if (!db) return res.status(503).json({ error: 'Database not connected', lines: [], byJob: {} });
+  const jobs = planJobsFrom(req);
+  if (!jobs) return res.status(400).json({ error: 'jobs must be an array (max 20000)' });
+  try {
+    const result = await new SysproDatabaseService(db as any).getSalesOrderPegging(jobs);
+    const count = (s: string) => result.lines.filter((l) => l.status === s).length;
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      counts: { lines: result.lines.length, onTime: count('on-time'), late: count('late'), short: count('short'), unscheduled: count('unscheduled') },
+      ...result,
+    });
+  } catch (err: any) {
+    req.log.error({ err }, 'Sales-order pegging failed');
+    return res.status(500).json({ error: err.message, lines: [], byJob: {} });
   }
 });
 

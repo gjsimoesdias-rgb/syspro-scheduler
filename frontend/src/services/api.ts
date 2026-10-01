@@ -485,7 +485,27 @@ export interface ComponentProjection {
   daily: Array<{ day: string; balance: number }>;
 }
 
+export interface SoPeg { source: 'stock' | 'job'; jobId?: string; qty: number; availableAt: string | null; direct?: boolean }
+export interface PeggedSoLine {
+  salesOrder: string; line: number; customer?: string; customerName?: string; customerPo?: string;
+  stockCode: string; description?: string; unitOfMeasure?: string; openQty: number; shipDate: string | null;
+  pegs: SoPeg[]; shortQty: number; availableAt: string | null;
+  status: 'on-time' | 'late' | 'unscheduled' | 'short'; daysLate: number;
+}
+export interface SoPeggingResult {
+  generatedAt: string;
+  counts: { lines: number; onTime: number; late: number; short: number; unscheduled: number };
+  lines: PeggedSoLine[];
+  byJob: Record<string, Array<{ salesOrder: string; line: number; customerName?: string; qty: number; shipDate: string | null; status: PeggedSoLine['status'] }>>;
+  warning?: string;
+}
+
 export const inventoryService = {
+  /** Open sales-order lines pegged to stock and the plan's jobs. */
+  pegging: async (jobs: Array<{ jobId: string; itemCode?: string; quantity?: number; start?: string | null; end?: string | null }>) => {
+    const response = await apiClient.post('/inventory/pegging', { jobs });
+    return response.data as SoPeggingResult;
+  },
   /** Projected inventory by day for the plan's components. */
   projection: async (jobs: Array<{ jobId: string; itemCode?: string; quantity?: number; start?: string | null; end?: string | null }>) => {
     const response = await apiClient.post('/inventory/projection', { jobs });

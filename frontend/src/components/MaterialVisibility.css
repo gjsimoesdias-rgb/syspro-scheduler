@@ -42,3 +42,20 @@
 .mat-kind-demand { color: var(--text-secondary); }
 .mat-unscheduled { margin-top: 6px; color: var(--text-muted, #64748b); font-style: italic; }
 .material-alert { margin: 8px 0; padding: 8px 10px; border-radius: 6px; background: #fef3c7; color: #92400e; }
+
+/* ── Sales orders (Promise view) ── */
+.so-grid { display: grid; grid-template-columns: 90px minmax(120px, 1fr) 90px minmax(140px, 1.3fr) 100px 85px minmax(170px, 1.4fr) 85px 95px; align-items: center; padding: 5px 10px; column-gap: 6px; }
+.table-header.so-grid { background: #1e293b; color: #e2e8f0; font-weight: 700; font-size: 11px; position: sticky; top: 0; z-index: 1; }
+.table-row.so-grid { border-top: 1px solid var(--border-subtle, #f1f5f9); }
+.table-row.so-grid:hover { background: var(--bg-hover, #f1f5f9); }
+.so-pegs { display: flex; flex-wrap: wrap; gap: 3px; }
+.so-peg { font-size: 10.5px; padding: 1px 5px; border-radius: 3px; background: var(--bg-hover, #eef2f7); white-space: nowrap; }
+.so-peg.stock { background: #dcfce7; color: #166534; }
+.so-peg.job { background: #e0e7ff; color: #3730a3; }
+.so-peg.missing { background: #fee2e2; color: #991b1b; }
+.so-status { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
+.so-ok { background: #dcfce7; color: #166534; }
+.so-late { background: #fef3c7; color: #92400e; }
+.so-warn { background: #e0e7ff; color: #3730a3; }
+.so-short { background: #fee2e2; color: #991b1b; }
+.stat-item.warning { background: #fef3c7; color: #92400e; }

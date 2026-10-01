@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Job, JobSchedule } from '../types';
 import { inventoryService, ComponentProjection } from '../services/api';
+import { planJobsFrom, planKeyOf } from '../utils/planJobs';
 import './MaterialVisibility.css';
 
 interface MaterialVisibilityProps {
@@ -14,11 +15,6 @@ interface MaterialVisibilityProps {
   jobs: Job[];
 }
 
-const iso = (v: unknown): string | null => {
-  if (!v) return null;
-  const d = new Date(v as any);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-};
 const fmtDate = (s?: string | null) => {
   if (!s) return '—';
   const d = new Date(s);
@@ -59,22 +55,8 @@ export default function MaterialVisibility({ jobSchedules, jobs }: MaterialVisib
   const [shortOnly, setShortOnly] = useState(false);
   const [filter, setFilter] = useState('');
 
-  // Planned jobs with their scheduled dates (unscheduled jobs are sent without).
-  const planJobs = useMemo(() => {
-    const byId = new Map(jobSchedules.map((s) => [s.jobId, s]));
-    return jobs.map((j) => {
-      const s = byId.get(j.jobId);
-      const ok = s && s.status !== 'Unschedulable';
-      return {
-        jobId: j.jobId,
-        itemCode: (j as any).itemCode,
-        quantity: Number((j as any).quantity) || 0,
-        start: ok ? iso(s!.plannedStartDate) : null,
-        end: ok ? iso(s!.plannedEndDate) : null,
-      };
-    });
-  }, [jobs, jobSchedules]);
-  const planKey = useMemo(() => planJobs.map((j) => `${j.jobId}|${j.start}|${j.end}`).join(';'), [planJobs]);
+  const planJobs = useMemo(() => planJobsFrom(jobs, jobSchedules), [jobs, jobSchedules]);
+  const planKey = useMemo(() => planKeyOf(planJobs), [planJobs]);
 
   useEffect(() => {
     if (!planJobs.length) { setData([]); return; }

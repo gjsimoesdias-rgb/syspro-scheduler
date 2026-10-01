@@ -28,7 +28,7 @@ export type ContentTab =
   | 'gantt' | 'jobtree' | 'resources' | 'constraints' | 'draggable' | 'compare'
   | 'bottleneck' | 'history' | 'kpi' | 'capacity' | 'pegging' | 'whatif'
   | 'materials' | 'constraints-mgmt' | 'leveling' | 'guide' | 'inventory'
-  | 'settings' | 'scenarios' | 'dispatch' | 'ctp' | 'changeovers' | 'optimize' | 'bomtree';
+  | 'settings' | 'scenarios' | 'dispatch' | 'ctp' | 'changeovers' | 'optimize' | 'bomtree' | 'salesorders';
 
 export type WorkflowJobFilter = 'all' | 'unscheduled' | 'past-due' | 'short-term' | 'long-term';
 export type JobPaneMode = 'production' | 'master';

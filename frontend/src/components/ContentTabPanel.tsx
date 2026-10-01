@@ -31,6 +31,7 @@ const MaterialVisibility    = lazy(() => import('./MaterialVisibility'));
 const ConstraintOverride    = lazy(() => import('./ConstraintOverride'));
 const ResourceLeveling      = lazy(() => import('./ResourceLeveling'));
 const InventoryDashboard    = lazy(() => import('./InventoryDashboard'));
+const SalesOrderPegging     = lazy(() => import('./SalesOrderPegging'));
 const VersionsPanel         = lazy(() => import('./VersionsPanel'));
 const DispatchListView      = lazy(() => import('./DispatchListView'));
 const OrderPromisePanel     = lazy(() => import('./OrderPromisePanel'));
@@ -57,7 +58,7 @@ const VIEW_GROUPS: Array<{ id: ViewGroupId; label: string; icon: LucideIcon; tab
   { id: 'versions', label: 'Versions', icon: BookOpen, tabs: [
     { id: 'history', label: 'Plan versions' }, { id: 'optimize', label: 'Optimize rules' }, { id: 'whatif', label: 'Quick what-if' },
   ] },
-  { id: 'promise', label: 'Promise', icon: CalendarCheck, tabs: [{ id: 'ctp', label: 'Capable to promise' }] },
+  { id: 'promise', label: 'Promise', icon: CalendarCheck, tabs: [{ id: 'ctp', label: 'Capable to promise' }, { id: 'salesorders', label: 'Sales orders' }] },
   { id: 'setup', label: 'Setup', icon: Settings2, tabs: [
     { id: 'resources', label: 'Resources' }, { id: 'changeovers', label: 'Changeover matrix' },
   ] },
@@ -414,6 +415,10 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
 
           {contentTab === 'optimize' && (
             <OptimizerPanel />
+          )}
+
+          {contentTab === 'salesorders' && (
+            <SalesOrderPegging jobSchedules={schedule?.jobSchedules || []} jobs={openJobs} />
           )}
 
           {contentTab === 'bomtree' && (
