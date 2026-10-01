@@ -448,7 +448,7 @@ router.post('/pegging', async (req: Request, res: Response) => {
     const count = (s: string) => result.lines.filter((l) => l.status === s).length;
     return res.json({
       generatedAt: new Date().toISOString(),
-      counts: { lines: result.lines.length, onTime: count('on-time'), late: count('late'), short: count('short'), unscheduled: count('unscheduled') },
+      counts: { lines: result.lines.length, onTime: count('on-time'), late: count('late'), pastDue: count('past-due'), short: count('short'), unscheduled: count('unscheduled') },
       ...result,
     });
   } catch (err: any) {

@@ -19,11 +19,12 @@ const fmtQty = (n: number) => (Number.isInteger(n) ? n.toLocaleString() : n.toLo
 const shortJob = (id: string) => id.replace(/^0+(?=\d)/, '');
 const STATUS: Record<PeggedSoLine['status'], { label: string; cls: string; title: string }> = {
   'on-time': { label: 'On time', cls: 'so-ok', title: 'Covered by stock and planned jobs that finish by the ship date' },
-  late: { label: 'Late', cls: 'so-late', title: 'Covered, but the last supply arrives after the ship date' },
+  late: { label: 'Late', cls: 'so-late', title: 'Covered, but the plan delivers after the ship date' },
+  'past-due': { label: 'Past due', cls: 'so-past', title: 'The ship date passed before today; the date shows when the plan can still supply it' },
   unscheduled: { label: 'Not planned', cls: 'so-warn', title: 'Covered by a job the plan has not scheduled' },
   short: { label: 'Short', cls: 'so-short', title: 'Stock plus the jobs in the plan do not cover this line' },
 };
-const ORDER = { short: 0, late: 1, unscheduled: 2, 'on-time': 3 } as const;
+const ORDER = { short: 0, late: 1, 'past-due': 2, unscheduled: 3, 'on-time': 4 } as const;
 
 export default function SalesOrderPegging({ jobSchedules, jobs }: Props) {
   const [data, setData] = useState<SoPeggingResult | null>(null);
@@ -78,6 +79,7 @@ export default function SalesOrderPegging({ jobSchedules, jobs }: Props) {
           <div className="mat-stats">
             <span className="stat-item error">{c.short} short</span>
             <span className="stat-item warning">{c.late} late</span>
+            {c.pastDue > 0 && <span className="stat-item neutral" title="Ship date already passed before today">{c.pastDue} past due</span>}
             {c.unscheduled > 0 && <span className="stat-item warning">{c.unscheduled} not planned</span>}
             <span className="stat-item success">{c.onTime} on time</span>
             <span className="stat-item neutral">{c.lines} lines</span>
@@ -132,7 +134,7 @@ export default function SalesOrderPegging({ jobSchedules, jobs }: Props) {
                     ))}
                     {l.shortQty > 0 && <span className="so-peg missing">Short {fmtQty(l.shortQty)}</span>}
                   </div>
-                  <div>{fmtDate(l.availableAt)}</div>
+                  <div>{l.status === 'short' ? '—' : fmtDate(l.availableAt)}</div>
                   <div>
                     <span className={`so-status ${st.cls}`} title={st.title}>{st.label}{l.daysLate > 0 ? ` +${l.daysLate}d` : ''}</span>
                   </div>

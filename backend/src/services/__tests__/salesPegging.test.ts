@@ -58,4 +58,14 @@ describe('pegSalesOrders', () => {
     expect(lines.find((l) => l.salesOrder === 'S1')!.status).toBe('unscheduled');
     expect(lines.find((l) => l.salesOrder === 'S2')!.status).toBe('on-time');
   });
+
+  it('ship date already passed → past due, with how late the plan can still supply it', () => {
+    const { lines } = pegSalesOrders({
+      now,
+      onHand: new Map([['A', 5]]),
+      jobs: [{ jobId: 'J', itemCode: 'A', quantity: 5, end: d('2026-10-03T10:00:00') }],
+      lines: [line('OLD', 1, 'A', 10, '2026-09-20T00:00:00')],
+    });
+    expect(lines[0]).toMatchObject({ status: 'past-due', daysLate: 13 });
+  });
 });

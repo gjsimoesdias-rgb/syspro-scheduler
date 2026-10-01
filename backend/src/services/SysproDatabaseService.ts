@@ -858,7 +858,11 @@ export class SysproDatabaseService {
       links.set(String(r.jobId || '').trim(), { so: String(r.salesOrder || '').trim(), line: Number(r.salesOrderLine) || 0 });
     }
     const onHand = new Map<string, number>();
-    for (const w of stock) onHand.set(w.code, (onHand.get(w.code) || 0) + (Number(w.qtyOnHand) || 0));
+    const stockUom = new Map<string, string>();
+    for (const w of stock) {
+      onHand.set(w.code, (onHand.get(w.code) || 0) + (Number(w.qtyOnHand) || 0));
+      if (w.unitOfMeasure) stockUom.set(w.code, w.unitOfMeasure);
+    }
     const lines: SoLine[] = ((soRes as any).recordset || []).map((r: any) => ({
       salesOrder: String(r.salesOrder || '').trim(),
       line: Number(r.line) || 0,
@@ -868,7 +872,8 @@ export class SysproDatabaseService {
       stockCode: String(r.stockCode || '').trim(),
       description: String(r.description || '').trim(),
       warehouse: String(r.warehouse || '').trim(),
-      unitOfMeasure: String(r.unitOfMeasure || '').trim(),
+      // SorDetail quantities are held in the stocking unit, so label them with it.
+      unitOfMeasure: stockUom.get(String(r.stockCode || '').trim()) || String(r.unitOfMeasure || '').trim(),
       openQty: Number(r.openQty) || 0,
       shipDate: r.shipDate ? new Date(r.shipDate) : null,
     }));

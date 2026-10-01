@@ -490,11 +490,11 @@ export interface PeggedSoLine {
   salesOrder: string; line: number; customer?: string; customerName?: string; customerPo?: string;
   stockCode: string; description?: string; unitOfMeasure?: string; openQty: number; shipDate: string | null;
   pegs: SoPeg[]; shortQty: number; availableAt: string | null;
-  status: 'on-time' | 'late' | 'unscheduled' | 'short'; daysLate: number;
+  status: 'on-time' | 'late' | 'past-due' | 'unscheduled' | 'short'; daysLate: number;
 }
 export interface SoPeggingResult {
   generatedAt: string;
-  counts: { lines: number; onTime: number; late: number; short: number; unscheduled: number };
+  counts: { lines: number; onTime: number; late: number; pastDue: number; short: number; unscheduled: number };
   lines: PeggedSoLine[];
   byJob: Record<string, Array<{ salesOrder: string; line: number; customerName?: string; qty: number; shipDate: string | null; status: PeggedSoLine['status'] }>>;
   warning?: string;

@@ -9,7 +9,9 @@
  *     now), then planned jobs that make the item in order of planned finish.
  *  3. A line is
  *       on-time     — covered, and the last supply arrives by its ship date
- *       late        — covered, but after the ship date (daysLate)
+ *       late        — covered, but the plan delivers after the ship date (daysLate)
+ *       past-due    — the ship date had already passed before today; shows
+ *                     when the plan can still supply it (daysLate vs ship date)
  *       unscheduled — covered only with a job that has no planned dates
  *       short       — not enough stock + jobs in the plan
  */
@@ -54,7 +56,7 @@ export interface PeggedLine {
   pegs: Peg[];
   shortQty: number;
   availableAt: string | null;
-  status: 'on-time' | 'late' | 'unscheduled' | 'short';
+  status: 'on-time' | 'late' | 'past-due' | 'unscheduled' | 'short';
   daysLate: number;
 }
 
@@ -150,7 +152,9 @@ export function pegSalesOrders(args: {
     // Late = available after the end of the ship day.
     const shipEnd = w.ship ? new Date(w.ship.getFullYear(), w.ship.getMonth(), w.ship.getDate() + 1) : null;
     const lateMs = availableAt && shipEnd ? new Date(availableAt).getTime() - shipEnd.getTime() : 0;
-    const status: PeggedLine['status'] = shortQty > 0 ? 'short' : undated ? 'unscheduled' : lateMs > 0 ? 'late' : 'on-time';
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const status: PeggedLine['status'] = shortQty > 0 ? 'short' : undated ? 'unscheduled'
+      : w.ship && w.ship < today ? 'past-due' : lateMs > 0 ? 'late' : 'on-time';
     const out: PeggedLine = {
       salesOrder: norm(w.l.salesOrder),
       line: w.l.line,
@@ -166,7 +170,7 @@ export function pegSalesOrders(args: {
       shortQty,
       availableAt,
       status,
-      daysLate: status === 'late' ? Math.ceil(lateMs / 86400000) : 0,
+      daysLate: lateMs > 0 && (status === 'late' || status === 'past-due') ? Math.ceil(lateMs / 86400000) : 0,
     };
     for (const p of w.pegs) {
       if (p.source !== 'job' || !p.jobId) continue;
