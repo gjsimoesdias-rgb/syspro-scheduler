@@ -50,10 +50,10 @@ const CruxLogo: React.FC<Props> = ({
   if (variant === 'inline') {
     const h = height ?? 30;
     return (
-      <svg className={className} viewBox="0 -10 430 84" height={h} role="img" aria-label="CRUX APS">
+      <svg className={className} viewBox="0 -10 470 84" height={h} role="img" aria-label="CRUX APS">
         <CruxMark maskId={maskId} />
-        <text x="340" y="60" fill="var(--crux-accent, #c5f23a)" fontSize="40" fontWeight={500}
-          letterSpacing="6" fontFamily="'Segoe UI', 'Inter', system-ui, sans-serif">APS</text>
+        <text x="338" y="62" fill="var(--crux-accent, #c5f23a)" fontSize="52" fontWeight={600}
+          letterSpacing="5" fontFamily="'Segoe UI', 'Inter', system-ui, sans-serif">APS</text>
       </svg>
     );
   }

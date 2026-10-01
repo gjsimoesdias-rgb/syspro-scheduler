@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense, lazy } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
-import { Keyboard, Lock, Unlock } from 'lucide-react';
+import { Lock, Unlock } from 'lucide-react';
 // Always-eager: modals and always-visible chrome
 import ConstraintOverrideModal from './components/ConstraintOverrideModal';
 import BomDetailModal from './components/BomDetailModal';
@@ -17,13 +17,12 @@ import ConnectionModal from './components/ConnectionModal';
 import SchemaExplorer from './components/SchemaExplorer';
 import ContentTabPanel from './components/ContentTabPanel';
 // Type-only import (no runtime value used)
-import type { GanttSettingsState } from './components/GanttSettings';
 // Lazy tab panels still used directly in App.tsx (manage tab)
 const ResourceDefinitionTab = lazy(() => import('./components/ResourceDefinitionTab'));
 const ShiftManagementTab = lazy(() => import('./components/ShiftManagementTab'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
-import { useUiStore, MAIN_TABS, type MainTab, type ContentTab, type WorkflowJobFilter, type JobPaneMode, type ScheduleAroundMode, type ManageTab, type SchedulingRule, type SchedulingDirection, type ScheduleDateMode } from './stores/uiStore';
+import { useUiStore, type MainTab, type WorkflowJobFilter, type JobPaneMode, type ScheduleAroundMode } from './stores/uiStore';
 import { useScheduleStore } from './stores/scheduleStore';
 import exportService from './services/exportService';
 import { createShortcutManager } from './services/keyboardShortcuts';
@@ -35,7 +34,8 @@ import ScheduleSetupModal, { ScheduleConfig } from './components/ScheduleSetupMo
 import { useSseEvents } from './hooks/useSseEvents';
 import { useJobsData } from './hooks/useJobsData';
 import { useScheduleGeneration } from './hooks/useScheduleGeneration';
-import { useColumnManager, DEFAULT_JOB_COLUMNS, DEFAULT_OPERATION_COLUMNS, type JobColumnDef } from './hooks/useColumnManager';
+import { useScheduleDiagnostics } from './hooks/useScheduleDiagnostics';
+import { useColumnManager, type JobColumnDef } from './hooks/useColumnManager';
 import { toCsv, downloadCsv } from './utils/csvExport';
 import { convertScheduleDates } from './utils/scheduleDates';
 import { findEarliestSlotOrForce, findEarliestSlotWithRetry } from './utils/slotFinder';
@@ -43,7 +43,6 @@ import {
   buildParentMap,
   clampMasterDropStart,
   describeDependencyViolation,
-  getMasterLinkValue as extractMasterLink,
   getMasterRootJobId as resolveMasterRootJobId,
 } from './utils/masterSub';
 import {
@@ -997,7 +996,6 @@ const App: React.FC = () => {
     return map;
   }, [resources]);
 
-  const orderedGroupNames = useMemo(() => Object.keys(workcentreGroups).sort(), [workcentreGroups]);
 
   const visibleJobSource = useMemo(() => {
     if (openJobs.length) return openJobs;
@@ -1121,13 +1119,9 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const scheduleByJobId = useMemo(() => {
-    const map = new Map<string, JobSchedule>();
-    if (schedule?.jobSchedules) {
-      for (const js of schedule.jobSchedules) map.set(js.jobId, js);
-    }
-    return map;
-  }, [schedule]);
+  // Lateness, why-late, unscheduled reasons and per-job status (pure, unit-tested).
+  const { scheduleByJobId, jobLatenessMap, lateWhyByJob, scheduleShortfall, getJobScheduleStatus } =
+    useScheduleDiagnostics(schedule, openJobs);
 
   /**
    * Toggle pin for a single operation. Syncs optimistically with the backend:
@@ -1182,158 +1176,11 @@ const App: React.FC = () => {
     }
   }, [pinnedOps, togglePinnedOp, setPinnedOpDetails, scheduleByJobId]);
 
-  // Per-job lateness indicator: compare scheduled end date vs job due date
-  const jobLatenessMap = useMemo(() => {
-    const map = new Map<string, 'late' | 'at-risk' | 'on-time' | 'unscheduled'>();
-    const jobById = new Map(openJobs.map((j) => [j.jobId, j] as const));
-    for (const js of schedule?.jobSchedules ?? []) {
-      // Unscheduled jobs carry the due date as their "end" — not a lateness state.
-      if (!js.operationSchedules?.length) continue;
-      const job = jobById.get(js.jobId);
-      if (!job?.dueDate) { map.set(js.jobId, 'on-time'); continue; }
-      const endDate = new Date(js.plannedEndDate);
-      const dueDate = new Date(job.dueDate);
-      if (isNaN(endDate.getTime()) || isNaN(dueDate.getTime())) { map.set(js.jobId, 'on-time'); continue; }
-      const diffMs = endDate.getTime() - dueDate.getTime();
-      if (diffMs > 0) map.set(js.jobId, 'late');
-      else if (diffMs > -8 * 60 * 60 * 1000) map.set(js.jobId, 'at-risk');
-      else map.set(js.jobId, 'on-time');
-    }
-    return map;
-  }, [schedule, openJobs]);
-
-  /**
-   * Why a late job is late, from the engine's per-operation explanation
-   * (readyAt / waitMinutes / waitReason / blockedBy). Shown as the tooltip on
-   * the Overdue column's "Late" flag.
-   */
-  const lateWhyByJob = useMemo(() => {
-    const out = new Map<string, string>();
-    const jobById = new Map(openJobs.map((j) => [j.jobId, j] as const));
-    const span = (min: number) => {
-      const m = Math.max(0, Math.round(min));
-      const d = Math.floor(m / 1440); const h = Math.floor((m % 1440) / 60);
-      return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m % 60}m` : `${m}m`;
-    };
-    const fmt = (d: Date) => d.toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    for (const js of schedule?.jobSchedules ?? []) {
-      if (jobLatenessMap.get(js.jobId) !== 'late') continue;
-      const job = jobById.get(js.jobId);
-      const due = job?.dueDate ? new Date(job.dueDate) : null;
-      const end = new Date(js.plannedEndDate);
-      if (!due || Number.isNaN(due.getTime())) continue;
-      const lines = [`Finishes ${span((end.getTime() - due.getTime()) / 60000)} after the due date (${fmt(due)}).`];
-      const ops = (js.operationSchedules || []) as any[];
-      const firstReady = ops[0]?.readyAt ? new Date(ops[0].readyAt) : null;
-      if (firstReady && firstReady.getTime() >= due.getTime()) {
-        lines.push(`The due date had already passed when the job could start (ready ${fmt(firstReady)}).`);
-      }
-      let lineMin = 0; let calMin = 0; const behind = new Set<string>();
-      for (const o of ops) {
-        const w = Number(o.waitMinutes) || 0;
-        if (w <= 0) continue;
-        if (o.waitReason === 'calendar') calMin += w; else lineMin += w;
-        for (const b of o.blockedBy || []) behind.add(String(b).replace(/^0+/, ''));
-      }
-      if (lineMin > 0) lines.push(`Waited ${span(lineMin)} for busy lines${behind.size ? ` (behind ${[...behind].slice(0, 6).join(', ')})` : ''}.`);
-      if (calMin > 0) lines.push(`Waited ${span(calMin)} for shift time.`);
-      if (lines.length === 1 && !ops.some((o) => 'readyAt' in o)) lines.push('Regenerate to see what delayed it.');
-      out.set(js.jobId, lines.join('\n'));
-    }
-    return out;
-  }, [schedule, openJobs, jobLatenessMap]);
-
-  const getJobScheduleStatus = useCallback((job: Job): 'scheduled' | 'partial' | 'not-scheduled' => {
-    const jobSch = scheduleByJobId.get(job.jobId);
-    if (!jobSch) return 'not-scheduled';
-    const totalOps = job.operations.length;
-    const scheduledOps = jobSch.operationSchedules?.length ?? 0;
-    if (scheduledOps >= totalOps && totalOps > 0) return 'scheduled';
-    if (scheduledOps > 0) return 'partial';
-    return 'not-scheduled';
-  }, [scheduleByJobId]);
-
-  /**
-   * Explain WHY jobs didn't fully fit the last schedule run.
-   *
-   * The engine emits a ConstraintViolation for every operation it couldn't
-   * place (CapacityExceeded when the machine's hours ran out before the
-   * horizon end, and related placement failures). We join each violation's
-   * affectedOperationId back to the job's operation to name the work centre
-   * that ran out of room, producing a per-job hover tip plus an aggregate
-   * bottleneck summary.
-   */
-  const scheduleShortfall = useMemo(() => {
-    const violations = schedule?.constraintViolations;
-    if (!violations || violations.length === 0) return null;
-
-    const humanViolation = (t: string): string => {
-      switch (t) {
-        case 'CapacityExceeded': return 'no capacity in window';
-        case 'OvertimeExceeded': return 'over shift capacity';
-        case 'ScheduleDateViolation': return 'outside horizon';
-        case 'SkillMismatch': return 'no qualified machine';
-        case 'LineGroupViolation': return 'line-group conflict';
-        case 'SetupConflict': return 'setup conflict';
-        case 'BatchViolation': return 'batch rule';
-        default: return t;
-      }
-    };
-    const PLACEMENT_TYPES = new Set([
-      'CapacityExceeded', 'OvertimeExceeded', 'ScheduleDateViolation',
-      'SkillMismatch', 'LineGroupViolation', 'SetupConflict', 'BatchViolation',
-    ]);
-
-    // opId -> { wc, seq } across all currently-loaded jobs.
-    const opMap = new Map<string, { wc: string; seq: number }>();
-    for (const j of openJobs) {
-      for (const op of j.operations || []) {
-        opMap.set(op.opId, { wc: op.workcentreName || op.workcentreId, seq: op.sequence });
-      }
-    }
-
-    const reasonsByJob = new Map<string, string[]>();
-    const wcCounts = new Map<string, number>();
-    const jobIds = new Set<string>();
-    let opCount = 0;
-
-    for (const v of violations) {
-      if (!PLACEMENT_TYPES.has(v.type)) continue;
-      if (v.severity === 'Info') continue; // notes (e.g. finishes after the window), not drops
-      opCount++;
-      const info = v.affectedOperationId ? opMap.get(v.affectedOperationId) : undefined;
-      const wc = info?.wc || 'work centre';
-      if (v.type === 'CapacityExceeded' || v.type === 'OvertimeExceeded') {
-        wcCounts.set(wc, (wcCounts.get(wc) || 0) + 1);
-      }
-      const jid = v.affectedJobId;
-      if (jid) {
-        jobIds.add(jid);
-        const label = info ? `Op ${info.seq} — ${wc}` : (v.description || v.type);
-        const line = `${label} (${humanViolation(v.type)})`;
-        const arr = reasonsByJob.get(jid) || [];
-        if (!arr.includes(line)) arr.push(line);
-        reasonsByJob.set(jid, arr);
-      }
-    }
-
-    if (opCount === 0) return null;
-
-    const tipByJob = new Map<string, string>();
-    for (const [jid, arr] of reasonsByJob) {
-      tipByJob.set(jid, `Couldn't fit in this schedule:\n• ${arr.join('\n• ')}`);
-    }
-    const topWc = [...wcCounts.entries()].sort((a, b) => b[1] - a[1]);
-
-    return { tipByJob, jobCount: jobIds.size, opCount, topWc };
-  }, [schedule, openJobs]);
-
   const getJobMaterialStatus = useCallback((job: Job): 'Materials' | 'Partial' | 'No Materials' => {
     return materialStatusByJob[job.jobId] || 'Materials';
   }, [materialStatusByJob]);
 
   // Master/sub-job helpers — logic shared with MachineGanttBoard via utils/masterSub.
-  const getMasterLinkValue = useCallback((job: Job): string => extractMasterLink(job), []);
 
   const parentJobByChildId = useMemo(() => buildParentMap(visibleJobSource), [visibleJobSource]);
 
