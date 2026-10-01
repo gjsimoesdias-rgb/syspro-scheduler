@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { inventoryService, StockItem, PurchaseOrderLine, MaterialShortage, apiErrorMessage } from '../services/api';
 import './InventoryDashboard.css';
+import { AlertTriangle, Package, ShoppingCart } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
 // Sub-component: Stock On Hand table
@@ -114,7 +115,7 @@ const StockPanel: React.FC<StockPanelProps> = ({ isDarkMode }) => {
         </label>
       </div>
 
-      {error && <div className="inv-error">⚠ {error}</div>}
+      {error && <div className="inv-error"><AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> {error}</div>}
 
       <div className="inv-table-wrap">
         <table className="inv-table">
@@ -274,7 +275,7 @@ const POPanel: React.FC<POPanelProps> = ({ isDarkMode }) => {
         />
       </div>
 
-      {error && <div className="inv-error">⚠ {error}</div>}
+      {error && <div className="inv-error"><AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> {error}</div>}
 
       <div className="inv-table-wrap">
         <table className="inv-table">
@@ -385,7 +386,7 @@ const ShortagesPanel: React.FC<ShortagesPanelProps> = ({ isDarkMode }) => {
         </button>
       </div>
 
-      {error && <div className="inv-error">⚠ {error}</div>}
+      {error && <div className="inv-error"><AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> {error}</div>}
       {!error && items.length === 0 && !loading && (
         <div className="inv-empty-state">✓ No material shortages detected across open WIP jobs</div>
       )}
@@ -457,19 +458,19 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({ isDarkMode = fa
           className={`inv-tab ${tab === 'stock' ? 'active' : ''}`}
           onClick={() => setTab('stock')}
         >
-          📦 Stock On Hand
+          <Package size={13} className="ui-icon" aria-hidden="true" /> Stock On Hand
         </button>
         <button
           className={`inv-tab ${tab === 'po' ? 'active' : ''}`}
           onClick={() => setTab('po')}
         >
-          🛒 Open Purchase Orders
+          <ShoppingCart size={13} className="ui-icon" aria-hidden="true" /> Open Purchase Orders
         </button>
         <button
           className={`inv-tab ${tab === 'shortages' ? 'active' : ''}`}
           onClick={() => setTab('shortages')}
         >
-          ⚠ Material Shortages
+          <AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> Material Shortages
         </button>
       </div>
 

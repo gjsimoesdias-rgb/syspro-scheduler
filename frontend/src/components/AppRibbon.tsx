@@ -7,7 +7,7 @@
  * action callbacks that trigger heavy logic in App) are passed as props.
  */
 import React from 'react';
-import { Trash2, FlaskConical, Clock, Send, Database } from 'lucide-react';
+import { Clock, Database, FlaskConical, Send, Settings, Trash2, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   useUiStore,
@@ -244,7 +244,7 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
         <div className="aps-ribbon-group">
           <span className="aps-ribbon-title">SCHEDULE</span>
           <button className="btn btn-sm" onClick={onExportToSyspro} disabled={loading || !schedule || !dbStatus.sysproConnected}>
-            {scheduleLoading ? '⏳ Restoring…' : 'Save and Publish'}
+            {scheduleLoading ? 'Restoring…' : 'Save and Publish'}
           </button>
           <button className="btn btn-sm" onClick={onLoadData} disabled={dataLoading}>Refresh</button>
           <button className="btn btn-sm" onClick={onUndo} disabled={loading || !undoRedoManager.canUndo()}>Undo</button>
@@ -283,7 +283,7 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
           <button className={`btn btn-sm ${workflowJobFilter === 'past-due' ? 'active-tab-btn' : ''}`} onClick={() => onApplyWorkflowFilter('past-due')}>Past Due</button>
           <button className={`btn btn-sm ${workflowJobFilter === 'short-term' ? 'active-tab-btn' : ''}`} onClick={() => onApplyWorkflowFilter('short-term')}>Short Term</button>
           <button className={`btn btn-sm ${workflowJobFilter === 'long-term' ? 'active-tab-btn' : ''}`} onClick={() => onApplyWorkflowFilter('long-term')}>Long Term</button>
-          <button className={`btn btn-sm ${advancedFilterActive ? 'active-tab-btn' : ''}`} onClick={onOpenAdvancedFilter} title="Build an AND/OR filter with grouping and sorting">⚙ Advanced Filter{advancedFilterActive ? ' •' : ''}</button>
+          <button className={`btn btn-sm ${advancedFilterActive ? 'active-tab-btn' : ''}`} onClick={onOpenAdvancedFilter} title="Build an AND/OR filter with grouping and sorting"><Settings size={13} className="ui-icon" aria-hidden="true" /> Advanced Filter{advancedFilterActive ? ' •' : ''}</button>
         </div>
       )}
 
@@ -301,7 +301,7 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
           <>
             <span className="aps-ribbon-sep" aria-hidden="true">|</span>
             <span className="aps-ribbon-user" title={`Role: ${user.role}`}>
-              👤 {user.fullName ?? user.username}
+              <User size={13} className="ui-icon" aria-hidden="true" /> {user.fullName ?? user.username}
             </span>
             <button
               className="aps-ribbon-logout"

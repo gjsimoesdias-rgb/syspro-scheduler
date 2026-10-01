@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ConstraintViolation } from '../types';
 import './ConstraintOverrideModal.css';
+import { AlertTriangle } from 'lucide-react';
 
 interface ConstraintOverrideModalProps {
   violation: ConstraintViolation | null;
@@ -102,7 +103,7 @@ const ConstraintOverrideModal: React.FC<ConstraintOverrideModalProps> = ({
           </div>
 
           <div className="warning-box">
-            <strong>⚠️ Warning:</strong> This action will override a constraint and may negatively impact
+            <strong><AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> Warning:</strong> This action will override a constraint and may negatively impact
             schedule quality. Ensure proper authorization before proceeding.
           </div>
         </div>

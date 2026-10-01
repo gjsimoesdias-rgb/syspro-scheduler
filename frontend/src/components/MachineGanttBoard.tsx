@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { pinService, apiErrorMessage, type PinnedOperationDto } from '../services/api';
 import { useScheduleStore } from '../stores/scheduleStore';
 import './MachineGanttBoard.css';
+import { BarChart3, List, LocateFixed, Lock, Unlock } from 'lucide-react';
 
 /** Reload locks from the server into the store (after a bulk lock/unlock). */
 const refreshPins = async () => {
@@ -36,7 +37,7 @@ const timeFenceLock = async () => {
     const until = new Date(Date.now() + days * 86_400_000);
     const r = await pinService.timeFence(until);
     await refreshPins();
-    toast.success(`🔒 ${r.added} operations locked up to ${until.toLocaleString()} (${r.total} locked in total)`);
+    toast.success(`${r.added} operations locked up to ${until.toLocaleString()} (${r.total} locked in total)`);
   } catch (err) { toast.error(apiErrorMessage(err, 'Could not apply the time fence')); }
 };
 
@@ -45,7 +46,7 @@ const clearLocks = async () => {
   try {
     const r = await pinService.removeAll();
     await refreshPins();
-    toast.success(`🔓 ${r.removed} locks removed`);
+    toast.success(`${r.removed} locks removed`);
   } catch (err) { toast.error(apiErrorMessage(err, 'Could not remove locks')); }
 };
 
@@ -1201,9 +1202,9 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
             <button className={`zoom-btn ${zoom === 'hour' ? 'active' : ''}`} onClick={() => setZoom('hour')}>Hour</button>
             <button className={`zoom-btn ${zoom === 'minute' ? 'active' : ''}`} onClick={() => setZoom('minute')}>Minute</button>
           </div>
-          <button className={`zoom-btn ${showUtilBars ? 'active' : ''}`} onClick={() => setShowUtilBars(v => !v)} title="Toggle utilization bars">📊 Util</button>
-          <button className="zoom-btn" onClick={timeFenceLock} title="Lock every operation starting in the next N days (time fence)">🔒 Time fence</button>
-          <button className="zoom-btn" onClick={clearLocks} title="Remove all locks">🔓 Clear locks</button>
+          <button className={`zoom-btn ${showUtilBars ? 'active' : ''}`} onClick={() => setShowUtilBars(v => !v)} title="Toggle utilization bars"><BarChart3 size={13} className="ui-icon" aria-hidden="true" /> Util</button>
+          <button className="zoom-btn" onClick={timeFenceLock} title="Lock every operation starting in the next N days (time fence)"><Lock size={13} className="ui-icon" aria-hidden="true" /> Time fence</button>
+          <button className="zoom-btn" onClick={clearLocks} title="Remove all locks"><Unlock size={13} className="ui-icon" aria-hidden="true" /> Clear locks</button>
           <button className={`zoom-btn ${showShift ? 'active' : ''}`} onClick={() => setShowShift(v => !v)} title="Toggle shift info">⏱ Shift</button>
           <button
             className={`zoom-btn today-btn${todayStartPx === 'before' || todayStartPx === 'after' ? ' today-btn-out' : ''}`}
@@ -1223,8 +1224,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
               : todayStartPx === 'after' ? 'Today is past this schedule — scrolling to end'
               : 'Scroll to today'
             }
-          >📍 Today</button>
-          <button className="zoom-btn" onClick={() => setShowLegend(v => !v)} title="Toggle legend">🔑 Legend</button>
+          ><LocateFixed size={13} className="ui-icon" aria-hidden="true" /> Today</button>
+          <button className="zoom-btn" onClick={() => setShowLegend(v => !v)} title="Toggle legend"><List size={13} className="ui-icon" aria-hidden="true" /> Legend</button>
           {selectedOps.size > 1 && (
             <span className="gantt-multiselect-badge" title={`${selectedOps.size} ops selected — drag any to move group. Press Esc to clear.`}>
               ✦ {selectedOps.size} selected

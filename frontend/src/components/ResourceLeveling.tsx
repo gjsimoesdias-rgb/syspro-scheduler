@@ -5,6 +5,7 @@
 import React, { useMemo, useState } from 'react';
 import { JobSchedule, OperationSchedule } from '../types';
 import './ResourceLeveling.css';
+import { AlertTriangle, Lightbulb } from 'lucide-react';
 
 interface ResourceLevelingProps {
   jobSchedules: JobSchedule[];
@@ -124,7 +125,7 @@ export default function ResourceLeveling(props: ResourceLevelingProps) {
           </select>
         </div>
         <button className="btn btn-primary" onClick={handleOptimize} disabled={isOptimizing}>
-          {isOptimizing ? '⏳ Optimizing...' : '🚀 Run Optimizer'}
+          {isOptimizing ? 'Optimizing...' : 'Run Optimizer'}
         </button>
       </div>
 
@@ -157,13 +158,13 @@ export default function ResourceLeveling(props: ResourceLevelingProps) {
 
       {overloadedResources.length > 0 && (
         <div className="leveling-suggestion">
-          <strong>⚠️ High Utilization:</strong> {overloadedResources.map(r => r.resourceId).join(', ')} are overloaded. Consider adding capacity or rescheduling.
+          <strong><AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> High Utilization:</strong> {overloadedResources.map(r => r.resourceId).join(', ')} are overloaded. Consider adding capacity or rescheduling.
         </div>
       )}
 
       {underutilizedResources.length > 0 && (
         <div className="leveling-suggestion info">
-          <strong>💡 Opportunity:</strong> {underutilizedResources.map(r => r.resourceId).join(', ')} have available capacity.
+          <strong><Lightbulb size={13} className="ui-icon" aria-hidden="true" /> Opportunity:</strong> {underutilizedResources.map(r => r.resourceId).join(', ')} have available capacity.
         </div>
       )}
     </div>

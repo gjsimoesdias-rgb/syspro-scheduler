@@ -1,5 +1,6 @@
 import React from 'react';
 import './GanttSettings.css';
+import { Settings } from 'lucide-react';
 
 export type GanttZoom = 'week' | 'day' | 'hour' | 'minute';
 export type GanttColorMode = 'workcentre' | 'lateness' | 'status' | 'critical';
@@ -93,7 +94,7 @@ const GanttSettings: React.FC<Props> = ({ settings, onChange }) => {
   return (
     <div className="gantt-settings-panel">
       <div className="gs-header">
-        <h2>⚙️ Gantt Board Settings</h2>
+        <h2><Settings size={13} className="ui-icon" aria-hidden="true" /> Gantt Board Settings</h2>
         <p>Changes apply instantly and are saved in your browser.</p>
       </div>
 

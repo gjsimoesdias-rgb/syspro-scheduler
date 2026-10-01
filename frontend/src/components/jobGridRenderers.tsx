@@ -81,7 +81,7 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
 
     if (column.key === 'lockedOps') {
       const n = (job.operations || []).filter((o) => pinnedOps.has(`${job.jobId}::${o.opId}`)).length;
-      return n ? <span className="grid-flag" title={`${n} operation(s) locked in place`}>🔒 {n}</span> : <span className="grid-flag">—</span>;
+      return n ? <span className="grid-flag" title={`${n} operation(s) locked in place`}><Lock size={13} className="ui-icon" aria-hidden="true" /> {n}</span> : <span className="grid-flag">—</span>;
     }
 
     if (column.key === 'publishState') {

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { Schedule, Job } from '../types';
 import './PeggingView.css';
+import { ClipboardList, Factory, Moon, Settings } from 'lucide-react';
 
 interface PeggingViewProps {
   schedule: Schedule | null;
@@ -66,7 +67,7 @@ const PeggingView: React.FC<PeggingViewProps> = ({ schedule, jobs }) => {
             <>
               {/* Job block */}
               <div className="peg-node peg-node-job">
-                <div className="peg-node-header">📋 Job</div>
+                <div className="peg-node-header"><ClipboardList size={13} className="ui-icon" aria-hidden="true" /> Job</div>
                 <div className="peg-node-row"><span>Job ID</span><strong>{selectedJob?.jobId || selectedJobId}</strong></div>
                 <div className="peg-node-row"><span>Item</span><strong>{selectedJob?.itemCode}</strong></div>
                 <div className="peg-node-row"><span>Description</span><strong>{selectedJob?.description}</strong></div>
@@ -91,7 +92,7 @@ const PeggingView: React.FC<PeggingViewProps> = ({ schedule, jobs }) => {
                 return (
                   <React.Fragment key={op.opId}>
                     <div className="peg-node peg-node-op">
-                      <div className="peg-node-header">⚙️ Op {idx + 1}</div>
+                      <div className="peg-node-header"><Settings size={13} className="ui-icon" aria-hidden="true" /> Op {idx + 1}</div>
                       <div className="peg-node-row"><span>Op ID</span><strong>{op.opId}</strong></div>
                       <div className="peg-node-row"><span>Workcentre</span><strong>{op.workcentreId}</strong></div>
                       {sourceOp && <div className="peg-node-row"><span>WC Name</span><strong>{sourceOp.workcentreName}</strong></div>}
@@ -100,13 +101,13 @@ const PeggingView: React.FC<PeggingViewProps> = ({ schedule, jobs }) => {
                       <div className="peg-node-row"><span>Duration</span><strong>{op.duration} min</strong></div>
                       {sourceOp && <div className="peg-node-row"><span>Setup</span><strong>{sourceOp.setupTime} min</strong></div>}
                       {sourceOp && <div className="peg-node-row"><span>Queue</span><strong>{sourceOp.queueTime} min</strong></div>}
-                      {op.isOvertimeSlot && <div className="peg-overtime-flag">🌙 Overtime Slot</div>}
+                      {op.isOvertimeSlot && <div className="peg-overtime-flag"><Moon size={13} className="ui-icon" aria-hidden="true" /> Overtime Slot</div>}
                     </div>
 
                     <div className="peg-arrow">▼ Resource</div>
 
                     <div className="peg-node peg-node-resource">
-                      <div className="peg-node-header">🏭 Resource</div>
+                      <div className="peg-node-header"><Factory size={13} className="ui-icon" aria-hidden="true" /> Resource</div>
                       <div className="peg-node-row"><span>Resource ID</span><strong>{op.resourceId}</strong></div>
                       <div className="peg-node-row"><span>Workcentre</span><strong>{op.workcentreId}</strong></div>
                       <div className="peg-node-row"><span>Batch Size</span><strong>{op.batchSize}</strong></div>

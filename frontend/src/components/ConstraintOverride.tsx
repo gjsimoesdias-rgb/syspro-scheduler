@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Lightbulb } from 'lucide-react';
 import { ConstraintViolation } from '../types';
 import './ConstraintOverride.css';
 
@@ -90,7 +90,7 @@ export default function ConstraintOverride(props: ConstraintOverrideProps) {
                         <div className="violation-type">{violation.type}</div>
                         <div className="violation-desc">{violation.description}</div>
                         {violation.suggestedAction && (
-                          <div className="violation-action">💡 {violation.suggestedAction}</div>
+                          <div className="violation-action"><Lightbulb size={13} className="ui-icon" aria-hidden="true" /> {violation.suggestedAction}</div>
                         )}
                       </div>
                     </label>

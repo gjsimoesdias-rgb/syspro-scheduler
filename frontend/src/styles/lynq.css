@@ -225,3 +225,6 @@ body, :root .app { font-family: var(--font-sans); }
   font-size: 12px;
   font-weight: 600;
 }
+
+/* lucide icons inline with text (replaced emoji) */
+.ui-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; flex-shrink: 0; }

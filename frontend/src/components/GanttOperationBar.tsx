@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { format } from 'date-fns';
-import { Lock, Unlock } from 'lucide-react';
+import { Lock, Settings, Unlock } from 'lucide-react';
 import type { GanttSettingsState } from './GanttSettings';
 
 export interface GanttOperationBarProps {
@@ -192,7 +192,7 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
         </div>
       )}
       <div className="gantt-tt-divider" />
-      <div className="gantt-tt-row phase-setup"><span>⚙ Setup</span><strong>{Math.round(setupMin)}m</strong></div>
+      <div className="gantt-tt-row phase-setup"><span><Settings size={13} className="ui-icon" aria-hidden="true" /> Setup</span><strong>{Math.round(setupMin)}m</strong></div>
       <div className="gantt-tt-row phase-run"><span>▶ Run</span><strong>{Math.round(runMin)}m</strong></div>
       <div className="gantt-tt-row phase-queue"><span>Queue</span><strong>{Math.round(queueMin)}m</strong></div>
       <div className="gantt-tt-row phase-move"><span>Move</span><strong>{Math.round(moveMin)}m</strong></div>

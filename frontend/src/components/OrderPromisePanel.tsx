@@ -120,7 +120,7 @@ const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
       setStockSearching(true);
       const res = await apiClient.get('/schedule/ctp/stock-search', { params: { q } });
       setStockResults(res.data?.items || []);
-      if (!(res.data?.items || []).length) toast('No stock codes match', { icon: '🔍' });
+      if (!(res.data?.items || []).length) toast('No stock codes match', { icon: '' });
     } catch (err: any) {
       toast.error(apiErrorMessage(err, 'Stock code search failed'));
     } finally {
@@ -483,7 +483,7 @@ const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
                 <div className="ctp-banner-sub">
                   {result.onTime
                     ? '✓ Meets the customer requested date'
-                    : '⚠ Later than the customer requested date'}
+                    : 'Later than the customer requested date'}
                 </div>
               )}
             </div>

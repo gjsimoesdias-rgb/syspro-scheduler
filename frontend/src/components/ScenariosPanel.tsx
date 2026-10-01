@@ -195,7 +195,7 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
       <div className="scenarios-list-header">
         <h3>Saved Scenarios {scenarios.length > 0 && <span className="scenarios-count">({scenarios.length})</span>}</h3>
         <button className="btn btn-sm" onClick={loadScenarios} disabled={loading}>
-          {loading ? '⏳' : '↻ Refresh'}
+          {loading ? '' : '↻ Refresh'}
         </button>
       </div>
 

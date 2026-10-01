@@ -690,7 +690,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
         </>}
 
         <div className="sp-tree-separator" />
-        <TreeItem id="my-profile" label="👤 My Profile &amp; Preferences" />
+        <TreeItem id="my-profile" label="My Profile &amp; Preferences" />
       </div>
 
       {/* ── Right panel ─────────────────────────────── */}

@@ -12,6 +12,7 @@ import type { AlternativeGroup, DbStatus, NewAlternativeGroup } from '../hooks/u
 import type { JobPaneMode, ManageTab, WorkflowJobFilter } from '../stores/uiStore';
 import type { Lateness, ScheduleShortfall } from '../utils/scheduleDiagnostics';
 import CrewsPanel from './CrewsPanel';
+import { AlertTriangle } from 'lucide-react';
 
 const ResourceDefinitionTab = lazy(() => import('./ResourceDefinitionTab'));
 const ShiftManagementTab = lazy(() => import('./ShiftManagementTab'));
@@ -286,7 +287,7 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                 const latest = dues.length ? Math.max(...dues) : NaN;
                 return Number.isFinite(latest) && latest < Date.now() - 30 * 86400000 ? (
                   <span className="grid-flag grid-flag-warn" title="The newest suggestion is due more than a month ago — run Requirements Calculation in SYSPRO to refresh them">
-                    ⚠ Stale: newest due {new Date(latest).toLocaleDateString()}
+                    <AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> Stale: newest due {new Date(latest).toLocaleDateString()}
                   </span>
                 ) : null;
               })()}
@@ -310,7 +311,7 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                 lineHeight: 1.4,
               }}
             >
-              <span aria-hidden="true" style={{ fontSize: '14px' }}>⚠</span>
+              <span aria-hidden="true" style={{ fontSize: '14px' }}><AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> </span>
               <span style={{ flex: 1 }}>
                 <strong>{scheduleShortfall.jobCount}</strong> job{scheduleShortfall.jobCount === 1 ? '' : 's'} couldn&apos;t be fully scheduled in this window
                 {' '}({scheduleShortfall.opCount} operation{scheduleShortfall.opCount === 1 ? '' : 's'} dropped).
@@ -352,7 +353,7 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
                     onClick={saveColumnProfile}
                     title="Save column order + visibility as your profile"
                   >
-                    {profileSaving ? '…' : '💾 Save Profile'}
+                    {profileSaving ? '…' : 'Save Profile'}
                   </button>
                 </div>
               </div>

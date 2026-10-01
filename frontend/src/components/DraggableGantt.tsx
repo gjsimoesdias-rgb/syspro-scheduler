@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { OperationSchedule, Schedule } from '../types';
 import './DraggableGantt.css';
+import { Pin } from 'lucide-react';
 
 interface DraggableGanttProps {
   schedule: Schedule | null;
@@ -70,7 +71,7 @@ const DraggableGantt: React.FC<DraggableGanttProps> = ({ schedule, onJobMoved })
 
   return (
     <div className="draggable-gantt">
-      <h3>📌 Draggable Schedule (Drag jobs to reschedule)</h3>
+      <h3><Pin size={13} className="ui-icon" aria-hidden="true" /> Draggable Schedule (Drag jobs to reschedule)</h3>
       <div className="gantt-timeline" onMouseMove={handleMouseMove}>
         <div className="timeline-header">
           <div className="timeline-labels">

@@ -380,7 +380,7 @@ const App: React.FC = () => {
   const scheduleOpRef = useRef<((job: Job, opId: string) => Promise<void>) | null>(null);
 
   useEffect(() => {
-    console.log('🚀 Syspro Scheduler UI loaded');
+    console.log('Syspro Scheduler UI loaded');
 
     Promise.allSettled([
       loadJobsAndResources(),
@@ -1084,7 +1084,7 @@ const App: React.FC = () => {
     const delay = (jobLoadRetryRef.current + 1) * 3000; // 3s, 6s, 9s
     const retryTimer = setTimeout(() => {
       jobLoadRetryRef.current += 1;
-      console.log(`🔄 Auto-retrying job load (attempt ${jobLoadRetryRef.current}/3)...`);
+      console.log(`Auto-retrying job load (attempt ${jobLoadRetryRef.current}/3)...`);
       loadJobsAndResources();
     }, delay);
 

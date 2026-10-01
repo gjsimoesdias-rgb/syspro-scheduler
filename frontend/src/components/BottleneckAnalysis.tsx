@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle, Search } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Lightbulb, Search } from 'lucide-react';
 import { ResourceLoad } from '../types';
 import './BottleneckAnalysis.css';
 
@@ -82,7 +82,7 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ resourceLoads }
       </div>
 
       <div className="bottleneck-recommendations">
-        <h4>💡 Recommendations</h4>
+        <h4><Lightbulb size={13} className="ui-icon" aria-hidden="true" /> Recommendations</h4>
         <ul>
           {bottlenecks.map((item) => (
             <li key={item.resourceId}>

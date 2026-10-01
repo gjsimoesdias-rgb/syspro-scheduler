@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { Schedule } from '../types';
 import './WhatIfPanel.css';
+import { BarChart3, FileText, FlaskConical, Plus, Trash2 } from 'lucide-react';
 
 interface WhatIfPanelProps {
   liveSchedule: Schedule | null;
@@ -57,15 +58,15 @@ const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
             onClick={onCreateScenario}
             disabled={!liveSchedule}
           >
-            ➕ Create What-If Scenario from Current Schedule
+            <Plus size={13} className="ui-icon" aria-hidden="true" /> Create What-If Scenario from Current Schedule
           </button>
         ) : (
           <>
             <div className="whatif-scenario-badge">
-              🔬 Scenario Active: <strong>{scenarioLabel}</strong>
+              <FlaskConical size={13} className="ui-icon" aria-hidden="true" /> Scenario Active: <strong>{scenarioLabel}</strong>
             </div>
             <button className="whatif-btn whatif-btn-clear" onClick={onClearScenario}>
-              🗑️ Clear Scenario
+              <Trash2 size={13} className="ui-icon" aria-hidden="true" /> Clear Scenario
             </button>
           </>
         )}
@@ -78,13 +79,13 @@ const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
               className={`whatif-tab ${activePanel === 'compare' ? 'active' : ''}`}
               onClick={() => setActivePanel('compare')}
             >
-              📊 Metric Comparison
+              <BarChart3 size={13} className="ui-icon" aria-hidden="true" /> Metric Comparison
             </button>
             <button
               className={`whatif-tab ${activePanel === 'notes' ? 'active' : ''}`}
               onClick={() => setActivePanel('notes')}
             >
-              📝 Scenario Notes
+              <FileText size={13} className="ui-icon" aria-hidden="true" /> Scenario Notes
             </button>
           </div>
 
@@ -165,7 +166,7 @@ const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
 
       {!scenarioSchedule && liveSchedule && (
         <div className="whatif-empty-hint">
-          <div className="whatif-hint-icon">🔬</div>
+          <div className="whatif-hint-icon"><FlaskConical size={13} className="ui-icon" aria-hidden="true" /> </div>
           <p>A What-If scenario is a sandbox copy of the live schedule.</p>
           <p>You can modify the scenario without affecting the live plan, then compare KPIs side-by-side.</p>
         </div>

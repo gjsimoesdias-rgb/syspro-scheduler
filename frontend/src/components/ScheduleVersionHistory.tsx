@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Schedule } from '../types';
 import './ScheduleVersionHistory.css';
+import { History, RotateCcw } from 'lucide-react';
 
 interface ScheduleVersion {
   versionId: string;
@@ -40,7 +41,7 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({
 
   return (
     <div className="version-history">
-      <h3>📚 Schedule Version History</h3>
+      <h3><History size={13} className="ui-icon" aria-hidden="true" /> Schedule Version History</h3>
 
       <div className="versions-timeline">
         {sortedVersions.map((version, index) => (
@@ -93,7 +94,7 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({
 
                   {!version.isCurrent && (
                     <button className="restore-btn" onClick={() => handleRestore(version)}>
-                      🔄 Restore This Version
+                      <RotateCcw size={13} className="ui-icon" aria-hidden="true" /> Restore This Version
                     </button>
                   )}
                 </div>

@@ -3,6 +3,7 @@ import { Job } from '../types';
 import type { ProductionMode } from '../types';
 import { apiClient } from '../services/api';
 import { toWeekValue, mondayFromWeekValue, addDays } from '../utils/weekWindow';
+import { AlertTriangle } from 'lucide-react';
 
 interface ScheduleSetupModalProps {
   open: boolean;
@@ -309,7 +310,7 @@ const ScheduleSetupModal: React.FC<ScheduleSetupModalProps> = ({
               </div>
               {cpSatHealth === 'down' && (
                 <div className="setup-hint setup-hint--warn">
-                  ⚠ CP-SAT unavailable: {cpSatHealthDetail || 'the Python sidecar is not running'}.
+                  <AlertTriangle size={13} className="ui-icon" aria-hidden="true" /> CP-SAT unavailable: {cpSatHealthDetail || 'the Python sidecar is not running'}.
                   Start it with <code>docker-compose up cp-sat</code> or <code>python cp-sat/main.py</code>.
                 </div>
               )}
