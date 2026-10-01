@@ -353,7 +353,10 @@ const App: React.FC = () => {
       const state = jobLatenessMap.get(job.jobId);
       const due = job.dueDate ? new Date(job.dueDate) : null;
       const pastDue = due && !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
-      if (state === 'late') return <span className="grid-flag grid-flag-bad" title="Planned to finish after the due date">Late</span>;
+      if (state === 'late') {
+        const why = lateWhyByJob.get(job.jobId);
+        return <span className="grid-flag grid-flag-bad" title={why || 'Planned to finish after the due date'}>Late{why ? ' ⓘ' : ''}</span>;
+      }
       if (state === 'at-risk') return <span className="grid-flag grid-flag-warn" title="Finishes less than 8 h before the due date">At risk</span>;
       if (!state && pastDue) return <span className="grid-flag grid-flag-bad" title="Due date has passed and the job is not scheduled">Past due</span>;
       return state ? <span className="grid-flag grid-flag-ok">On time</span> : <span className="grid-flag">—</span>;
@@ -1182,8 +1185,11 @@ const App: React.FC = () => {
   // Per-job lateness indicator: compare scheduled end date vs job due date
   const jobLatenessMap = useMemo(() => {
     const map = new Map<string, 'late' | 'at-risk' | 'on-time' | 'unscheduled'>();
+    const jobById = new Map(openJobs.map((j) => [j.jobId, j] as const));
     for (const js of schedule?.jobSchedules ?? []) {
-      const job = openJobs.find(j => j.jobId === js.jobId);
+      // Unscheduled jobs carry the due date as their "end" — not a lateness state.
+      if (!js.operationSchedules?.length) continue;
+      const job = jobById.get(js.jobId);
       if (!job?.dueDate) { map.set(js.jobId, 'on-time'); continue; }
       const endDate = new Date(js.plannedEndDate);
       const dueDate = new Date(job.dueDate);
@@ -1195,6 +1201,47 @@ const App: React.FC = () => {
     }
     return map;
   }, [schedule, openJobs]);
+
+  /**
+   * Why a late job is late, from the engine's per-operation explanation
+   * (readyAt / waitMinutes / waitReason / blockedBy). Shown as the tooltip on
+   * the Overdue column's "Late" flag.
+   */
+  const lateWhyByJob = useMemo(() => {
+    const out = new Map<string, string>();
+    const jobById = new Map(openJobs.map((j) => [j.jobId, j] as const));
+    const span = (min: number) => {
+      const m = Math.max(0, Math.round(min));
+      const d = Math.floor(m / 1440); const h = Math.floor((m % 1440) / 60);
+      return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m % 60}m` : `${m}m`;
+    };
+    const fmt = (d: Date) => d.toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    for (const js of schedule?.jobSchedules ?? []) {
+      if (jobLatenessMap.get(js.jobId) !== 'late') continue;
+      const job = jobById.get(js.jobId);
+      const due = job?.dueDate ? new Date(job.dueDate) : null;
+      const end = new Date(js.plannedEndDate);
+      if (!due || Number.isNaN(due.getTime())) continue;
+      const lines = [`Finishes ${span((end.getTime() - due.getTime()) / 60000)} after the due date (${fmt(due)}).`];
+      const ops = (js.operationSchedules || []) as any[];
+      const firstReady = ops[0]?.readyAt ? new Date(ops[0].readyAt) : null;
+      if (firstReady && firstReady.getTime() >= due.getTime()) {
+        lines.push(`The due date had already passed when the job could start (ready ${fmt(firstReady)}).`);
+      }
+      let lineMin = 0; let calMin = 0; const behind = new Set<string>();
+      for (const o of ops) {
+        const w = Number(o.waitMinutes) || 0;
+        if (w <= 0) continue;
+        if (o.waitReason === 'calendar') calMin += w; else lineMin += w;
+        for (const b of o.blockedBy || []) behind.add(String(b).replace(/^0+/, ''));
+      }
+      if (lineMin > 0) lines.push(`Waited ${span(lineMin)} for busy lines${behind.size ? ` (behind ${[...behind].slice(0, 6).join(', ')})` : ''}.`);
+      if (calMin > 0) lines.push(`Waited ${span(calMin)} for shift time.`);
+      if (lines.length === 1 && !ops.some((o) => 'readyAt' in o)) lines.push('Regenerate to see what delayed it.');
+      out.set(js.jobId, lines.join('\n'));
+    }
+    return out;
+  }, [schedule, openJobs, jobLatenessMap]);
 
   const getJobScheduleStatus = useCallback((job: Job): 'scheduled' | 'partial' | 'not-scheduled' => {
     const jobSch = scheduleByJobId.get(job.jobId);
