@@ -676,7 +676,7 @@ const App: React.FC = () => {
     setGuideFocus(section);
     setShowShortcutsHelp(false);
 
-    const guideWindow = window.open('', 'ascend-aps-user-guide', 'width=1280,height=900,resizable=yes,scrollbars=yes');
+    const guideWindow = window.open('', 'crux-aps-user-guide', 'width=1280,height=900,resizable=yes,scrollbars=yes');
     if (!guideWindow) {
       toast.error('Allow pop-ups to open the user guide');
       return;

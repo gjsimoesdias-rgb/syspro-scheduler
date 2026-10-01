@@ -43,6 +43,15 @@
   align-items: center;
   gap: var(--sp-2);
 }
+/* CRUX APS logo (components/CruxLogo.tsx): outline letters use the text
+   colour; the accent is a deeper green on light backgrounds for contrast. */
+.brand-logo {
+  display: block;
+  color: var(--text-primary);
+  --crux-accent: #4d7c0f;
+}
+:root.dark-mode .brand-logo { --crux-accent: #c5f23a; }
+
 .brand-icon {
   width: 48px;
   height: 38px;

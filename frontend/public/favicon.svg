@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 32 32">
-  <!-- Show the icon portion (left ~37%) of the logo at full height -->
-  <image href="/logo.png" x="-30" y="0" width="87" height="32" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- CRUX APS: the lime X from the logo on a dark tile -->
+  <rect width="32" height="32" rx="6" fill="#1b1d20"/>
+  <path d="M8 9 L22 24" stroke="#ffffff" stroke-width="3" stroke-linecap="square" fill="none"/>
+  <path d="M8 24 L25 6" stroke="#c5f23a" stroke-width="3.4" stroke-linecap="square" fill="none"/>
 </svg>

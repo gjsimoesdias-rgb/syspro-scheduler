@@ -15,7 +15,7 @@ export const getUserGuideHtml = (focus: GuideSection = 'overview'): string => {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ascend APS - User Guide</title>
+  <title>CRUX APS - User Guide</title>
   <style>
     :root {
       --bg: #f4f7fb;
@@ -240,7 +240,7 @@ export const getUserGuideHtml = (focus: GuideSection = 'overview'): string => {
 </head>
 <body>
   <div class="hero">
-    <h1>Ascend APS User Guide</h1>
+    <h1>CRUX APS User Guide</h1>
     <p>This guide covers the full scheduling workflow, factory setup, material planning, master jobs, Gantt editing, publishing back to Syspro, and troubleshooting. Use it as the main operating manual for planners, supervisors, and schedulers.</p>
     <div class="hero-meta">
       <span class="pill">Comprehensive guide</span>
@@ -287,7 +287,7 @@ export const getUserGuideHtml = (focus: GuideSection = 'overview'): string => {
     <main class="main">
       <section class="card" id="overview">
         <h2>1. Overview</h2>
-        <p class="lead">Ascend APS is a production scheduling cockpit connected to Syspro. It combines live job data, operation routing, work centre resources, schedule generation, and publish-back into a single planning workspace.</p>
+        <p class="lead">CRUX APS is a production scheduling cockpit connected to Syspro. It combines live job data, operation routing, work centre resources, schedule generation, and publish-back into a single planning workspace.</p>
         <div class="grid">
           <div class="mini"><strong>Primary purpose</strong>Build and review finite schedules using real job, machine, and calendar data.</div>
           <div class="mini"><strong>Live data source</strong>Production orders and routing are read from Syspro tables and company-specific records.</div>
@@ -576,7 +576,7 @@ export const getUserGuideHtml = (focus: GuideSection = 'overview'): string => {
         </ol>
       </section>
 
-      <div class="footer">Ascend APS operational guide</div>
+      <div class="footer">CRUX APS operational guide</div>
     </main>
   </div>
 

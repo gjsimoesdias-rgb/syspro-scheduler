@@ -1,11 +1,12 @@
 /**
- * AppHeader — top navigation bar for Ascend APS.
+ * AppHeader — top navigation bar for CRUX APS.
  *
  * Extracted from App.tsx as part of #42 (phased App.tsx split, phase a).
  * Receives only the props it truly needs; everything else stays in App.tsx
  * until future phases migrate it.
  */
 import React from 'react';
+import CruxLogo from './CruxLogo';
 import { Sun, Moon, HelpCircle, RefreshCw } from 'lucide-react';
 
 export interface DbStatus {
@@ -33,12 +34,8 @@ const AppHeader: React.FC<Props> = ({
   <header className="app-header">
     <div className="header-content">
       <div className="header-title">
-        <div className="brand-lockup" aria-label="Ascend APS">
-          <div className="brand-icon" />
-          <div className="brand-text">
-            <span className="brand-ascend">Ascend</span>
-            <span className="brand-aps">APS</span>
-          </div>
+        <div className="brand-lockup">
+          <CruxLogo variant="inline" height={26} className="brand-logo" />
         </div>
       </div>
       <div className="header-controls">
