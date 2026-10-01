@@ -1,6 +1,6 @@
 import type { Job, JobSchedule } from '../types';
 
-export interface PlanJob { jobId: string; itemCode?: string; quantity: number; start: string | null; end: string | null }
+export interface PlanJob { jobId: string; itemCode?: string; quantity: number; start: string | null; end: string | null; dueDate?: string | null }
 
 const iso = (v: unknown): string | null => {
   if (!v) return null;
@@ -20,6 +20,7 @@ export function planJobsFrom(jobs: Job[], jobSchedules: JobSchedule[]): PlanJob[
       quantity: Number((j as any).quantity) || 0,
       start: ok ? iso(s!.plannedStartDate) : null,
       end: ok ? iso(s!.plannedEndDate) : null,
+      dueDate: iso((j as any).dueDate) ?? undefined,
     };
   });
 }

@@ -27,7 +27,8 @@ import exportService from './services/exportService';
 import { createShortcutManager } from './services/keyboardShortcuts';
 import BulkImportService from './services/bulkImportService';
 import { Schedule, ConstraintViolation, Job, Resource, Operation } from './types';
-import { scheduleService, jobService, versionService, apiClient, pinService, settingsService, type PinnedOperationDto, apiErrorMessage } from './services/api';
+import { scheduleService, jobService, versionService, apiClient, pinService, settingsService, inventoryService, type JobFmad, type PinnedOperationDto, apiErrorMessage } from './services/api';
+import { planJobsFrom, planKeyOf } from './utils/planJobs';
 import { getUserGuideHtml } from './userGuideHtml';
 import ScheduleSetupModal, { ScheduleConfig } from './components/ScheduleSetupModal';
 import { useSseEvents } from './hooks/useSseEvents';
@@ -313,6 +314,27 @@ const App: React.FC = () => {
   const assignMarker = useMarkerStore((s) => s.assign);
   useEffect(() => { if (user?.id !== undefined) void loadMarkers(); }, [user?.id, loadMarkers]);
 
+  // FMAD column: first material availability per job — fetched only while the
+  // column is shown, and again when the plan's dates change.
+  const fmadVisible = visibleJobColumns.includes('fmad');
+  const [fmadByJob, setFmadByJob] = useState<Record<string, JobFmad> | undefined>(undefined);
+  const fmadPlan = useMemo(
+    () => (fmadVisible ? planJobsFrom(openJobs, schedule?.jobSchedules || []) : []),
+    [fmadVisible, openJobs, schedule?.jobSchedules],
+  );
+  const fmadKey = useMemo(() => planKeyOf(fmadPlan), [fmadPlan]);
+  useEffect(() => {
+    if (!fmadVisible || !dbStatus.sysproConnected || !fmadPlan.length) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      inventoryService.fmad(fmadPlan)
+        .then((r) => { if (!cancelled) setFmadByJob(r.jobs || {}); })
+        .catch(() => { if (!cancelled) setFmadByJob({}); });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fmadKey, fmadVisible, dbStatus.sysproConnected]);
+
   // ─── Cell renderers for the jobs grid (use formatters from useColumnManager) ──
 
   /** Export the jobs grid as shown (filtered rows, visible columns) for Excel. */
@@ -324,6 +346,8 @@ const App: React.FC = () => {
         case 'lateness': return jobLatenessMap.get(job.jobId) ?? '';
         case 'lockedOps': return (job.operations || []).filter((o) => pinnedOps.has(`${job.jobId}::${o.opId}`)).length;
         case 'publishState': return publishByJob.get(String(job.jobId).trim()) ?? '';
+        case 'fmad': { const f = fmadByJob?.[job.jobId]; return f?.fmad ? f.fmad.slice(0, 10) : f?.status === 'no-supply' ? 'No supply' : ''; }
+        case 'dependents': return dependentsByJob.get(job.jobId) || 0;
         case 'marker': return markerDefs.find((d) => d.id === markerAssignments[job.jobId])?.name ?? '';
         case 'validForScheduling': return job.operations?.length ? 'Yes' : 'No operations';
         default: {
@@ -872,6 +896,21 @@ const App: React.FC = () => {
   // the manual-scheduling dependency guards below.
   const masterParentMap = useMemo(() => buildParentMap(openJobs), [openJobs]);
 
+  // Dependents column: sub-jobs (all levels) under each master job.
+  const dependentsByJob = useMemo(() => {
+    const m = new Map<string, number>();
+    parentJobByChildId.forEach((_parent, child) => {
+      const seen = new Set<string>([child]);
+      let p = parentJobByChildId.get(child);
+      while (p && !seen.has(p)) {
+        m.set(p, (m.get(p) || 0) + 1);
+        seen.add(p);
+        p = parentJobByChildId.get(p);
+      }
+    });
+    return m;
+  }, [parentJobByChildId]);
+
   const getMasterRootJobId = useCallback(
     (job: Job): string => resolveMasterRootJobId(job.jobId, parentJobByChildId),
     [parentJobByChildId]
@@ -1347,6 +1386,8 @@ const App: React.FC = () => {
     lateWhyByJob,
     pinnedOps,
     publishByJob,
+    fmadByJob,
+    dependentsByJob,
     scheduleOpRef,
     scheduleShortfall,
     setBomJobId,

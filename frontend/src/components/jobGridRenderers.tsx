@@ -7,6 +7,8 @@ import { Lock, Unlock } from 'lucide-react';
 import type { Job, Operation } from '../types';
 import type { JobColumnDef } from '../hooks/useColumnManager';
 import { useMarkerStore } from '../stores/markerStore';
+import type { JobFmad } from '../services/api';
+import { fmadText } from '../utils/fmad';
 import type { JobScheduleStatus, Lateness, ScheduleShortfall } from '../utils/scheduleDiagnostics';
 
 export interface JobGridRenderContext {
@@ -20,6 +22,10 @@ export interface JobGridRenderContext {
   lateWhyByJob: Map<string, string>;
   pinnedOps: Set<string>;
   publishByJob: Map<string, string>;
+  /** First material availability per job (FMAD column); undefined while loading. */
+  fmadByJob?: Record<string, JobFmad>;
+  /** Sub-jobs (all levels) under each master job. */
+  dependentsByJob: Map<string, number>;
   scheduleOpRef: React.MutableRefObject<((job: Job, opId: string) => Promise<void>) | null>;
   scheduleShortfall: ScheduleShortfall | null;
   setBomJobId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -41,6 +47,8 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
     lateWhyByJob,
     pinnedOps,
     publishByJob,
+    fmadByJob,
+    dependentsByJob,
     scheduleOpRef,
     scheduleShortfall,
     setBomJobId,
@@ -88,6 +96,19 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
       return def
         ? <span className="marker-chip" style={{ ['--mk' as any]: def.color }} title={`Marker: ${def.name} (right-click the job to change)`}>{def.name}</span>
         : <span className="grid-flag">—</span>;
+    }
+
+    if (column.key === 'fmad') {
+      const f = fmadByJob?.[job.jobId];
+      if (!fmadByJob) return <span className="grid-flag" title="Loading material availability…">…</span>;
+      if (!f) return <span className="grid-flag">—</span>;
+      const { label, tip, cls } = fmadText(f, job.dueDate);
+      return <span className={`grid-flag ${cls}`} title={tip}>{label}</span>;
+    }
+
+    if (column.key === 'dependents') {
+      const n = dependentsByJob.get(job.jobId) || 0;
+      return n ? <span className="grid-flag" title={`${n} sub-job(s) must finish before this master job`}>{n}</span> : <span className="grid-flag">—</span>;
     }
 
     if (column.key === 'lockedOps') {

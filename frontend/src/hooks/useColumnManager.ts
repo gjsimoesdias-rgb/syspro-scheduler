@@ -27,6 +27,8 @@ export const DEFAULT_JOB_COLUMNS: JobColumnDef[] = [
   { key: 'status', label: 'Status' },
   { key: 'scheduleStatus', label: 'Schedule' },
   { key: 'materialStatus', label: 'Materials' },
+  { key: 'fmad', label: 'FMAD' },
+  { key: 'dependents', label: 'Dependents' },
   // LYNQ-style status columns (phase 6)
   { key: 'validForScheduling', label: 'Valid' },
   { key: 'lateness', label: 'Overdue' },

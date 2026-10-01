@@ -47,6 +47,7 @@ export interface JobMaterialPlan {
 import environment from '../config/environment';
 import { computeMaterialPlans, RequirementLine } from './materialPlan';
 import { projectInventory, ProjectionJob, ComponentProjection } from './inventoryProjection';
+import { firstMaterialAvailability, FmadJob, JobFmad } from './materialAvailability';
 import { isSuggestedJobId } from '../utils/suggestedJobs';
 import { remapMachineWorkcentres } from '../utils/remapMachineWorkcentres';
 import { pegSalesOrders, PegJob, PeggedLine, JobPeg, SoLine } from './salesPegging';
@@ -861,6 +862,33 @@ export class SysproDatabaseService {
         unitOfMeasure: w.unitOfMeasure,
       })),
       poReceipts,
+    });
+  }
+
+  /**
+   * FMAD per job (services/materialAvailability.ts): free stock + open PO
+   * receipts claimed in order of need, else InvMaster lead time.
+   */
+  async getFirstMaterialAvailability(jobs: FmadJob[]): Promise<Record<string, JobFmad>> {
+    if (!jobs.length) return {};
+    const [warehouseRows, poReceipts, requirementsByJob, inventory] = await Promise.all([
+      this.getInventoryByWarehouse(),
+      this.getOpenPoReceipts(),
+      this.getOpenJobMaterialRequirements(),
+      this.getInventory().catch(() => [] as Material[]),
+    ]);
+    await this.addBomFallbackRequirements(jobs as any, requirementsByJob);
+    const leadTimeDays = new Map<string, number>();
+    for (const m of inventory as any[]) {
+      const lt = Number(m.leadTimeDays) || 0;
+      if (lt > 0) leadTimeDays.set(String(m.code ?? m.materialId ?? '').trim(), lt);
+    }
+    return firstMaterialAvailability({
+      jobs,
+      requirementsByJob,
+      stock: warehouseRows.map((w) => ({ code: w.code, warehouseCode: w.warehouseCode, qtyOnHand: w.qtyOnHand, qtyAllocSO: w.qtyAllocSO })),
+      poReceipts,
+      leadTimeDays,
     });
   }
 

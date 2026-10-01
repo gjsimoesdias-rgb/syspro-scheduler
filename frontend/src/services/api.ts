@@ -255,6 +255,12 @@ export const versionService = {
     (await apiClient.post('/versions/purge', { olderThanDays, keepAtLeast })).data.deleted,
 };
 
+export interface JobFmad {
+  fmad: string | null;
+  status: 'in-stock' | 'on-order' | 'lead-time' | 'no-supply' | 'no-materials';
+  limiting?: string;
+  components: number;
+}
 export interface MarkerDef { id: string; name: string; color: string }
 export interface JobMarkers { definitions: MarkerDef[]; assignments: Record<string, string> }
 export const markerService = {
@@ -530,6 +536,11 @@ export const inventoryService = {
     return response.data as SoPeggingResult;
   },
   /** Projected inventory by day for the plan's components. */
+  /** First material availability date per job (grid FMAD column). */
+  fmad: async (jobs: Array<{ jobId: string; start?: string | null; end?: string | null; dueDate?: string | null }>) => {
+    const response = await apiClient.post('/inventory/fmad', { jobs });
+    return response.data as { generatedAt: string; jobs: Record<string, JobFmad> };
+  },
   projection: async (jobs: Array<{ jobId: string; itemCode?: string; quantity?: number; start?: string | null; end?: string | null }>) => {
     const response = await apiClient.post('/inventory/projection', { jobs });
     return response.data as { generatedAt: string; count: number; shortCount: number; components: ComponentProjection[] };

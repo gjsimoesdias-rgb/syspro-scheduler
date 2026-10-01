@@ -411,6 +411,7 @@ function planJobsFrom(req: Request) {
       quantity: Number(j?.quantity) || 0,
       start: j?.start ?? null,
       end: j?.end ?? null,
+      dueDate: j?.dueDate ?? null,
     }))
     .filter((j: any) => j.jobId);
 }
@@ -431,6 +432,25 @@ router.post('/projection', async (req: Request, res: Response) => {
   } catch (err: any) {
     req.log.error({ err }, 'Inventory projection failed');
     return res.status(500).json({ error: err.message, components: [] });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/inventory/fmad
+// First material availability date per job (grid FMAD column). Body as
+// /projection (jobs with planned start / due date set the claim order).
+// ─────────────────────────────────────────────────────────────
+router.post('/fmad', async (req: Request, res: Response) => {
+  const db = getDb(req);
+  if (!db) return res.status(503).json({ error: 'Database not connected', jobs: {} });
+  const jobs = planJobsFrom(req);
+  if (!jobs) return res.status(400).json({ error: 'jobs must be an array (max 20000)' });
+  try {
+    const result = await (await sysproServiceFor(req, db)).getFirstMaterialAvailability(jobs);
+    return res.json({ generatedAt: new Date().toISOString(), jobs: result });
+  } catch (err: any) {
+    req.log.error({ err }, 'FMAD failed');
+    return res.status(500).json({ error: err.message, jobs: {} });
   }
 });
 
