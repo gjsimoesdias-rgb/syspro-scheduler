@@ -17,6 +17,8 @@ import {
 import type { FilterGroup, SortSpec } from '../lib/advancedFilter';
 
 export type ColorMode = 'dark' | 'light';
+export type GanttPeriod = 'free' | '4d' | '1w' | '2w' | 'month';
+export const GANTT_PERIOD_DAYS: Record<Exclude<GanttPeriod, 'free'>, number> = { '4d': 4, '1w': 7, '2w': 14, month: 30 };
 export type GanttColorScheme = 'lateness' | 'workcentre' | 'status';
 
 /** Top-level ribbon tabs */
@@ -91,6 +93,12 @@ interface UiState {
   /** Production lines whose Gantt lane is hidden (unticked in the tree). */
   hiddenLanes: string[];
   setHiddenLanes: (v: string[]) => void;
+  /** Gantt period shown across the board ('free' = Week/Day/Hour/Minute zoom). */
+  ganttPeriod: GanttPeriod;
+  setGanttPeriod: (v: GanttPeriod) => void;
+  /** Gantt lane order. */
+  ganttLaneSort: 'name' | 'load';
+  setGanttLaneSort: (v: 'name' | 'load') => void;
   setSidebarCollapsed: (v: boolean) => void;
 
   /** Gantt bar colouring scheme selection */
@@ -239,6 +247,10 @@ export const useUiStore = create<UiState>()(
       setShowResourceTree: (v) => set({ showResourceTree: v }),
       hiddenLanes: [],
       setHiddenLanes: (v) => set({ hiddenLanes: v }),
+      ganttPeriod: 'free',
+      setGanttPeriod: (v) => set({ ganttPeriod: v }),
+      ganttLaneSort: 'name',
+      setGanttLaneSort: (v) => set({ ganttLaneSort: v }),
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
 
       ganttColorScheme: 'lateness',
@@ -353,6 +365,8 @@ export const useUiStore = create<UiState>()(
         sidebarCollapsed: s.sidebarCollapsed,
         showResourceTree: s.showResourceTree,
         hiddenLanes: s.hiddenLanes,
+        ganttPeriod: s.ganttPeriod,
+        ganttLaneSort: s.ganttLaneSort,
         ganttColorScheme: s.ganttColorScheme,
         violationsPanelExpanded: s.violationsPanelExpanded,
         kpiVisible: s.kpiVisible,

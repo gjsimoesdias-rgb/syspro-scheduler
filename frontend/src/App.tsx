@@ -1632,6 +1632,7 @@ const App: React.FC = () => {
               onJobDrop={autoScheduleDroppedJob}
               onOperationMove={handleScheduleBoardOperationMove}
               onShowMaterials={(jobId: string) => setBomJobId(jobId)}
+              onRefresh={async () => { await loadJobsAndResources(); toast.success('Jobs refreshed'); }}
               onHighlightJob={(jobId: string | null) => { setHighlightJobId(jobId); setJobSearch(jobId || ''); }}
               onSelectViolation={setSelectedViolation}
               onShowOverrideModal={(v: ConstraintViolation) => { setSelectedViolation(v); setShowOverrideModal(true); }}

@@ -87,6 +87,8 @@ export interface ContentTabPanelProps {
   onJobDrop: (jobId: string, dropDate: Date, workcentreId: string, machineId?: string) => void;
   onOperationMove: (jobId: string, opId: string, newStartDate: Date, workcentreId: string, machineId?: string) => void;
   onShowMaterials: (jobId: string) => void;
+  /** Gantt toolbar Refresh: reload jobs and resources. */
+  onRefresh?: () => void | Promise<void>;
   onHighlightJob: (jobId: string | null) => void;
 
   // Constraint callbacks
@@ -125,6 +127,7 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
   onJobDrop,
   onOperationMove,
   onShowMaterials,
+  onRefresh,
   onHighlightJob,
   onSelectViolation,
   onShowOverrideModal,
@@ -230,6 +233,7 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
               onOperationMove={onOperationMove}
               onHighlightJob={onHighlightJob}
               onShowMaterials={onShowMaterials}
+              onRefresh={onRefresh}
               constraintViolations={schedule?.constraintViolations ?? []}
               focusedViolationOpId={selectedViolation?.affectedOperationId}
               focusWorkcentre={ganttFocusWorkcentre}

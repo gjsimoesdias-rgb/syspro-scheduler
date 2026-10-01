@@ -381,3 +381,11 @@ body, :root .app { font-family: var(--font-sans); }
   background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color);
 }
 .ctx-marker-clear:hover { color: var(--text-primary); border-color: var(--accent); }
+
+/* ── Gantt board navigation ───────────────────────────────────── */
+:root .app .gantt-nav { gap: 2px; }
+:root .app .zoom-btn.icon-only { padding: 3px 5px; display: inline-flex; align-items: center; justify-content: center; }
+:root .app .zoom-btn:disabled { opacity: .4; cursor: default; }
+.ui-icon.spin { animation: crux-spin .9s linear infinite; }
+@keyframes crux-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ui-icon.spin { animation: none; } }

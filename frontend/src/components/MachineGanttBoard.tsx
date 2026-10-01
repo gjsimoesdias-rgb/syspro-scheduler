@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { addDays, format, differenceInMinutes, startOfDay, endOfDay, startOfWeek } from 'date-fns';
 import { Resource, Schedule, Job, ConstraintViolation } from '../types';
 import { GanttSettingsState, GANTT_SETTINGS_DEFAULTS } from './GanttSettings';
@@ -11,9 +11,9 @@ import { buildParentMap, getMasterRootJobId } from '../utils/masterSub';
 import toast from 'react-hot-toast';
 import { pinService, apiErrorMessage, type PinnedOperationDto } from '../services/api';
 import { useScheduleStore } from '../stores/scheduleStore';
-import { useUiStore } from '../stores/uiStore';
+import { useUiStore, GANTT_PERIOD_DAYS } from '../stores/uiStore';
 import './MachineGanttBoard.css';
-import { BarChart3, List, LocateFixed, Lock, Unlock, PanelLeft } from 'lucide-react';
+import { BarChart3, List, LocateFixed, Lock, Unlock, PanelLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 
 /** Reload locks from the server into the store (after a bulk lock/unlock). */
 const refreshPins = async () => {
@@ -109,6 +109,8 @@ interface MachineGanttBoardProps {
    * Pass null to clear the focus without filtering.
    */
   focusWorkcentre?: string | string[] | null;
+  /** Reload jobs and resources from SYSPRO (toolbar Refresh). */
+  onRefresh?: () => void | Promise<void>;
 }
 
 // ContextMenuState is re-exported from GanttContextMenu; re-import here for local use.
@@ -155,6 +157,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
   externalLockedOps,
   onLockChange,
   focusWorkcentre,
+  onRefresh,
 }) => {
   const basePrefs: GanttSettingsState = { ...GANTT_SETTINGS_DEFAULTS, ...ganttPrefs };
   // LYNQ-style blocks: bars are 26 px, so stacked sub-rows need at least 30 px.
@@ -262,7 +265,50 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24))
   );
 
-  const pxPerDay = zoom === 'week' ? 56 : zoom === 'day' ? 144 : zoom === 'hour' ? 288 : 1440;
+  // Board navigation (LYNQ planning board): a fixed period fills the visible
+  // width; otherwise the Week/Day/Hour/Minute zoom sets the scale.
+  const ganttPeriod = useUiStore((s) => s.ganttPeriod);
+  const setGanttPeriod = useUiStore((s) => s.setGanttPeriod);
+  const laneSort = useUiStore((s) => s.ganttLaneSort);
+  const setLaneSort = useUiStore((s) => s.setGanttLaneSort);
+  const [boardWidth, setBoardWidth] = useState(1600);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setBoardWidth(el.clientWidth || 1600));
+    ro.observe(el);
+    setBoardWidth(el.clientWidth || 1600);
+    return () => ro.disconnect();
+  }, []);
+  const laneAreaWidth = Math.max(300, boardWidth - (prefs.wcColWidth + prefs.machineColWidth));
+  const zoomPx = zoom === 'week' ? 56 : zoom === 'day' ? 144 : zoom === 'hour' ? 288 : 1440;
+  const pxPerDay = ganttPeriod === 'free' ? zoomPx : Math.max(24, laneAreaWidth / GANTT_PERIOD_DAYS[ganttPeriod]);
+  /** Label scale actually in use (a period picks the nearest zoom's labels). */
+  const effZoom: 'week' | 'day' | 'hour' | 'minute' = ganttPeriod === 'free' ? zoom
+    : pxPerDay >= 1000 ? 'minute' : pxPerDay >= 280 ? 'hour' : pxPerDay >= 120 ? 'day' : 'week';
+  const ZOOM_LEVELS: Array<'week' | 'day' | 'hour' | 'minute'> = ['week', 'day', 'hour', 'minute'];
+  const zoomStep = (dir: 1 | -1) => {
+    const i = ZOOM_LEVELS.indexOf(effZoom);
+    const next = ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, i + dir))];
+    setGanttPeriod('free');
+    setZoom(next);
+  };
+  /** Move the board one period (or one screen) behind / ahead. */
+  const stepPeriod = (dir: 1 | -1) => {
+    const el = gridRef.current;
+    if (!el) return;
+    const days = ganttPeriod === 'free' ? laneAreaWidth / pxPerDay : GANTT_PERIOD_DAYS[ganttPeriod];
+    el.scrollBy({ left: dir * days * pxPerDay, behavior: 'smooth' });
+  };
+  // Keep the date at the left edge when the scale changes.
+  const prevPxRef = useRef(pxPerDay);
+  useLayoutEffect(() => {
+    const el = gridRef.current;
+    const prev = prevPxRef.current;
+    if (el && prev && prev !== pxPerDay) el.scrollLeft = (el.scrollLeft * pxPerDay) / prev;
+    prevPxRef.current = pxPerDay;
+  }, [pxPerDay]);
+  const [refreshing, setRefreshing] = useState(false);
   const timelineWidth = Math.max(1200, totalDays * pxPerDay);
   const timelineSpanMs = Math.max(1, timelineEnd.getTime() - timelineStart.getTime());
 
@@ -290,7 +336,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       window.removeEventListener('resize', onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [zoom, totalDays]);
+  }, [pxPerDay, totalDays]);
   const visFromPx = Math.max(0, viewport.left - viewport.width);
   const visToPx = viewport.left + viewport.width * 2;
   const firstVisDay = Math.min(totalDays, Math.max(0, Math.floor(visFromPx / pxPerDay)));
@@ -386,6 +432,17 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     return ordered.length > 0 ? { set: matches, ordered } : null;
   }, [highlightJobId, schedule, jobs]);
 
+  /** Planned setup + run minutes per lane (for "sort by load"). */
+  const laneLoadMin = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const js of schedule?.jobSchedules || []) {
+      for (const op of js.operationSchedules || []) {
+        m.set(op.workcentreId, (m.get(op.workcentreId) || 0) + (Number(op.setupTime) || 0) + (Number(op.runTime) || 0));
+      }
+    }
+    return m;
+  }, [schedule]);
+
   // All workcentre lanes stay visible at all times. When a job is highlighted we
   // only REORDER the lanes so the job's workcentres come first (in operation
   // order) — never hide the others.
@@ -398,7 +455,9 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
           return aIdx - bIdx;
         });
       })()
-    : workcentres;
+    : laneSort === 'load'
+      ? [...workcentres].sort((a, b) => (laneLoadMin.get(b) || 0) - (laneLoadMin.get(a) || 0) || a.localeCompare(b))
+      : workcentres;
 
   // Every production line is shown unless unticked in the resource tree;
   // selection/focus only highlights and scrolls, it never hides lanes.
@@ -890,13 +949,15 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     if (!e.ctrlKey) return;
     e.preventDefault();
     const levels: Array<'week' | 'day' | 'hour' | 'minute'> = ['week', 'day', 'hour', 'minute'];
-    const currentIndex = levels.indexOf(zoom);
+    const currentIndex = levels.indexOf(effZoom);
     if (e.deltaY < 0 && currentIndex < levels.length - 1) {
+      setGanttPeriod('free');
       setZoom(levels[currentIndex + 1]);
     } else if (e.deltaY > 0 && currentIndex > 0) {
+      setGanttPeriod('free');
       setZoom(levels[currentIndex - 1]);
     }
-  }, [zoom]);
+  }, [effZoom, setGanttPeriod]);
 
   const calculateWidth = (startDate: Date, endDate: Date): number => {
     const days = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
@@ -974,14 +1035,14 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
   }, [totalDays, timelineStart]);
 
   const timeSlots = useMemo(() => {
-    const stepHours = zoom === 'minute' ? 0.5 : zoom === 'hour' ? 2 : zoom === 'day' ? 4 : 24;
+    const stepHours = effZoom === 'minute' ? 0.5 : effZoom === 'hour' ? 2 : effZoom === 'day' ? 4 : 24;
     const totalHours = totalDays * 24;
     const slots: Date[] = [];
     for (let h = 0; h < totalHours; h += stepHours) {
       slots.push(new Date(timelineStart.getTime() + h * 3600000));
     }
     return slots;
-  }, [zoom, totalDays, timelineStart]);
+  }, [effZoom, totalDays, timelineStart]);
 
   const weekSlots = useMemo(() => {
     const weeks: { start: Date; days: number }[] = [];
@@ -1241,13 +1302,40 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
               <option value="critical">Critical Path</option>
             </select>
           </div>
-          <div className="gantt-toolbar-group">
-            <span className="gantt-toolbar-label">Zoom:</span>
-            <button className={`zoom-btn ${zoom === 'week' ? 'active' : ''}`} onClick={() => setZoom('week')}>Week</button>
-            <button className={`zoom-btn ${zoom === 'day' ? 'active' : ''}`} onClick={() => setZoom('day')}>Day</button>
-            <button className={`zoom-btn ${zoom === 'hour' ? 'active' : ''}`} onClick={() => setZoom('hour')}>Hour</button>
-            <button className={`zoom-btn ${zoom === 'minute' ? 'active' : ''}`} onClick={() => setZoom('minute')}>Minute</button>
+          <div className="gantt-toolbar-group gantt-nav" role="group" aria-label="Board navigation">
+            <button className="zoom-btn icon-only" onClick={() => stepPeriod(-1)} title="Period behind" aria-label="Period behind"><ChevronLeft size={14} aria-hidden="true" /></button>
+            <select
+              className="gantt-select"
+              value={ganttPeriod}
+              onChange={(e) => setGanttPeriod(e.target.value as typeof ganttPeriod)}
+              title="Period length shown across the board"
+              aria-label="Period length"
+            >
+              <option value="4d">4 days</option>
+              <option value="1w">1 week</option>
+              <option value="2w">2 weeks</option>
+              <option value="month">Month</option>
+              <option value="free">Zoom ({zoom})</option>
+            </select>
+            <button className="zoom-btn icon-only" onClick={() => stepPeriod(1)} title="Period ahead" aria-label="Period ahead"><ChevronRight size={14} aria-hidden="true" /></button>
+            <button className="zoom-btn icon-only" onClick={() => zoomStep(-1)} disabled={effZoom === 'week' && ganttPeriod === 'free'} title="Zoom out" aria-label="Zoom out"><ZoomOut size={14} aria-hidden="true" /></button>
+            <button className="zoom-btn icon-only" onClick={() => zoomStep(1)} disabled={effZoom === 'minute'} title="Zoom in" aria-label="Zoom in"><ZoomIn size={14} aria-hidden="true" /></button>
           </div>
+          <div className="gantt-toolbar-group">
+            <span className="gantt-toolbar-label">Sort:</span>
+            <select className="gantt-select" value={laneSort} onChange={(e) => setLaneSort(e.target.value as 'name' | 'load')} aria-label="Lane order" title="Lane order">
+              <option value="name">Name</option>
+              <option value="load">Load</option>
+            </select>
+          </div>
+          {onRefresh && (
+            <button
+              className="zoom-btn"
+              disabled={refreshing}
+              onClick={async () => { setRefreshing(true); try { await onRefresh(); } finally { setRefreshing(false); } }}
+              title="Reload jobs and machines from SYSPRO"
+            ><RefreshCw size={13} className={`ui-icon${refreshing ? ' spin' : ''}`} aria-hidden="true" /> Refresh</button>
+          )}
           <button className={`zoom-btn ${showUtilBars ? 'active' : ''}`} onClick={() => setShowUtilBars(v => !v)} title="Toggle utilization bars"><BarChart3 size={13} className="ui-icon" aria-hidden="true" /> Util</button>
           <button className="zoom-btn" onClick={timeFenceLock} title="Lock every operation starting in the next N days (time fence)"><Lock size={13} className="ui-icon" aria-hidden="true" /> Time fence</button>
           <button className="zoom-btn" onClick={clearLocks} title="Remove all locks"><Unlock size={13} className="ui-icon" aria-hidden="true" /> Clear locks</button>
@@ -1338,12 +1426,12 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
             <div className="timeline-time-row">
               <div className="gantt-virtual-spacer" style={{ width: firstVisDay * pxPerDay }} />
               {timeSlots.filter((d) => d.getTime() >= visStartMs && d.getTime() < visEndMs).map((date) => {
-                const stepHours = zoom === 'minute' ? 0.5 : zoom === 'hour' ? 2 : zoom === 'day' ? 4 : 24;
+                const stepHours = effZoom === 'minute' ? 0.5 : effZoom === 'hour' ? 2 : effZoom === 'day' ? 4 : 24;
                 const slotWidth = (stepHours / 24) * pxPerDay;
                 const i = date.getTime();
                 return (
                   <div key={i} className="time-cell" style={{ width: slotWidth, minWidth: slotWidth }}>
-                    {zoom === 'week' ? format(date, 'EEE') : slotWidth < 34 ? format(date, 'HH') : format(date, 'HH:mm')}
+                    {effZoom === 'week' ? format(date, 'EEE') : slotWidth < 34 ? format(date, 'HH') : format(date, 'HH:mm')}
                   </div>
                 );
               })}
