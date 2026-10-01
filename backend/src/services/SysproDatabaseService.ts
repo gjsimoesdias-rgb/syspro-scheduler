@@ -832,7 +832,13 @@ export class SysproDatabaseService {
                  ' + CASE WHEN COL_LENGTH('SorMaster','CustomerPoNumber') IS NOT NULL THEN N'm.CustomerPoNumber' ELSE N'CAST('''' AS varchar(30))' END + N' AS customerPo,
                  d.MStockCode AS stockCode, d.MStockDes AS description, d.MWarehouse AS warehouse,
                  ' + CASE WHEN COL_LENGTH('SorDetail','MOrderUom') IS NOT NULL THEN N'd.MOrderUom' ELSE N'CAST('''' AS varchar(10))' END + N' AS unitOfMeasure,
-                 ISNULL(d.MShipQty, 0) + ISNULL(d.MBackOrderQty, 0) AS openQty,
+                 (ISNULL(d.MShipQty, 0) + ISNULL(d.MBackOrderQty, 0))
+                   ' + CASE WHEN COL_LENGTH('SorDetail','MConvFactOrdUm') IS NOT NULL AND COL_LENGTH('SorDetail','MMulDivQtyFct') IS NOT NULL
+                       THEN N'* CASE WHEN ISNULL(d.MConvFactOrdUm, 0) IN (0, 1) THEN 1
+                                     WHEN d.MMulDivQtyFct = ''M'' THEN d.MConvFactOrdUm
+                                     ELSE 1.0 / d.MConvFactOrdUm END'
+                       ELSE N'' END + N' AS openQty,
+                 ' + CASE WHEN COL_LENGTH('SorDetail','MStockingUom') IS NOT NULL THEN N'd.MStockingUom' ELSE N'CAST('''' AS varchar(10))' END + N' AS stockingUom,
                  ' + CASE WHEN COL_LENGTH('SorDetail','MLineShipDate') IS NOT NULL THEN N'ISNULL(d.MLineShipDate, m.ReqShipDate)' ELSE N'm.ReqShipDate' END + N' AS shipDate
           FROM SorDetail d
           JOIN SorMaster m ON m.SalesOrder = d.SalesOrder
@@ -872,8 +878,9 @@ export class SysproDatabaseService {
       stockCode: String(r.stockCode || '').trim(),
       description: String(r.description || '').trim(),
       warehouse: String(r.warehouse || '').trim(),
-      // SorDetail quantities are held in the stocking unit, so label them with it.
-      unitOfMeasure: stockUom.get(String(r.stockCode || '').trim()) || String(r.unitOfMeasure || '').trim(),
+      // Order-line quantities are in the order unit; the query converts them
+      // to the stocking unit (MConvFactOrdUm / MMulDivQtyFct), so label them with it.
+      unitOfMeasure: String(r.stockingUom || '').trim() || stockUom.get(String(r.stockCode || '').trim()) || String(r.unitOfMeasure || '').trim(),
       openQty: Number(r.openQty) || 0,
       shipDate: r.shipDate ? new Date(r.shipDate) : null,
     }));
