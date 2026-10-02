@@ -81,3 +81,8 @@ SYSPRO-integrated APS scheduler. React + Vite + TypeScript frontend, Node backen
   never `window.confirm/prompt/alert`. Use `apiJson` / `apiClient`, not raw `fetch`.
 - **Line endings are mixed** (some files CRLF, most LF). Keep each file's style: edit with
   tools that preserve it (Python on Windows writes CRLF in text mode — use `newline=''`).
+- **Typing is strict** (October 2026): lint has 0 warnings and `no-explicit-any` /
+  `no-non-null-assertion` are errors outside tests; backend runs full `strict` incl.
+  `noImplicitAny`. SQL rows are `DbRow` (the one deliberate any); client/JSON input is read
+  via `asObj`/`asArr` (utils/loose.ts); errors via `errorMessage(err)` (utils/errors.ts,
+  both sides); saved plans via `parseStoredSchedule`; inline CSS variables via `cssVars()`.

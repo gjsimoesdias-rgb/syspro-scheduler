@@ -33,6 +33,16 @@ interface OpRow {
   description: string;
 }
 
+/** GET /schedule/ctp/stock-routing/:stockCode — a quote routing built from SYSPRO BOM data. */
+interface StockRoutingResponse {
+  stockCode: string;
+  description: string;
+  quantity: number;
+  operations: SubLeg['operations'];
+  subJobs: Array<{ label: string; operations: SubLeg['operations'] }>;
+  warnings: string[];
+}
+
 interface SubLeg {
   id: number;
   label: string;
@@ -131,12 +141,12 @@ const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
   const loadStockRouting = async (stockCode: string, qty: number) => {
     try {
       setLoadingRouting(true);
-      const res = await apiClient.get(`/schedule/ctp/stock-routing/${encodeURIComponent(stockCode)}`, {
+      const res = await apiClient.get<StockRoutingResponse>(`/schedule/ctp/stock-routing/${encodeURIComponent(stockCode)}`, {
         params: { quantity: qty },
       });
       const data = res.data;
       setRows(
-        (data.operations || []).map((op: any) => ({
+        (data.operations || []).map((op) => ({
           id: nextRowId++,
           workcentreId: op.workcentreId,
           setupMinutes: String(op.setupMinutes),
@@ -145,7 +155,7 @@ const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
         }))
       );
       setSubLegs(
-        (data.subJobs || []).map((sj: any) => ({ id: nextRowId++, label: sj.label, operations: sj.operations }))
+        (data.subJobs || []).map((sj) => ({ id: nextRowId++, label: sj.label, operations: sj.operations }))
       );
       setRoutingWarnings(data.warnings || []);
       setSelectedStock({ stockCode: data.stockCode, description: data.description });
