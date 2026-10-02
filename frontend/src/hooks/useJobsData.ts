@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { jobService, resourceService, statusService, apiErrorMessage } from '../services/api';
 import { Job, Resource } from '../types';
@@ -182,7 +182,8 @@ export function useJobsData(): JobsDataResult {
     }
   };
 
-  const loadMaterialPlan = async (jobs: Job[]) => {
+  // Only uses state setters, so its identity never needs to change.
+  const loadMaterialPlan = useCallback(async (jobs: Job[]) => {
     try {
       if (!jobs.length) {
         setMaterialPlan([]);
@@ -204,7 +205,7 @@ export function useJobsData(): JobsDataResult {
       setMaterialPlan([]);
       setMaterialStatusByJob({});
     }
-  };
+  }, []);
 
   const saveAlternativeGroup = async () => {
     try {

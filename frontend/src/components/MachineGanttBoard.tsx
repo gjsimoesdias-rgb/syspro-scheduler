@@ -379,16 +379,6 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     return map;
   }, [resources]);
 
-  const primaryLaneByWorkcentre = useMemo(() => {
-    const map: Record<string, string> = {};
-    resources.forEach((resource) => {
-      if (!map[resource.worcentreId]) {
-        map[resource.worcentreId] = resource.resourceId;
-      }
-    });
-    return map;
-  }, [resources]);
-
   // When a job is highlighted, build an ordered list of workcentres by operation sequence
   const highlightedJobWcOrder = useMemo(() => {
     if (!highlightJobId) return null;
@@ -928,7 +918,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     } else {
       setGhostBars([]);
     }
-  }, [timelineStart, timelineSpanMs, jobs, highlightJobId, laneOperations, schedule, primaryLaneByWorkcentre, pxPerDay, timelineWidth, workcentreCalendars, getProductiveDisplaySegments]);
+  }, [timelineStart, timelineSpanMs, jobs, highlightJobId, laneOperations, schedule, pxPerDay, timelineWidth, workcentreCalendars, getProductiveDisplaySegments]);
 
   const handleDragLeave = useCallback(() => {
     setDragPreview(prev => ({ ...prev, visible: false }));
@@ -1117,7 +1107,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       });
     });
     return links;
-  }, [highlightJobId, schedule, parentMap, laneGeometry, subRowMap, prefs.rowHeight, primaryLaneByWorkcentre, pxPerDay, timelineWidth, timelineStart]);
+  }, [highlightJobId, schedule, parentMap, laneGeometry, subRowMap, prefs.rowHeight, pxPerDay, timelineWidth, timelineStart]);
 
   const getOpColor = (op: typeof laneOperations[0]): string => {
     if (colorMode === 'workcentre') {

@@ -472,9 +472,9 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
     });
   };
 
-  const closeJobContextMenu = () => {
+  const closeJobContextMenu = React.useCallback(() => {
     setJobContextMenu((prev) => ({ ...prev, visible: false, jobId: null }));
-  };
+  }, [setJobContextMenu]);
 
   const unscheduleJob = (jobId: string) => {
     if (!schedule) return;

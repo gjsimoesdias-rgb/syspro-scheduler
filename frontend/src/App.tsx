@@ -378,7 +378,7 @@ const App: React.FC = () => {
     setJobWcFilter('all');
     setSelectedWorkcentre([]);
     setScheduleFilter(filter === 'unscheduled' ? 'not-scheduled' : 'all');
-  }, []);
+  }, [resetJobFilters, setJobPaneMode, setJobWcFilter, setManageTab, setScheduleFilter, setWorkflowJobFilter]);
 
   const openUserGuide = (section: 'overview' | 'company' | 'jobs' | 'materials' | 'publish' | 'shortcuts' = 'overview') => {
     setGuideFocus(section);
@@ -549,7 +549,7 @@ const App: React.FC = () => {
     }, 600);
 
     return () => window.clearTimeout(timeoutId);
-  }, [schedule, scheduleLoading, dbStatus.sysproConnected, scheduleSource, activeVersion]);
+  }, [schedule, scheduleLoading, dbStatus.sysproConnected, scheduleSource, activeVersion, reopenMaster]);
 
   useEffect(() => {
     // 'restored' = a saved plan opened from the Versions tab (or loaded at
@@ -603,7 +603,7 @@ const App: React.FC = () => {
     if (scheduleSource !== 'none') {
       setScheduleSource('none');
     }
-  }, [openJobs, scheduleSource, buildScheduleFromSyspro, activePlanningInterval, dbStatus.sysproConnected]);
+  }, [openJobs, scheduleSource, buildScheduleFromSyspro, activePlanningInterval, dbStatus.sysproConnected, setBoardIntervalEnd, setBoardIntervalStart, setDraftIntervalEnd, setDraftIntervalStart, setSchedule, setScheduleSource]);
 
   useEffect(() => {
     if (!isGeneratingSchedule) {
@@ -636,7 +636,7 @@ const App: React.FC = () => {
     }, 400);
 
     return () => window.clearInterval(timer);
-  }, [isGeneratingSchedule, openJobs]);
+  }, [isGeneratingSchedule, openJobs, setGenerationProgress, setGenerationStatusText]);
 
   // generateSchedule, exportToSyspro, and handleExport are provided by useScheduleGeneration().
 
@@ -773,7 +773,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     loadMaterialPlan(visibleJobSource);
-  }, [visibleJobSource]);
+  }, [visibleJobSource, loadMaterialPlan]);
 
   // Load persisted pins from backend on startup
   useEffect(() => {
@@ -1150,7 +1150,7 @@ const App: React.FC = () => {
     if (!hasWorkcentreFilterMatch) {
       setJobWcFilter('all');
     }
-  }, [visibleJobSource, selectedWorkcentre, jobStatusFilter, jobWcFilter, scheduleFilter]);
+  }, [visibleJobSource, selectedWorkcentre, jobStatusFilter, jobWcFilter, scheduleFilter, setJobStatusFilter, setJobWcFilter]);
 
   useEffect(() => {
     if (!visibleJobSource.length) return;
@@ -1369,7 +1369,7 @@ const App: React.FC = () => {
       window.removeEventListener('click', handleWindowClick);
       window.removeEventListener('keydown', handleEsc);
     };
-  }, [jobContextMenu.visible]);
+  }, [jobContextMenu.visible, closeJobContextMenu]);
 
   useEffect(() => {
     if (!resizeMode) return;
@@ -1410,7 +1410,7 @@ const App: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizeMode]);
+  }, [resizeMode, setJobsPanelHeight, setWorkcentrePanelWidth]);
 
   // Jobs-grid cell renderers — components/jobGridRenderers.tsx
   const { renderJobCellContent, renderOperationsTable } = useJobGridRenderers({

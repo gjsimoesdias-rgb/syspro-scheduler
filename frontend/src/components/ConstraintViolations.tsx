@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ConstraintViolation, Job } from '../types';
 import './ConstraintViolations.css';
 
@@ -33,8 +33,8 @@ const ConstraintViolations: React.FC<ConstraintViolationsProps> = ({ violations,
     return m;
   }, [jobs]);
 
-  const workcentreOf = (v: ConstraintViolation): string =>
-    (v.affectedOperationId ? opWorkcentre.get(v.affectedOperationId) : undefined) || NO_WC;
+  const workcentreOf = useCallback((v: ConstraintViolation): string =>
+    (v.affectedOperationId ? opWorkcentre.get(v.affectedOperationId) : undefined) || NO_WC, [opWorkcentre]);
 
   // Violations grouped by work centre, largest group first, then critical→info.
   const workcentreGroups = useMemo(() => {
@@ -53,7 +53,7 @@ const ConstraintViolations: React.FC<ConstraintViolationsProps> = ({ violations,
       if ((a[0] === NO_WC) !== (b[0] === NO_WC)) return a[0] === NO_WC ? 1 : -1;
       return b[1].length - a[1].length;
     });
-  }, [violations, opWorkcentre]);
+  }, [violations, workcentreOf]);
 
   const hasWcInfo = useMemo(
     () => violations.some((v) => v.affectedOperationId && opWorkcentre.has(v.affectedOperationId)),
