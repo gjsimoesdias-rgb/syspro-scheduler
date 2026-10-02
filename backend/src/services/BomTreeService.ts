@@ -15,6 +15,7 @@
  * All table references live inside dynamic SQL guarded by OBJECT_ID /
  * COL_LENGTH, matching the codebase's defensive pattern for SYSPRO variance.
  */
+import type { DbExecutor } from '../database/connection';
 
 export interface BomRoutingOp {
   operation: string;
@@ -135,7 +136,7 @@ const ROOT_DESC_SQL = `
 
 type ChildRow = { component: string; qtyPer: number; description: string; hasRouting: number };
 
-export async function buildBomTree(sysproDb: any, stockCode: string): Promise<BomTreeResult> {
+export async function buildBomTree(sysproDb: DbExecutor, stockCode: string): Promise<BomTreeResult> {
   const warnings: string[] = [];
   let nodeCount = 0;
   const key = (v: unknown) => String(v ?? '').trim();
@@ -151,7 +152,7 @@ export async function buildBomTree(sysproDb: any, stockCode: string): Promise<Bo
       const params = Object.fromEntries(chunk.map((c, n) => [`c${n}`, c]));
       const prelude = codesPrelude(chunk.length);
       const [kids, ops] = await Promise.all([
-        sysproDb.queryWithParams(`${prelude}\n${STRUCTURE_BODY}`, params),
+        sysproDb.queryWithParams<ChildRow & { parent: string }>(`${prelude}\n${STRUCTURE_BODY}`, params),
         sysproDb.queryWithParams(`${prelude}\n${ROUTING_BODY}`, params),
       ]);
       for (const c of chunk) { childrenByCode.set(c, []); opsByCode.set(c, []); }

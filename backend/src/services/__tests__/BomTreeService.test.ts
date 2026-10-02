@@ -31,7 +31,7 @@ const fakeDb = () => {
 describe('buildBomTree (batched per level)', () => {
   it('builds the same tree with one structure + one routing query per level', async () => {
     const db = fakeDb();
-    const { root, nodeCount, warnings } = await buildBomTree(db, 'TOP');
+    const { root, nodeCount, warnings } = await buildBomTree(db as any, 'TOP');
 
     expect(root.description).toBe('Top item');
     expect(root.operations).toEqual([{ operation: '10', workcentreId: 'ASSY', setupMinutes: 30, unitRunMinutes: 6 }]);
@@ -49,7 +49,7 @@ describe('buildBomTree (batched per level)', () => {
   it('flags circular references instead of looping', async () => {
     STRUCTURE.C = [{ component: 'A', qtyPer: 1 }];
     try {
-      const { warnings } = await buildBomTree(fakeDb(), 'TOP');
+      const { warnings } = await buildBomTree(fakeDb() as any, 'TOP');
       expect(warnings.some((w) => w.includes('Circular structure reference at A'))).toBe(true);
     } finally {
       delete STRUCTURE.C;

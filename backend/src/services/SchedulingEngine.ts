@@ -5,6 +5,10 @@
 
 import { localDayKey } from '../utils/calendarExceptions';
 import { dayWindowMinutes } from '../utils/shiftWindows';
+import type { CalendarLike } from '../utils/calendarExceptions';
+
+/** A machine/line calendar as the day logic reads it (may be missing). */
+type Cal = CalendarLike | null | undefined;
 import type { CrewLookup } from '../utils/crews';
 import { CrewLoad } from './crewLoad';
 import { v4 as uuidv4 } from 'uuid';
@@ -287,7 +291,7 @@ export class SchedulingEngine {
   private windowCache = new WeakMap<object, Map<number, Array<{ start: Date; end: Date; overtime?: boolean }>>>();
   private static readonly NO_CALENDAR = {};
 
-  private getProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date; overtime?: boolean }> {
+  private getProductiveWindowsForDay(calendar: Cal, date: Date): Array<{ start: Date; end: Date; overtime?: boolean }> {
     const cacheKey = calendar && typeof calendar === 'object' ? calendar : SchedulingEngine.NO_CALENDAR;
     let byDay = this.windowCache.get(cacheKey);
     if (!byDay) this.windowCache.set(cacheKey, (byDay = new Map()));
@@ -299,7 +303,7 @@ export class SchedulingEngine {
     return windows;
   }
 
-  private computeProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date; overtime?: boolean }> {
+  private computeProductiveWindowsForDay(calendar: Cal, date: Date): Array<{ start: Date; end: Date; overtime?: boolean }> {
     // Shared with CtpService (utils/shiftWindows) so CTP always mirrors the engine.
     const day = new Date(date);
     day.setHours(0, 0, 0, 0);
@@ -310,13 +314,13 @@ export class SchedulingEngine {
     });
   }
 
-  private fitsProductiveWindow(start: Date, end: Date, calendar: any): boolean {
+  private fitsProductiveWindow(start: Date, end: Date, calendar: Cal): boolean {
     return this.getProductiveWindowsForDay(calendar, start).some(
       (window) => start >= window.start && start < window.end && end > start && end <= window.end
     );
   }
 
-  private findContiguousProductiveStart(date: Date, requiredMinutes: number, calendar: any): Date | null {
+  private findContiguousProductiveStart(date: Date, requiredMinutes: number, calendar: Cal): Date | null {
     const requiredMs = Math.max(0, requiredMinutes) * 60 * 1000;
     let probe = new Date(date);
 
@@ -345,7 +349,7 @@ export class SchedulingEngine {
     return null;
   }
 
-  private addMinutesAcrossProductiveWindows(start: Date, requiredMinutes: number, calendar: any): Date | null {
+  private addMinutesAcrossProductiveWindows(start: Date, requiredMinutes: number, calendar: Cal): Date | null {
     if (requiredMinutes <= 0) {
       return new Date(start);
     }
@@ -385,7 +389,7 @@ export class SchedulingEngine {
     return null;
   }
 
-  private nextProductiveStart(date: Date, calendar: any): Date | null {
+  private nextProductiveStart(date: Date, calendar: Cal): Date | null {
     let probe = new Date(date);
 
     for (let i = 0; i < 60; i++) {
@@ -408,7 +412,7 @@ export class SchedulingEngine {
     return null;
   }
 
-  private previousProductiveEnd(date: Date, calendar: any): Date | null {
+  private previousProductiveEnd(date: Date, calendar: Cal): Date | null {
     let probe = new Date(date);
 
     for (let i = 0; i < 60; i++) {
@@ -432,7 +436,7 @@ export class SchedulingEngine {
     return null;
   }
 
-  private subtractMinutesAcrossProductiveWindows(end: Date, requiredMinutes: number, calendar: any): Date | null {
+  private subtractMinutesAcrossProductiveWindows(end: Date, requiredMinutes: number, calendar: Cal): Date | null {
     if (requiredMinutes <= 0) {
       return new Date(end);
     }
@@ -700,7 +704,7 @@ export class SchedulingEngine {
     context.workcentres.forEach((wc, id) => {
       this.overtimeBudget.set(
         id,
-        (wc as any).maxOvertimePerDay || environment.maxOvertimePerDay
+        wc.maxOvertimePerDay || environment.maxOvertimePerDay
       );
     });
 
@@ -754,15 +758,12 @@ export class SchedulingEngine {
 
       // Ensure the resource/workcentre lists exist (pinned resource might not
       // be in context.resources if it was manually assigned).
-      if (!this.resourceLoads.has(pin.resourceId)) {
-        this.resourceLoads.set(pin.resourceId, []);
-      }
-      if (!this.workcentreLoads.has(pin.workcentreId)) {
-        this.workcentreLoads.set(pin.workcentreId, []);
-      }
-
-      this.resourceLoads.get(pin.resourceId)!.push(slot);
-      this.workcentreLoads.get(pin.workcentreId)!.push(slot);
+      const resourceSlots = this.resourceLoads.get(pin.resourceId) ?? [];
+      const workcentreSlots = this.workcentreLoads.get(pin.workcentreId) ?? [];
+      resourceSlots.push(slot);
+      workcentreSlots.push(slot);
+      this.resourceLoads.set(pin.resourceId, resourceSlots);
+      this.workcentreLoads.set(pin.workcentreId, workcentreSlots);
 
       logger.debug({ key, start: start.toISOString(), end: end.toISOString() }, 'Pre-booked pinned operation slot');
     }
@@ -1560,7 +1561,7 @@ export class SchedulingEngine {
       maxSearchDate.setHours(23, 59, 59, 999);
     }
 
-    const resourceCalendar = (resource as any)?.calendar || (workcentre as any)?.calendar;
+    const resourceCalendar: Cal = resource?.calendar || workcentre?.calendar;
     // Starts must fall inside the window; ends may run past it when allowed.
     const endLimit = context.ruleToggles?.allowFinishAfterHorizon
       ? new Date(maxSearchDate.getTime() + 366 * 86_400_000)
@@ -1821,7 +1822,7 @@ export class SchedulingEngine {
     const minSearchDate = new Date(horizonStart);
     minSearchDate.setHours(0, 0, 0, 0);
 
-    const resourceCalendar = (resource as any)?.calendar || (workcentre as any)?.calendar;
+    const resourceCalendar: Cal = resource?.calendar || workcentre?.calendar;
     const isInWorkingWindow = (start: Date, end: Date): boolean => this.fitsProductiveWindow(start, end, resourceCalendar);
 
     const findPreviousConflictStart = (candidateStart: Date, candidateEnd: Date): Date | null => {
@@ -2047,8 +2048,8 @@ export class SchedulingEngine {
       const slots = this.resourceLoads.get(resource.resourceId) || [];
       const dayLoads = new Map<string, { regular: number; overtime: number }>();
 
-      const calendar = (resource as any)?.calendar
-        || (context.workcentres.get((resource as any).worcentreId) as any)?.calendar;
+      const calendar: Cal = resource.calendar
+        || context.workcentres.get(resource.worcentreId)?.calendar;
 
       // Spread each booking over the days it actually runs (a 50 h operation
       // used to be credited in full to its start day).
@@ -2078,7 +2079,7 @@ export class SchedulingEngine {
           regularHours: load.regular,
           overtimeHours: load.overtime,
           utilizationRate: availableHours > 0 ? Math.min(100, (load.regular / availableHours) * 100) : 0,
-          assignedOperations: slots.filter((s) => s.start.toDateString() === dayKey) as any[]
+          assignedOperations: slots.filter((s) => s.start.toDateString() === dayKey) as unknown as ResourceLoad['assignedOperations']
         });
       });
     });
@@ -2092,7 +2093,7 @@ export class SchedulingEngine {
    * A multi-day operation is spread over the days it runs, and the gaps
    * between shifts are not counted.
    */
-  private occupiedMinutesByDay(calendar: any, from: Date, to: Date): Map<string, { regular: number; overtime: number }> {
+  private occupiedMinutesByDay(calendar: Cal, from: Date, to: Date): Map<string, { regular: number; overtime: number }> {
     const out = new Map<string, { regular: number; overtime: number }>();
     if (!(to > from)) return out;
     const day = new Date(from);
@@ -2112,14 +2113,14 @@ export class SchedulingEngine {
   }
 
   /** Minutes of a booking that fall in overtime windows. */
-  private overtimeMinutesIn(calendar: any, from: Date, to: Date): number {
+  private overtimeMinutesIn(calendar: Cal, from: Date, to: Date): number {
     let total = 0;
     this.occupiedMinutesByDay(calendar, from, to).forEach((v) => { total += v.overtime; });
     return total;
   }
 
   /** Shift hours available on one day for a calendar (sum of productive windows). */
-  private productiveHoursForDay(calendar: any, date: Date): number {
+  private productiveHoursForDay(calendar: Cal, date: Date): number {
     return this.getProductiveWindowsForDay(calendar, date)
       .reduce((h, w) => h + (w.end.getTime() - w.start.getTime()) / 3600000, 0);
   }
@@ -2136,10 +2137,10 @@ export class SchedulingEngine {
     start.setHours(0, 0, 0, 0);
     const end = new Date(context.planningHorizonEnd);
 
-    const calendarByWc = new Map<string, any>();
-    context.resources.forEach((r: any) => {
+    const calendarByWc = new Map<string, Cal>();
+    context.resources.forEach((r) => {
       if (!calendarByWc.has(r.worcentreId)) {
-        calendarByWc.set(r.worcentreId, r.calendar || (context.workcentres.get(r.worcentreId) as any)?.calendar);
+        calendarByWc.set(r.worcentreId, r.calendar || context.workcentres.get(r.worcentreId)?.calendar);
       }
     });
 
@@ -2211,9 +2212,9 @@ export class SchedulingEngine {
       // ~100 % almost always and skewed the rule optimizer's ranking.
       resourceUtilization: timeModel.busyPct,
       overtimeHours: totalOvertime,
-      criticalPathLength: jobSchedules.reduce((acc: number, job: any) => {
+      criticalPathLength: jobSchedules.reduce((acc: number, job) => {
         const jobDuration = job.operationSchedules.reduce(
-          (opAcc: number, op: any) => opAcc + (op.duration || 0) / 60,
+          (opAcc: number, op) => opAcc + (op.duration || 0) / 60,
           0
         );
         return Math.max(acc, jobDuration);

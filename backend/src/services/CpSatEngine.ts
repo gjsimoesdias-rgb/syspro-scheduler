@@ -225,7 +225,7 @@ export class CpSatSchedulingEngine implements ISchedulingEngine {
           : null,
         line_group_id: (context.productionMode === 'flow-line' ||
           (context.productionMode === 'mixed' && j.productionMode === 'flow-line'))
-          ? (j as any).lineGroupId ?? null
+          ? (j as typeof j & { lineGroupId?: string }).lineGroupId ?? null
           : null,
         master_job_id: (j.masterJobId as string | null) ?? null,
       })),

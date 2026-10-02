@@ -3,7 +3,8 @@
  * Can optionally read from APS schema views for scheduler-owned data
  */
 
-import type { DbExecutor, DbRow } from '../database/connection';
+import type { DbExecutor, DbResult, DbRow } from '../database/connection';
+import { errorMessage } from '../utils/errors';
 import { SYSPRO_QUERIES } from '../database/queries/sysproDashboard';
 import { logger } from '../utils/logger';
 import { resolveMasterLinks } from '../utils/jobIdNormalization';
@@ -71,7 +72,7 @@ const firstLinkValue = (value: unknown): string | null => {
 /** SYSPRO char keys come back space-padded; compare jobs on the trimmed id. */
 const jobKey = (value: unknown): string => String(value ?? '').trim();
 
-export const deriveOperationStatus = (row: Record<string, any>): 'NotStarted' | 'InProgress' | 'Complete' => {
+export const deriveOperationStatus = (row: DbRow): 'NotStarted' | 'InProgress' | 'Complete' => {
   if (String(row.OperCompleted ?? '').trim().toUpperCase() === 'Y') return 'Complete';
   const s = String(row.status ?? '').trim();
   if (s === 'Complete' || s === 'InProgress') return s;
@@ -86,7 +87,7 @@ const ELAPSED_MINUTES_PER_UNIT =
  * Subcontract (outside) operations — WipJobAllLab.SubcontractOp = 'Y'. They take
  * elapsed calendar time at the supplier and must not book an internal machine.
  */
-export const subcontractFields = (row: Record<string, any>): Record<string, unknown> => {
+export const subcontractFields = (row: DbRow): Record<string, unknown> => {
   const isSub = String(row.SubcontractOp ?? '').trim().toUpperCase() === 'Y';
   if (!isSub) return { isSubcontract: false };
   const elapsed = Number(row.ElapsedTime);
@@ -97,7 +98,7 @@ export const subcontractFields = (row: Record<string, any>): Record<string, unkn
   };
 };
 
-const mapDatabaseFields = (row: Record<string, any>): Record<string, unknown> => {
+const mapDatabaseFields = (row: DbRow): Record<string, unknown> => {
   const passthrough: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
     passthrough[key] = value ?? null;
@@ -111,7 +112,7 @@ const mapDatabaseFields = (row: Record<string, any>): Record<string, unknown> =>
  * share of this op's run after which the next op may start, or undefined
  * when there is no usable transfer (blank, 0, or the whole quantity).
  */
-export function sysproTransferFraction(row: Record<string, any>, opQty?: number): number | undefined {
+export function sysproTransferFraction(row: DbRow, opQty?: number): number | undefined {
   const kind = String(row?.TransferQtyOrPct ?? '').trim().toUpperCase();
   const value = Number(row?.TransferQtyPct);
   if (!Number.isFinite(value) || value <= 0) return undefined;
@@ -140,8 +141,10 @@ export class SysproDatabaseService {
         this.sysproDb.query(SYSPRO_QUERIES.getOperationsForSuggestedJobs),
       ]);
       const opsByJob = this.groupOperationsByJob(opsResult.recordset);
-      const jobs = (result.recordset || []).map((row: any) => {
-        const job: any = this.mapRowToJob(row, opsByJob.get(jobKey(row.jobId)) || []);
+      const jobs = (result.recordset || []).map((row) => {
+        const job = this.mapRowToJob(row, opsByJob.get(jobKey(row.jobId)) || []) as Job & {
+          isSuggested?: boolean; suggestedJob?: string;
+        };
         job.isSuggested = true;
         job.suggestedJob = String(row.suggestedJob || '').trim();
         job.status = 'Planned';
@@ -151,7 +154,7 @@ export class SysproDatabaseService {
       // Suggestions may predate line routing (machine code in WorkCentre).
       try {
         const [wcs, res] = await Promise.all([this.getWorkcentres(), this.getResources()]);
-        const moved = remapMachineWorkcentres(jobs, wcs.map((w: any) => w.worcentreId), res as any);
+        const moved = remapMachineWorkcentres(jobs, wcs.map((w) => w.worcentreId), res);
         if (moved) logger.info({ moved }, 'MRP suggested jobs: machine work centres mapped to their lines');
       } catch (err) {
         logger.debug({ err }, 'MRP suggested jobs: work-centre remap skipped');
@@ -163,7 +166,7 @@ export class SysproDatabaseService {
     }
   }
 
-  private normalizeSysproTextValue(value: any): string {
+  private normalizeSysproTextValue(value: unknown): string {
     if (Array.isArray(value)) {
       for (const entry of value) {
         const normalized = this.normalizeSysproTextValue(entry);
@@ -179,10 +182,10 @@ export class SysproDatabaseService {
     return parts[0] || '';
   }
 
-  private combineSysproDateTime(dateValue: any, timeValue?: any): Date | undefined {
+  private combineSysproDateTime(dateValue: unknown, timeValue?: unknown): Date | undefined {
     if (!dateValue) return undefined;
 
-    const combined = new Date(dateValue);
+    const combined = new Date(dateValue as string | number | Date);
     if (Number.isNaN(combined.getTime())) return undefined;
 
     if (timeValue === undefined || timeValue === null || String(timeValue).trim() === '') {
@@ -208,7 +211,7 @@ export class SysproDatabaseService {
     return combined;
   }
 
-  private mapRowToJob(row: Record<string, any>, operations: Operation[]): Job {
+  private mapRowToJob(row: DbRow, operations: Operation[]): Job {
     const dueDateSource = row.JobDeliveryDate || row.jobDeliveryDate || row.dueDate || row.SchEndDate;
     const releaseDateSource = row.JobStartDate || row.jobStartDate || row.releaseDate || row.SchStartDate;
 
@@ -228,7 +231,7 @@ export class SysproDatabaseService {
       Number(row.estimatedMaterialCost) || 0
     );
 
-    Object.assign(job as any, mapDatabaseFields(row), {
+    Object.assign(job, mapDatabaseFields(row), {
       jobId: row.jobId,
       itemCode: row.itemCode,
       description: row.description || 'N/A',
@@ -250,7 +253,7 @@ export class SysproDatabaseService {
     return job;
   }
 
-  private mapRowToOperation(row: Record<string, any>): Operation {
+  private mapRowToOperation(row: DbRow): Operation {
     const scheduledMachine = this.normalizeSysproTextValue(row.ScheduledMachine);
     const iMachine = this.normalizeSysproTextValue(row.IMachine);
     const resourceIds = Array.from(new Set([scheduledMachine, iMachine].filter(Boolean)));
@@ -300,7 +303,7 @@ export class SysproDatabaseService {
       deriveOperationStatus(row)
     );
 
-    Object.assign(operation as any, mapDatabaseFields(row), {
+    Object.assign(operation, mapDatabaseFields(row), {
       opId: row.opId,
       jobId: row.jobId,
       sequence: Number(row.sequence) || 0,
@@ -330,7 +333,7 @@ export class SysproDatabaseService {
   // ==================== JOBS & OPERATIONS ====================
 
   /** Group operation rows (already ordered by job, sequence) by trimmed job id. */
-  private groupOperationsByJob(rows: any[]): Map<string, Operation[]> {
+  private groupOperationsByJob(rows: DbRow[]): Map<string, Operation[]> {
     const byJob = new Map<string, Operation[]>();
     for (const row of rows || []) {
       const key = jobKey(row.jobId);
@@ -355,7 +358,7 @@ export class SysproDatabaseService {
         this.sysproDb.query(SYSPRO_QUERIES.getOperationsForOpenJobs),
       ]);
       const opsByJob = this.groupOperationsByJob(opsResult.recordset);
-      const jobs: Job[] = result.recordset.map((row: any) =>
+      const jobs: Job[] = result.recordset.map((row) =>
         this.mapRowToJob(row, opsByJob.get(jobKey(row.jobId)) || []));
 
       // Master/sub links can come back in a different format than the job
@@ -421,7 +424,7 @@ export class SysproDatabaseService {
         ORDER BY po.ProductionOrderNumber ASC, po.SequenceNumber ASC
       `);
       const opsByJob = this.groupOperationsByJob(opsResult.recordset);
-      const jobs: Job[] = result.recordset.map((row: any) =>
+      const jobs: Job[] = result.recordset.map((row) =>
         this.mapRowToJob(row, opsByJob.get(jobKey(row.jobId)) || []));
 
       // Same normalisation as the direct-SYSPRO path — the compat layer
@@ -648,7 +651,7 @@ export class SysproDatabaseService {
         SYSPRO_QUERIES.getMaterialsByJob,
         { itemCode, jobId: jobId || '' }
       );
-      return result.recordset.map((row: any) => ({
+      return result.recordset.map((row) => ({
         bomId: row.bomId,
         itemCode: row.itemCode,
         componentCode: row.componentCode,
@@ -666,7 +669,7 @@ export class SysproDatabaseService {
     try {
       const result = await this.sysproDb.query(SYSPRO_QUERIES.getInventory);
       return result.recordset.map(
-        (row: any) =>
+        (row) =>
           new MaterialModel(
             row.materialId,
             row.code,
@@ -703,7 +706,7 @@ export class SysproDatabaseService {
   > {
     try {
       const result = await this.sysproDb.query(SYSPRO_QUERIES.getInventoryByWarehouse);
-      return (result.recordset || []).map((row: any) => ({
+      return (result.recordset || []).map((row) => ({
         code: String(row.code || '').trim(),
         description: String(row.description || '').trim(),
         unitOfMeasure: row.unitOfMeasure || 'EA',
@@ -728,7 +731,7 @@ export class SysproDatabaseService {
     const rows = [...(result.recordset || [])];
     if (this.options.includeSuggestedJobs) {
       const sug = await this.sysproDb.query(SYSPRO_QUERIES.getSuggestedJobMaterialRequirements)
-        .catch((err: any) => { logger.warn({ err }, 'Could not read MRP suggested job materials'); return { recordset: [] } as any; });
+        .catch((err): DbResult => { logger.warn({ err }, 'Could not read MRP suggested job materials'); return { recordset: [] }; });
       rows.push(...(sug.recordset || []));
     }
     const byJob = new Map<string, RequirementLine[]>();
@@ -792,7 +795,7 @@ export class SysproDatabaseService {
   > {
     try {
       const result = await this.sysproDb.query(SYSPRO_QUERIES.getOpenPoReceipts);
-      return (result.recordset || []).map((row: any) => ({
+      return (result.recordset || []).map((row) => ({
         componentCode: String(row.componentCode || '').trim(),
         warehouseCode: String(row.warehouseCode || '').trim(),
         poNumber: String(row.poNumber || '').trim(),
@@ -825,7 +828,7 @@ export class SysproDatabaseService {
     await this.addBomFallbackRequirements(jobs, requirementsByJob);
 
     return computeMaterialPlans({
-      jobs: jobs as any,
+      jobs,
       requirementsByJob,
       stock: warehouseRows.map((w) => ({
         code: w.code,
@@ -849,7 +852,7 @@ export class SysproDatabaseService {
       this.getOpenPoReceipts(),
       this.getOpenJobMaterialRequirements(),
     ]);
-    await this.addBomFallbackRequirements(jobs as any, requirementsByJob);
+    await this.addBomFallbackRequirements(jobs, requirementsByJob);
     return projectInventory({
       jobs,
       requirementsByJob,
@@ -877,9 +880,9 @@ export class SysproDatabaseService {
       this.getOpenJobMaterialRequirements(),
       this.getInventory().catch(() => [] as Material[]),
     ]);
-    await this.addBomFallbackRequirements(jobs as any, requirementsByJob);
+    await this.addBomFallbackRequirements(jobs, requirementsByJob);
     const leadTimeDays = new Map<string, number>();
-    for (const m of inventory as any[]) {
+    for (const m of inventory as Array<Material & { code?: string; leadTimeDays?: number }>) {
       const lt = Number(m.leadTimeDays) || 0;
       if (lt > 0) leadTimeDays.set(String(m.code ?? m.materialId ?? '').trim(), lt);
     }
@@ -933,12 +936,12 @@ export class SysproDatabaseService {
           FROM WipMaster WHERE Complete <> ''Y'' AND ISNULL(SalesOrder, '''') <> ''''';`;
     let warning: string | undefined;
     const [soRes, linkRes, stock] = await Promise.all([
-      this.sysproDb.query(soSql).catch((err: any) => { warning = `Sales orders could not be read: ${err?.message || err}`; return { recordset: [] }; }),
-      this.sysproDb.query(linkSql).catch(() => ({ recordset: [] })),
+      this.sysproDb.query(soSql).catch((err): DbResult => { warning = `Sales orders could not be read: ${errorMessage(err)}`; return { recordset: [] }; }),
+      this.sysproDb.query(linkSql).catch((): DbResult => ({ recordset: [] })),
       this.getInventoryByWarehouse(),
     ]);
     const links = new Map<string, { so: string; line: number }>();
-    for (const r of (linkRes as any).recordset || []) {
+    for (const r of linkRes.recordset || []) {
       links.set(String(r.jobId || '').trim(), { so: String(r.salesOrder || '').trim(), line: Number(r.salesOrderLine) || 0 });
     }
     const onHand = new Map<string, number>();
@@ -947,7 +950,7 @@ export class SysproDatabaseService {
       onHand.set(w.code, (onHand.get(w.code) || 0) + (Number(w.qtyOnHand) || 0));
       if (w.unitOfMeasure) stockUom.set(w.code, w.unitOfMeasure);
     }
-    const lines: SoLine[] = ((soRes as any).recordset || []).map((r: any) => ({
+    const lines: SoLine[] = (soRes.recordset || []).map((r) => ({
       salesOrder: String(r.salesOrder || '').trim(),
       line: Number(r.line) || 0,
       customer: String(r.customer || '').trim(),
@@ -970,28 +973,28 @@ export class SysproDatabaseService {
   }
 
   /** Jobs with no WipJobAllMat lines get their needs from the product BOM. */
-  private async addBomFallbackRequirements(jobs: Job[], requirementsByJob: Map<string, RequirementLine[]>): Promise<void> {
+  private async addBomFallbackRequirements(jobs: Array<{ jobId: string; itemCode?: string; quantity?: number }>, requirementsByJob: Map<string, RequirementLine[]>): Promise<void> {
     // Jobs with no WipJobAllMat lines (e.g. bulk-imported jobs not in SYSPRO)
     // fall back to the product BOM: qty per × job qty × (1 + scrap).
     const missing = jobs.filter((j) => !requirementsByJob.has(String(j.jobId).trim()));
     // One BOM lookup per distinct item, not per job.
     const bomByItem = new Map<string, Promise<BOMLine[]>>();
-    const bomFor = (job: Job) => {
-      const item = String((job as any).itemCode || job.jobId);
+    const bomFor = (job: { jobId: string; itemCode?: string }) => {
+      const item = String(job.itemCode || job.jobId);
       if (!bomByItem.has(item)) {
         // No jobId: these jobs have no WipJobAllMat lines, so passing the job
         // would query WipJobAllMat again and return nothing — go to the BOM.
         bomByItem.set(item, this.getMaterialsByJob(item).catch(() => [] as BOMLine[]));
       }
-      return bomByItem.get(item)!;
+      return bomByItem.get(item) ?? Promise.resolve([] as BOMLine[]);
     };
     for (const job of missing) {
       const lines = await bomFor(job);
       if (!lines.length) continue;
-      const qty = Math.max(1, Number((job as any).quantity) || 1);
+      const qty = Math.max(1, Number(job.quantity) || 1);
       requirementsByJob.set(
         String(job.jobId).trim(),
-        lines.map((l: any) => ({
+        lines.map((l) => ({
           jobId: String(job.jobId).trim(),
           componentCode: String(l.componentCode || '').trim(),
           warehouseCode: '',

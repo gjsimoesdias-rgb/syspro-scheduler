@@ -6,6 +6,14 @@
 import { Operation, Resource, Workcentre } from '../types';
 import environment from '../config/environment';
 
+/** An already-booked operation, as the availability checks read it. */
+interface BookedOperation {
+  workcentreId?: string;
+  resourceId?: string;
+  plannedStartDate: Date | string;
+  plannedEndDate: Date | string;
+}
+
 export interface TimeWindowConstraint {
   startTime: Date;
   endTime: Date;
@@ -72,7 +80,7 @@ export class ConstraintManager {
     windowEnd: Date,
     worcentre: Workcentre,
     resource: Resource,
-    existingSchedules: any[] = []
+    existingSchedules: BookedOperation[] = []
   ): boolean {
     const totalDuration =
       operation.setupTime + operation.duration;
@@ -216,7 +224,7 @@ export class ConstraintManager {
     resource: Resource,
     startTime: Date,
     endTime: Date,
-    existingSchedules: any[]
+    existingSchedules: BookedOperation[]
   ): boolean {
     // Check status
     if (resource.status !== 'Available') {
@@ -246,7 +254,7 @@ export class ConstraintManager {
     workcentre: Workcentre,
     startTime: Date,
     endTime: Date,
-    existingSchedules: any[]
+    existingSchedules: BookedOperation[]
   ): boolean {
     // Check existing schedules for conflicts
     for (const schedule of existingSchedules) {
@@ -270,7 +278,7 @@ export class ConstraintManager {
    * configurable default band rather than a hardcoded 6am–10pm window.
    */
   private isWithinWorkingHours(startTime: Date, endTime: Date, workcentre: Workcentre): boolean {
-    const calendar: any = (workcentre as any).calendar;
+    const calendar = workcentre.calendar;
 
     if (calendar?.shifts?.length) {
       // Use the actual shift definitions from the workcentre calendar
@@ -355,10 +363,11 @@ export class ConstraintManager {
 
     for (const op of operations) {
       const wc = op.workcentreId;
-      if (!byWC.has(wc)) byWC.set(wc, []);
-      // itemCode may live on the parent job; it's injected as (op as any).itemCode
-      const itemCode: string = (op as any).itemCode || op.workcentreId;
-      byWC.get(wc)!.push({ itemCode, setupTime: op.setupTime || 0 });
+      // itemCode may live on the parent job; callers can inject it onto the op.
+      const itemCode: string = (op as Operation & { itemCode?: string }).itemCode || op.workcentreId;
+      const list = byWC.get(wc) ?? [];
+      list.push({ itemCode, setupTime: op.setupTime || 0 });
+      byWC.set(wc, list);
     }
 
     // For every distinct item pair on the same workcentre, record the higher
