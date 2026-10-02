@@ -38,7 +38,7 @@ describe('isLocalUserId', () => {
   it('tells lic_users ids from Windows sign-ins', () => {
     expect(isLocalUserId(5)).toBe(true);
     expect(isLocalUserId('12')).toBe(true);
-    expect(isLocalUserId('ntlm:CORP\jo')).toBe(false);
+    expect(isLocalUserId('ntlm:CORP\\jo')).toBe(false);
     expect(isLocalUserId(0)).toBe(false);
   });
 });
