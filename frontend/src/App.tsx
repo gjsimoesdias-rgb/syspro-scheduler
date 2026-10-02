@@ -166,8 +166,6 @@ const App: React.FC = () => {
   const scheduleSetupPreselect = useUiStore((s) => s.scheduleSetupPreselect);
   const openScheduleSetup = useUiStore((s) => s.openScheduleSetup);
   const closeScheduleSetup = useUiStore((s) => s.closeScheduleSetup);
-  const useAlternatives = useUiStore((s) => s.useAlternatives);
-  const setUseAlternatives = useUiStore((s) => s.setUseAlternatives);
   // Pin / Exclude job flags live on the server so they survive reloads and
   // also apply to the background Auto plan (GET/PUT /api/jobs/flags).
   const [jobFlags, setJobFlags] = useState<JobFlags>({ excluded: [], pinned: [] });

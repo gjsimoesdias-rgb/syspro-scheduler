@@ -42,7 +42,6 @@ export function useScheduleGeneration({
   const scheduleDateMode = useUiStore((s) => s.scheduleDateMode);
   const schedulingHorizonStart = useUiStore((s) => s.schedulingHorizonStart);
   const schedulingHorizonEnd = useUiStore((s) => s.schedulingHorizonEnd);
-  const useAlternatives = useUiStore((s) => s.useAlternatives);
 
   const schedule = useScheduleStore((s) => s.schedule);
   const setSchedule = useScheduleStore((s) => s.setSchedule);
@@ -107,7 +106,6 @@ export function useScheduleGeneration({
           schedulingDirection: effectiveDirection,
           dateAnchorMode: effectiveDateMode,
           anchorDate,
-          useAlternatives,
           ...(selectedJobIds && selectedJobIds.length > 0 ? { selectedJobIds } : {}),
           engineType: configOverride?.engineType ?? 'greedy',
           ...(configOverride?.cpSatWeights ? { cpSatWeights: configOverride.cpSatWeights } : {}),

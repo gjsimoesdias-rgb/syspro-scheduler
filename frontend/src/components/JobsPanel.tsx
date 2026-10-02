@@ -754,8 +754,8 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
         </div>
       ) : manageTab === 'alternatives' ? (
         <div className="tab-placeholder guide-panel">
-          <h3>Alternative Machine Groups</h3>
-          <p>Create groups of machines for the same work centre so operations can switch between them during manual scheduling and publish-back.</p>
+          <h3>Alternative Machine Groups <span className="sp-na" title="Generate and the Auto plan don't pick alternative machines yet">not used by Generate yet</span></h3>
+          <p>Create groups of machines for the same work centre so operations can switch between them when you move or schedule them by hand. Generate and the Auto plan don't use these groups yet.</p>
           <div className="guide-grid">
             <label className="guide-card">
               <strong>Work Centre</strong>
