@@ -39,12 +39,12 @@ const dbOf = async (req: AuthRequest, res: Response) => {
 
 const fail = (req: AuthRequest, res: Response, err: unknown) => {
   if (err instanceof VersionError) return res.status(err.status).json({ error: err.message });
-  (req as any).log?.error?.({ err }, 'versions route failed');
+  req.log?.error({ err }, 'versions route failed');
   return res.status(500).json({ error: errorMessage(err, 'Version operation failed') });
 };
 
 const audit = (req: AuthRequest, action: string, details: Record<string, unknown>) => {
-  (req as any).log?.info?.({ action, user: req.user?.username, ...details }, `version_${action}`);
+  req.log?.info({ action, user: req.user?.username, ...details }, `version_${action}`);
   const schedulerDb = req.app.locals.schedulerDb;
   if (schedulerDb) {
     new AuditLogService(schedulerDb).log({
@@ -53,7 +53,7 @@ const audit = (req: AuthRequest, action: string, details: Record<string, unknown
       entityType: 'plan_version',
       entityId: String(details.versionId ?? 'all'),
       after: details,
-      traceId: (req as any).id,
+      traceId: req.id != null ? String(req.id) : undefined,
     }).catch(() => { /* best effort */ });
   }
 };

@@ -166,7 +166,7 @@ export async function generateHandler(req: Request, res: Response) {
 
   // Remember the planner's options for the background Auto plan (not the
   // selection, target version or exact dates — it plans everything from now).
-  if (!(req as any).autoSchedule) {
+  if (!req.autoSchedule) {
     const b = req.body || {};
     const start = Date.parse(b.planningHorizonStartDate), end = Date.parse(b.planningHorizonEndDate);
     const { selectedJobIds: _s, excludedJobIds: _e, pinnedJobIds: _p, versionId: _v, planningHorizonStartDate: _hs, planningHorizonEndDate: _he, anchorDate: _a, dateAnchorMode: _m, ...rest } = b;
@@ -524,7 +524,7 @@ export async function generateHandler(req: Request, res: Response) {
     } else {
       try {
         const { jobCount, revision } = await saveAsLatest(await planDbFor(req.app), schedule, {
-          status: 'Draft', generatedAt: new Date(), createdBy: (req as any).user?.username,
+          status: 'Draft', generatedAt: new Date(), createdBy: req.user?.username,
         });
         masterRevisionOut = revision;
         req.log.info({ jobCount, revision }, 'Schedule auto-saved to DB');
@@ -762,7 +762,7 @@ router.put('/auto', requireAuth, requirePlanner, (req: AuthRequest, res: Respons
     // The run uses the settings of the company of whoever switched it on.
     ...(body.enabled ? { companyId: req.user?.companyId, enabledBy: req.user?.username } : {}),
   });
-  (req as any).log?.info?.({ config, user: req.user?.username }, 'Auto plan settings changed');
+  req.log?.info({ config, user: req.user?.username }, 'Auto plan settings changed');
   res.json({ config, status: auto.status });
 });
 router.post('/auto/run', requireAuth, requirePlanner, async (req: AuthRequest, res: Response) => {
@@ -808,8 +808,8 @@ async function auditPlan(req: Request, action: string, scheduleId: string): Prom
   if (!schedulerDb) return;
   try {
     await new AuditLogService(schedulerDb).log({
-      actorId: (req as any).user?.username ?? String((req as any).user?.sub ?? 'unknown'),
-      action, entityType: 'plan_version', entityId: scheduleId, traceId: (req as any).id,
+      actorId: req.user?.username ?? String(req.user?.sub ?? 'unknown'),
+      action, entityType: 'plan_version', entityId: scheduleId, traceId: req.id != null ? String(req.id) : undefined,
     });
   } catch (err) {
     req.log.warn({ err }, `Audit log write failed for ${action}`);
@@ -889,7 +889,7 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
 
     // Any saved change is a new Draft (until it is sent to SYSPRO). Atomic — see ScheduleStore.
     const { jobCount, operationCount, revision } = await saveAsLatest(await planDbFor(req.app), schedule, {
-      status: 'Draft', baseRevision, createdBy: (req as any).user?.username,
+      status: 'Draft', baseRevision, createdBy: req.user?.username,
     });
 
     req.log.info({ scheduleId: schedule.scheduleId, jobCount, operationCount, revision }, 'Schedule saved');
@@ -1124,7 +1124,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
     const publishRows = await loadPublishRows(await planDbFor(req.app));
     const planned = planPublish(schedule, publishRows, full);
     const { unchanged } = planned;
-    const user = (req as any).user?.username;
+    const user = req.user?.username;
 
     // Bulk-imported jobs that SYSPRO doesn't have would fail "No WipMaster row
     // updated" and roll back the whole send. Leave them out and say so.
@@ -1249,8 +1249,8 @@ router.post('/:scheduleId/approve-override', requirePlanner, async (req: Request
     // Audit the approval
     const schedulerDb = req.app.locals.schedulerDb;
     if (schedulerDb) {
-      const actorId = (req as any).user?.username ?? String((req as any).user?.sub ?? 'anonymous');
-      const traceId = (req as any).id as string | undefined;
+      const actorId = req.user?.username ?? String(req.user?.sub ?? 'anonymous');
+      const traceId = (req.id != null ? String(req.id) : undefined);
       try {
         await new AuditLogService(schedulerDb).log({
           actorId,

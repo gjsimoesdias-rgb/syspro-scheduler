@@ -223,7 +223,7 @@ app.use((req: Request, res: Response) => {
   res.status(404).json({
     error: { code: 'NOT_FOUND', message: 'No handler for this route' },
     path: req.path,
-    traceId: (req as any).id || null,
+    traceId: req.id ?? null,
     timestamp: new Date().toISOString(),
   });
 });
@@ -259,7 +259,7 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       ? 'SERVICE_UNAVAILABLE'
       : 'INTERNAL_ERROR');
 
-  const log = (req as any).log || logger;
+  const log = req.log || logger;
   log.error(
     {
       err,
@@ -276,7 +276,7 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       code,
       message: err.message || 'Internal Server Error',
     },
-    traceId: (req as any).id || null,
+    traceId: req.id ?? null,
     timestamp: new Date().toISOString(),
   };
 

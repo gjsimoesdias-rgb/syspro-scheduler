@@ -3,15 +3,27 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { JWT_SECRET, SHOPFLOOR_KEY } from '../../config/secrets';
 
-export interface AuthRequest extends Request {
-  user?: {
-    /** Numeric DB id for local users; "ntlm:domain\user" for Windows users */
-    sub: number | string;
-    username: string;
-    role: string;
-    companyId: number | null;
-  };
+/** The signed-in user, from the JWT (requireAuth sets req.user). */
+export interface AuthUser {
+  /** Numeric DB id for local users; "ntlm:domain\user" for Windows users */
+  sub: number | string;
+  username: string;
+  role: string;
+  companyId: number | null;
 }
+
+// Every Express request can carry these (declared here, in a module every
+// route imports, so ts-node and ts-jest pick it up without a .d.ts).
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: AuthUser;
+    /** True on the background Auto plan's synthetic request. */
+    autoSchedule?: boolean;
+  }
+}
+
+/** Kept for existing imports: any Express request (user is optional). */
+export type AuthRequest = Request;
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
@@ -21,8 +33,13 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   }
   const token = header.slice(7);
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as any;
-    req.user = { sub: payload.sub, username: payload.username, role: payload.role, companyId: payload.companyId };
+    const payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload & Partial<AuthUser>;
+    req.user = {
+      sub: payload.sub ?? '',
+      username: String(payload.username ?? ''),
+      role: String(payload.role ?? ''),
+      companyId: payload.companyId ?? null,
+    };
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });

@@ -85,9 +85,9 @@ export const httpLogger = pinoHttp({
     return 'info';
   },
   customSuccessMessage: (req, res) =>
-    `${req.method} ${(req as any).originalUrl || req.url} ${res.statusCode}`,
+    `${req.method} ${(req as { originalUrl?: string }).originalUrl || req.url} ${res.statusCode}`,
   customErrorMessage: (req, res, err) =>
-    `${req.method} ${(req as any).originalUrl || req.url} ${res.statusCode}: ${
+    `${req.method} ${(req as { originalUrl?: string }).originalUrl || req.url} ${res.statusCode}: ${
       err?.message ?? 'error'
     }`,
   // Don't dump the entire body and headers on every line — keep logs scannable.
@@ -95,9 +95,9 @@ export const httpLogger = pinoHttp({
   // Express leaves in req.url after routing — that bug surfaced in Week 3.
   serializers: {
     req: (req) => ({
-      id: (req as any).id,
+      id: req.id,
       method: req.method,
-      url: (req as any).originalUrl || req.url,
+      url: (req as { originalUrl?: string }).originalUrl || req.url,
       remoteAddress: req.remoteAddress,
     }),
     res: (res) => ({

@@ -48,7 +48,7 @@ export async function connectedCompanyId(app: { locals: Record<string, any> }): 
 
 /** The company whose settings apply to this request. */
 export async function companyFor(req: Request): Promise<number | null> {
-  const own = (req as any).user?.companyId;
+  const own = req.user?.companyId;
   if (own) return Number(own);
   return connectedCompanyId(req.app);
 }

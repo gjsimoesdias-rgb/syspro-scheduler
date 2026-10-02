@@ -72,7 +72,7 @@ router.post('/', requireAuth, requirePlanner, async (req: Request, res: Response
     if (!base.recordset?.length) return res.status(404).json({ error: 'Base schedule not found' });
 
     const scenarioId = uuidv4();
-    const createdBy = (req as any).user?.username ?? 'anonymous';
+    const createdBy = req.user?.username ?? 'anonymous';
 
     await (await planDbFor(req.app)).queryWithParams(
       `INSERT INTO aps.Scenarios (ScenarioId, BaseScheduleId, Name, Description, ScheduleData, CreatedBy)

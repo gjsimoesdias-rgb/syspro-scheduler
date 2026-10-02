@@ -267,7 +267,7 @@ router.get('/schema', async (req: Request, res: Response) => {
     }
     res.json({ databases, generatedAt: new Date().toISOString() });
   } catch (error) {
-    (req as any).log?.error?.({ err: error }, 'Schema introspection failed');
+    req.log?.error({ err: error }, 'Schema introspection failed');
     res.status(500).json({ error: errorMessage(error, 'Failed to introspect database schema') });
   }
 });

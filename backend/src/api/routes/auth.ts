@@ -36,7 +36,7 @@ const sendAuthError = (req: Request, res: Response, err: any) => {
     res.status(401).json({ error: msg });
     return;
   }
-  (req as any).log?.error?.({ err }, 'Authentication backend error');
+  req.log?.error({ err }, 'Authentication backend error');
   res.status(503).json({
     error: "The scheduler can't reach its database right now. Please contact your administrator.",
   });
