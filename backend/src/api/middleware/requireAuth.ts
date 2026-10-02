@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../../config/secrets';
+import crypto from 'crypto';
+import { JWT_SECRET, SHOPFLOOR_KEY } from '../../config/secrets';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -60,4 +61,21 @@ export function requireCompanyAdmin(req: AuthRequest, res: Response, next: NextF
     return;
   }
   next();
+}
+
+/** Constant-time string compare. */
+const sameSecret = (a: string, b: string): boolean => {
+  const x = Buffer.from(a), y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+};
+
+/**
+ * Shop-floor screens: accept the X-Shopfloor-Key header (from the screen link)
+ * or a normal signed-in user. Anyone else on the LAN gets 401.
+ */
+export function requireShopfloorAccess(req: AuthRequest, res: Response, next: NextFunction): void {
+  const key = req.headers['x-shopfloor-key'];
+  if (typeof key === 'string' && key && sameSecret(key, SHOPFLOOR_KEY)) { next(); return; }
+  if (req.headers.authorization) { requireAuth(req, res, next); return; }
+  res.status(401).json({ error: 'This screen needs the shop-floor link — ask an admin for it (Settings → Shop-floor screen).' });
 }

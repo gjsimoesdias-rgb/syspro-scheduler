@@ -23,35 +23,51 @@ const PLACEHOLDERS = new Set([
 export const isWeakSecret = (value: string | undefined): boolean =>
   !value || value.trim().length < MIN_LENGTH || PLACEHOLDERS.has(value.trim());
 
-function resolveJwtSecret(): string {
-  const current = process.env.JWT_SECRET;
-  if (!isWeakSecret(current)) return current!.trim();
+/**
+ * A secret from backend/.env, or a freshly generated one written back to it
+ * (so it survives restarts). Never falls back to a known value.
+ */
+function resolveSecret(name: string, isWeak: (v: string | undefined) => boolean, bytes: number, purpose: string): string {
+  const current = process.env[name];
+  if (!isWeak(current)) return current!.trim();
 
-  const generated = crypto.randomBytes(48).toString('hex');
+  const generated = crypto.randomBytes(bytes).toString('hex');
   if (process.env.NODE_ENV === 'test') {
     // Tests never touch backend/.env.
-    process.env.JWT_SECRET = generated;
+    process.env[name] = generated;
     return generated;
   }
   const envPath = path.resolve(process.cwd(), '.env');
   try {
     const content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
     const nl = content.includes('\r\n') ? '\r\n' : '\n';
-    const line = `JWT_SECRET=${generated}`;
-    const next = /^JWT_SECRET=.*$/m.test(content)
-      ? content.replace(/^JWT_SECRET=.*$/m, line)
+    const line = `${name}=${generated}`;
+    const re = new RegExp(`^${name}=.*$`, 'm');
+    const next = re.test(content)
+      ? content.replace(re, line)
       : `${content.replace(/\s*$/, '')}${content ? nl : ''}${line}${nl}`;
     fs.writeFileSync(envPath, next, 'utf8');
     // eslint-disable-next-line no-console
-    console.warn(`[security] JWT_SECRET was missing or weak — generated a new one and saved it to ${envPath}.`);
+    console.warn(`[security] ${name} was missing or weak — generated a new one and saved it to ${envPath}.`);
   } catch (err: any) {
     // eslint-disable-next-line no-console
-    console.warn(`[security] JWT_SECRET was missing or weak and ${envPath} could not be updated (${err?.message}). ` +
-      'Using a random secret for this run only — users will be signed out on restart.');
+    console.warn(`[security] ${name} was missing or weak and ${envPath} could not be updated (${err?.message}). ` +
+      `Using a random value for this run only — ${purpose}.`);
   }
-  process.env.JWT_SECRET = generated;
+  process.env[name] = generated;
   return generated;
 }
 
+const resolveJwtSecret = (): string =>
+  resolveSecret('JWT_SECRET', isWeakSecret, 48, 'users will be signed out on restart');
+
 export const JWT_SECRET: string = resolveJwtSecret();
 export const JWT_EXPIRES_IN = '8h';
+
+/**
+ * Key for shop-floor wall screens (/shopfloor?key=…): read-only access to
+ * today's operations without a user login. Rotate by deleting SHOPFLOOR_KEY
+ * from backend/.env and restarting (old screen links stop working).
+ */
+export const SHOPFLOOR_KEY: string = resolveSecret(
+  'SHOPFLOOR_KEY', (v) => !v || v.trim().length < 24, 24, 'shop-floor screens need a new link after a restart');

@@ -25,13 +25,17 @@ import shopfloorRoutes from './api/routes/shopfloor';
 import rateLimit from 'express-rate-limit';
 import environment from './config/environment';
 import { httpLogger, logger } from './utils/logger';
-import { requireAuth, requireCompanyAdmin } from './api/middleware/requireAuth';
+import { requireAuth, requireCompanyAdmin, requireShopfloorAccess } from './api/middleware/requireAuth';
 
 const app: Express = express();
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+// The UI is served from this same origin (and Vite's dev server proxies /api),
+// so no CORS headers are needed. Only a UI hosted elsewhere needs them:
+// CORS_ORIGINS=https://planner.example.com,https://other.example.com
+const corsOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+if (corsOrigins.length) app.use(cors({ origin: corsOrigins }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -106,7 +110,9 @@ const sessionRateLimit = rateLimit({
 app.post('/api/auth/login', loginRateLimit);
 app.use('/api/auth', sessionRateLimit, authRoutes);
 app.use('/api/auth/ntlm', ntlmAuthRoutes); // already rate-limited by the /api/auth mount above
-app.use('/api/shopfloor', shopfloorRoutes);
+// Shop-floor wall screens: a signed-in user, or the shop-floor key from the
+// screen link (Settings → Shop-floor screen). Read-only, today's ops only.
+app.use('/api/shopfloor', requireShopfloorAccess, shopfloorRoutes);
 
 // Protected: all remaining routes require a valid JWT
 app.use('/api/schedule', eventsRoutes);   // SSE events stream — public, EventSource can't send headers; MUST be before requireAuth

@@ -34,6 +34,27 @@ type OpState = 'now' | 'next' | 'done' | 'later';
 
 const API_BASE = (window as any).__APS_CONFIG__?.apiUrl ?? '/api';
 
+/**
+ * The screen link (Settings → Shop-floor screen) carries ?key=…. Remember it
+ * on this device and take it out of the address bar, so it isn't left on
+ * screen or in browser history.
+ */
+const KEY_STORAGE = 'crux_shopfloor_key';
+export function shopfloorKey(): string | null {
+  let fromUrl: string | null = null;
+  try {
+    const url = new URL(window.location.href);
+    fromUrl = url.searchParams.get('key');
+    if (fromUrl) {
+      try { localStorage.setItem(KEY_STORAGE, fromUrl); } catch { /* private mode: keep for this load */ }
+      url.searchParams.delete('key');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+  } catch { /* ignore */ }
+  if (fromUrl) return fromUrl;
+  try { return localStorage.getItem(KEY_STORAGE); } catch { return null; }
+}
+
 /** HH:MM, with the weekday when it is not today (multi-day operations). */
 const time = (iso: string) => {
   const d = new Date(iso);
@@ -65,18 +86,22 @@ const ShopFloorView: React.FC = () => {
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [showDone, setShowDone] = useState<Record<string, boolean>>({});
+  const [key] = useState(() => shopfloorKey());
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE}/shopfloor/today`)
-      .then((r) => {
+    fetch(`${API_BASE}/shopfloor/today`, { headers: key ? { 'X-Shopfloor-Key': key } : {} })
+      .then(async (r) => {
+        if (r.status === 401) {
+          throw new Error('This screen needs the shop-floor link. Ask an admin for it (Settings → Shop-floor screen) and open it on this device once.');
+        }
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then((d: ShopFloorData) => { setData(d); setLoadedAt(new Date()); setLoading(false); })
       .catch((e: any) => { setError(e.message); setLoading(false); });
-  }, []);
+  }, [key]);
 
   useEffect(() => {
     load();

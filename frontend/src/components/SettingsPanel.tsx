@@ -109,7 +109,7 @@ interface UserSettings {
 type TreeSection =
   | 'general' | 'user-access'
   | 'fcs-designer' | 'fcs-interval' | 'fcs-routing' | 'fcs-tracking'
-  | 'license-admin'
+  | 'license-admin' | 'shopfloor'
   | 'my-profile';
 
 interface Props {
@@ -167,6 +167,35 @@ function Tabs({ tabs, active, onChange }: { tabs: string[]; active: string; onCh
 
 function GroupBox({ title, children }: { title: string; children: React.ReactNode }) {
   return <div className="sp-group"><div className="sp-group-title">{title}</div><div className="sp-group-body">{children}</div></div>;
+}
+
+/** Settings → Shop-floor screen: the link wall screens / tablets open once. */
+function ShopfloorLinkSection() {
+  const [link, setLink] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    apiJson<{ path: string }>('GET', '/status/shopfloor-link')
+      .then((r) => setLink(`${window.location.origin}${r.path}`))
+      .catch((e) => setMsg(e.message));
+  }, []);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(link); setMsg('Link copied'); } catch { setMsg('Select the link and copy it'); }
+  };
+  return (
+    <div className="sp-content-area">
+      <GroupBox title="Shop-floor screen">
+        <p>Open this link once on each wall screen or tablet. The device remembers it and shows today&rsquo;s operations per line, read-only, without signing in. Anyone with the link can see job and operation numbers, so share it only with shop-floor devices.</p>
+        <Row label="Screen link">
+          <input className="sp-text-input" readOnly value={link} onFocus={(e) => e.currentTarget.select()} style={{ width: '100%' }} aria-label="Shop-floor screen link" />
+        </Row>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="sp-btn sp-btn-save" onClick={copy} disabled={!link}>Copy link</button>
+          {msg && <span role="status">{msg}</span>}
+        </div>
+        <p style={{ marginTop: 12 }}>To revoke every screen link, delete <code>SHOPFLOOR_KEY</code> from <code>backend/.env</code> and restart the server; then open the new link on the devices you want to keep.</p>
+      </GroupBox>
+    </div>
+  );
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────
@@ -646,6 +675,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
       case 'fcs-tracking': return renderTracking();
       case 'user-access': return <UserManagement />;
       case 'license-admin': return <LicenseAdmin />;
+      case 'shopfloor': return <ShopfloorLinkSection />;
       case 'my-profile': return renderMyProfile();
       default: return null;
     }
@@ -660,6 +690,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
         <TreeGroup label="SETTINGS" />
         <TreeItem id="general" label="General" indent />
         {canEditCompany && <TreeItem id="user-access" label="User Access" indent />}
+        {canEditCompany && <TreeItem id="shopfloor" label="Shop-floor screen" indent />}
 
         <TreeGroup label="FINITE CAPACITY SCHEDULING" />
         <TreeItem id="fcs-designer" label="Designer" indent />

@@ -153,3 +153,35 @@ describe('settings for Windows (NTLM) sign-ins', () => {
     expect(call?.[1]).toMatchObject({ key: 'ntlm:CORP\jo' });
   });
 });
+
+describe('shop-floor screens and CORS', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { SHOPFLOOR_KEY } = require('../../../config/secrets');
+
+  it('refuses anonymous LAN requests', async () => {
+    const res = await request(app).get('/api/shopfloor/today');
+    expect(res.status).toBe(401);
+  });
+
+  it('accepts the screen key, or a signed-in user', async () => {
+    const byKey = await request(app).get('/api/shopfloor/today').set('X-Shopfloor-Key', SHOPFLOOR_KEY);
+    expect(byKey.status).toBe(503); // past the gate; no database in tests
+    const byUser = await request(app).get('/api/shopfloor/today').set('Authorization', `Bearer ${token('viewer')}`);
+    expect(byUser.status).toBe(503);
+    const wrong = await request(app).get('/api/shopfloor/today').set('X-Shopfloor-Key', 'x'.repeat(48));
+    expect(wrong.status).toBe(401);
+  });
+
+  it('only company admins can read the screen link', async () => {
+    const planner = await request(app).get('/api/status/shopfloor-link').set('Authorization', `Bearer ${token('planner')}`);
+    expect(planner.status).toBe(403);
+    const admin = await request(app).get('/api/status/shopfloor-link').set('Authorization', `Bearer ${token('company_admin')}`);
+    expect(admin.status).toBe(200);
+    expect(admin.body.path).toBe(`/shopfloor?key=${encodeURIComponent(SHOPFLOOR_KEY)}`);
+  });
+
+  it('sends no CORS headers unless CORS_ORIGINS is configured', async () => {
+    const res = await request(app).get('/health').set('Origin', 'http://evil.example');
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});

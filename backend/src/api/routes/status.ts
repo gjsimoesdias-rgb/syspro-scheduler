@@ -12,6 +12,8 @@ import { planDbFor } from '../../services/planStore';
 import AuthService from '../../services/AuthService';
 import { loadCompanyState } from '../../services/companyState';
 import { validateBody } from '../middleware/validateBody';
+import { requireCompanyAdmin } from '../middleware/requireAuth';
+import { SHOPFLOOR_KEY } from '../../config/secrets';
 import { listDatabasesSchema, connectSchema } from '../validators/statusValidators';
 
 const router = Router();
@@ -322,6 +324,14 @@ router.get('/engines', async (_req: Request, res: Response) => {
       'cp-sat': cpSat,
     },
   });
+});
+
+/**
+ * GET /api/status/shopfloor-link — the wall-screen link (company admin).
+ * Path only; the UI adds its own origin.
+ */
+router.get('/shopfloor-link', requireCompanyAdmin, (_req: Request, res: Response) => {
+  res.json({ path: `/shopfloor?key=${encodeURIComponent(SHOPFLOOR_KEY)}` });
 });
 
 router.post('/databases', validateBody(listDatabasesSchema), async (req: Request, res: Response) => {
