@@ -477,3 +477,29 @@ describe('POST /api/schedule/save — stale board protection', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('export-to-syspro — imported jobs and machine write-back', () => {
+  const token = makeToken('planner');
+  afterEach(() => { app.locals.sysproDb = undefined; (app.locals as any).importedJobs = undefined; });
+  const op = (jobId: string) => ({ opId: `${jobId}-OP10`, sequence: 10, resourceId: 'M1', workcentreId: 'WC1', plannedStartDate: '2026-10-05T08:00:00Z', plannedEndDate: '2026-10-05T10:00:00Z' });
+  const job = (jobId: string) => ({ jobId, plannedStartDate: '2026-10-05T08:00:00Z', plannedEndDate: '2026-10-05T10:00:00Z', operationSchedules: [op(jobId)] });
+
+  it('leaves out imported jobs SYSPRO does not have instead of failing the whole send, and never writes IMachine', async () => {
+    (app.locals as any).importedJobs = [{ jobId: 'IMP1' }];
+    const qwp = jest.fn().mockImplementation(async (sql: string) => {
+      if (/SELECT IsLatest, VersionKind/.test(sql)) return { recordset: [{ IsLatest: true, VersionKind: 'Plan' }] };
+      if (/SELECT ScheduleData, Status/.test(sql)) return { recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [job('J1'), job('IMP1')] }), Status: 'Approved' }] };
+      if (/FROM WipMaster WHERE Job IN/.test(sql)) return { recordset: [] }; // IMP1 is not in SYSPRO
+      if (/UPDATE WipJobAllLab|UPDATE WipMaster/.test(sql)) return { recordset: [{ rowsAffected: 1 }] };
+      return { recordset: [] };
+    });
+    app.locals.sysproDb = makeFakeDb({ queryWithParams: qwp }) as any;
+    const res = await request(app).post('/api/schedule/S1/export-to-syspro').set('Authorization', `Bearer ${token}`).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.details.skippedNotInSyspro).toEqual(['IMP1']);
+    const writes = qwp.mock.calls.filter(([sql]: [string]) => /UPDATE WipJobAllLab/.test(sql));
+    expect(writes.map(([, p]: [string, any]) => p.jobId)).toEqual(['J1']);
+    expect(writes[0][0]).not.toMatch(/IMachine\s*=/);
+    expect(writes[0][0]).not.toMatch(/TRY_CONVERT/);
+  });
+});

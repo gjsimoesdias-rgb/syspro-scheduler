@@ -772,6 +772,19 @@ router.post('/auto/run', requireAuth, requirePlanner, async (req: AuthRequest, r
   res.status(status.lastResult?.ok ? 200 : 500).json({ status });
 });
 
+/** Which of these job numbers have no WipMaster row (checked in chunks of 500). */
+async function jobsMissingFromSyspro(sysproDb: any, jobIds: string[]): Promise<Set<string>> {
+  const missing = new Set(jobIds);
+  for (let i = 0; i < jobIds.length; i += 500) {
+    const chunk = jobIds.slice(i, i + 500);
+    const params = Object.fromEntries(chunk.map((id, n) => [`j${n}`, id]));
+    const r = await sysproDb.queryWithParams(
+      `SELECT Job FROM WipMaster WHERE Job IN (${chunk.map((_, n) => `@j${n}`).join(', ')})`, params);
+    for (const row of r.recordset || []) missing.delete(String(row.Job).trim());
+  }
+  return missing;
+}
+
 /** Sends to SYSPRO in progress, by company plan schema. */
 const exportsRunning = new Set<string>();
 
@@ -1147,16 +1160,29 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
     // last successful send. { full: true } re-sends every scheduled job.
     const full = req.body?.full === true;
     const publishRows = await loadPublishRows(await planDbFor(req.app));
-    const { toPublish, unchanged } = planPublish(schedule, publishRows, full);
+    const planned = planPublish(schedule, publishRows, full);
+    const { unchanged } = planned;
     const user = (req as any).user?.username;
+
+    // Bulk-imported jobs that SYSPRO doesn't have would fail "No WipMaster row
+    // updated" and roll back the whole send. Leave them out and say so.
+    const importedIds = new Set<string>(((req.app.locals.importedJobs || []) as any[]).map((j) => String(j?.jobId ?? '').trim()));
+    const importedCandidates = planned.toPublish.filter((j: any) => importedIds.has(String(j.jobId).trim()));
+    const notInSyspro = importedCandidates.length
+      ? await jobsMissingFromSyspro(sysproDb, importedCandidates.map((j: any) => String(j.jobId).trim()))
+      : new Set<string>();
+    const toPublish = planned.toPublish.filter((j: any) => !notInSyspro.has(String(j.jobId).trim()));
+    const skipped = Array.from(notInSyspro);
+    if (skipped.length) req.log.info({ skipped }, 'Imported jobs not in SYSPRO left out of the send');
 
     if (toPublish.length === 0) {
       await (await planDbFor(req.app)).queryWithParams(
         `UPDATE aps.SavedSchedules SET Status = 'Exported' WHERE ScheduleID = @scheduleId`, { scheduleId });
       return res.json({
         scheduleId, status: 'Exported',
-        message: `Nothing changed since the last send — ${unchanged.length} jobs already up to date in SYSPRO`,
-        details: { schedulesWritten: 0, operationsWritten: 0, unchanged: unchanged.length },
+        message: `Nothing changed since the last send — ${unchanged.length} jobs already up to date in SYSPRO` +
+          (skipped.length ? `; ${skipped.length} imported job(s) not in SYSPRO were left out` : ''),
+        details: { schedulesWritten: 0, operationsWritten: 0, unchanged: unchanged.length, skippedNotInSyspro: skipped },
       });
     }
 
@@ -1199,6 +1225,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
           operationsWritten: exportResult.operationsWritten,
           logsCreated: exportResult.logsCreated,
           unchanged: unchanged.length,
+          skippedNotInSyspro: skipped,
           executionTimeMs: exportResult.executionTimeMs
         }
       });

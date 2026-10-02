@@ -580,10 +580,13 @@ export class APSDatabaseService {
 
         const result = await db.queryWithParams(
           `
+          -- IMachine (the routing's machine) is deliberately NOT written: the
+          -- loader reads {ScheduledMachine, IMachine} as the op's qualified
+          -- machines, so overwriting IMachine pinned every op to wherever it
+          -- was last scheduled and it could never move back.
           UPDATE WipJobAllLab
           SET
             ScheduledMachine   = @machine,
-            IMachine           = @machine,
             SchStartDate       = @startDate,
             SchStartTime       = @startTime,
             SchEndDate         = @endDate,
@@ -595,7 +598,7 @@ export class APSDatabaseService {
             PlannedStartDate   = @startDate,
             PlannedEndDate     = @endDate
           WHERE Job = @jobId
-            AND TRY_CONVERT(int, Operation) = @sequence;
+            AND Operation = @sequence;  -- numeric column: compare directly so the (Job, Operation) key is used
 
           SELECT @@ROWCOUNT AS rowsAffected;
           `,

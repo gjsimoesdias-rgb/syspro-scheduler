@@ -178,12 +178,15 @@ export function useScheduleGeneration({
       await loadJobsAndResources();
       const written = result?.details?.schedulesWritten;
       const unchanged = result?.details?.unchanged;
+      const skipped: string[] = result?.details?.skippedNotInSyspro || [];
       toast.success(
         written === 0 && result?.message
           ? `✓ ${result.message}`
           : written != null
-          ? `✓ Sent to SYSPRO — ${written} jobs updated${unchanged ? `, ${unchanged} already up to date` : ''}`
-          : '✓ Schedule sent to SYSPRO'
+          ? `✓ Sent to SYSPRO — ${written} jobs updated${unchanged ? `, ${unchanged} already up to date` : ''}` +
+            (skipped.length ? `; ${skipped.length} imported job(s) not in SYSPRO left out (${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? '…' : ''})` : '')
+          : '✓ Schedule sent to SYSPRO',
+        skipped.length ? { duration: 8000 } : undefined
       );
     } catch (error: any) {
       console.error('Error exporting schedule:', error);
