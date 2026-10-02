@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL as API } from '../services/api';
+import { apiJson } from '../services/api';
 import './LicenseAdmin.css';
 
 
@@ -48,7 +47,6 @@ const PlanBadge = ({ plan }: { plan: string }) => {
 };
 
 const LicenseAdmin: React.FC = () => {
-  const { authHeader } = useAuth();
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -63,13 +61,10 @@ const LicenseAdmin: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/licenses`, { headers: authHeader() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setLicenses(data);
+      setLicenses(await apiJson('GET', '/licenses'));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [authHeader]);
+  }, []);
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
@@ -77,10 +72,7 @@ const LicenseAdmin: React.FC = () => {
     if (expandedId === id) { setExpandedId(null); return; }
     setExpandedId(id);
     try {
-      const res = await fetch(`${API}/licenses/${id}/users`, { headers: authHeader() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setLicUsers(data);
+      setLicUsers(await apiJson('GET', `/licenses/${id}/users`));
     } catch (e: any) { setError(e.message); }
   };
 
@@ -102,15 +94,7 @@ const LicenseAdmin: React.FC = () => {
     if (!form.companyName) { setError('Company name is required'); return; }
     setSaving(true); setError('');
     try {
-      const url = editLic ? `${API}/licenses/${editLic.id}` : `${API}/licenses`;
-      const method = editLic ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { ...authHeader(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      await apiJson(editLic ? 'PUT' : 'POST', editLic ? `/licenses/${editLic.id}` : '/licenses', form);
       setShowForm(false);
       await load();
     } catch (e: any) { setError(e.message); }
@@ -119,20 +103,14 @@ const LicenseAdmin: React.FC = () => {
 
   const toggleActive = async (l: License) => {
     try {
-      const res = await fetch(`${API}/licenses/${l.id}`, {
-        method: 'PUT',
-        headers: { ...authHeader(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !l.isActive }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error);
+      await apiJson('PUT', `/licenses/${l.id}`, { isActive: !l.isActive });
       await load();
     } catch (e: any) { setError(e.message); }
   };
 
   const deleteLic = async (id: number) => {
     try {
-      const res = await fetch(`${API}/licenses/${id}`, { method: 'DELETE', headers: authHeader() });
-      if (!res.ok) throw new Error((await res.json()).error);
+      await apiJson('DELETE', `/licenses/${id}`);
       setConfirm(null);
       await load();
     } catch (e: any) { setError(e.message); }

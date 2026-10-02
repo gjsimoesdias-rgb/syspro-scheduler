@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL as API } from '../services/api';
+import { apiJson } from '../services/api';
 import './UserManagement.css';
 
 
@@ -33,7 +33,7 @@ const ROLE_COLORS: Record<string, string> = {
 const emptyForm = { username: '', email: '', password: '', role: 'planner', fullName: '' };
 
 const UserManagement: React.FC = () => {
-  const { authHeader, user: me, isRole } = useAuth();
+  const { user: me, isRole } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,13 +46,10 @@ const UserManagement: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/users`, { headers: authHeader() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setUsers(data);
+      setUsers(await apiJson('GET', '/users'));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [authHeader]);
+  }, []);
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
@@ -71,15 +68,7 @@ const UserManagement: React.FC = () => {
     try {
       const body: any = { ...form };
       if (editUser && !body.password) delete body.password;
-      const url = editUser ? `${API}/users/${editUser.id}` : `${API}/users`;
-      const method = editUser ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { ...authHeader(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      await apiJson(editUser ? 'PUT' : 'POST', editUser ? `/users/${editUser.id}` : '/users', body);
       setShowForm(false);
       await load();
     } catch (e: any) { setError(e.message); }
@@ -88,20 +77,14 @@ const UserManagement: React.FC = () => {
 
   const toggleActive = async (u: User) => {
     try {
-      const res = await fetch(`${API}/users/${u.id}`, {
-        method: 'PUT',
-        headers: { ...authHeader(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !u.isActive }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error);
+      await apiJson('PUT', `/users/${u.id}`, { isActive: !u.isActive });
       await load();
     } catch (e: any) { setError(e.message); }
   };
 
   const deleteUser = async (id: number) => {
     try {
-      const res = await fetch(`${API}/users/${id}`, { method: 'DELETE', headers: authHeader() });
-      if (!res.ok) throw new Error((await res.json()).error);
+      await apiJson('DELETE', `/users/${id}`);
       setConfirm(null);
       await load();
     } catch (e: any) { setError(e.message); }

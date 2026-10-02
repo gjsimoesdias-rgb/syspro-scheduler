@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL as API } from '../services/api';
+import { apiJson } from '../services/api';
 import { GanttSettingsState, GANTT_SETTINGS_DEFAULTS } from './GanttSettings';
 import UserManagement from './UserManagement';
 import LicenseAdmin from './LicenseAdmin';
@@ -172,7 +172,7 @@ function GroupBox({ title, children }: { title: string; children: React.ReactNod
 // ─── Main component ─────────────────────────────────────────────────────────
 
 const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
-  const { user, authHeader, isRole } = useAuth();
+  const { user, isRole } = useAuth();
   const [section, setSection] = useState<TreeSection>('general');
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
@@ -192,13 +192,12 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const [csRes, usRes] = await Promise.all([
-        fetch(`${API}/settings/company`, { headers: authHeader() }),
-        fetch(`${API}/settings/user`, { headers: authHeader() }),
+      const [cs, us] = await Promise.all([
+        apiJson('GET', '/settings/company').catch(() => null),
+        apiJson('GET', '/settings/user').catch(() => null),
       ]);
-      if (csRes.ok) setCompanySettings(await csRes.json());
-      if (usRes.ok) {
-        const us = await usRes.json();
+      if (cs) setCompanySettings(cs);
+      if (us) {
         setUserSettings(us);
         // Sync gantt prefs from DB
         if (us.gantt) onGanttPrefsChange({ ...GANTT_SETTINGS_DEFAULTS, ...us.gantt });
@@ -206,7 +205,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
     } catch (e) {
       console.warn('Could not fetch settings from DB, using local state');
     }
-  }, [authHeader, onGanttPrefsChange]);
+  }, [onGanttPrefsChange]);
 
   useEffect(() => { fetchSettings(); }, []); // eslint-disable-line
 
@@ -214,12 +213,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
     if (!companySettings) return;
     setSaving(true); setError('');
     try {
-      const res = await fetch(`${API}/settings/company`, {
-        method: 'PUT',
-        headers: { ...authHeader(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(companySettings),
-      });
-      if (!res.ok) throw new Error((await res.json()).error);
+      await apiJson('PUT', '/settings/company', companySettings);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } catch (e: any) { setError(e.message); }
     finally { setSaving(false); }
@@ -228,12 +222,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
   const saveUser = async (updated: UserSettings) => {
     setSaving(true); setError('');
     try {
-      const res = await fetch(`${API}/settings/user`, {
-        method: 'PUT',
-        headers: { ...authHeader(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-      if (!res.ok) throw new Error((await res.json()).error);
+      await apiJson('PUT', '/settings/user', updated);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } catch (e: any) { setError(e.message); }
     finally { setSaving(false); }
@@ -593,13 +582,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
       if (newPw !== confirmPw) { setPwMsg('New passwords do not match'); return; }
       if (newPw.length < 8) { setPwMsg('New password must be at least 8 characters'); return; }
       try {
-        const res = await fetch(`${API}/users/me/change-password`, {
-          method: 'POST',
-          headers: { ...authHeader(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        await apiJson('POST', '/users/me/change-password', { currentPassword: currentPw, newPassword: newPw });
         setPwMsg('Password changed successfully!');
         setCurrentPw(''); setNewPw(''); setConfirmPw('');
       } catch (e: any) { setPwMsg(e.message); }

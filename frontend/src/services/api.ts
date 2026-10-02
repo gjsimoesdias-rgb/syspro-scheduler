@@ -180,6 +180,18 @@ export const masterRevision = {
 export const isMasterChangedError = (err: any): boolean =>
   err?.response?.status === 409 && err?.response?.data?.code === 'MASTER_CHANGED';
 
+/**
+ * JSON request through apiClient — so it gets the token, the 401 refresh +
+ * retry and server error messages. Throws Error(message) on failure.
+ */
+export async function apiJson<T = any>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  try {
+    return (await apiClient.request<T>({ method, url: path, data: body })).data;
+  } catch (err) {
+    throw new Error(apiErrorMessage(err, 'Request failed'));
+  }
+}
+
 export const scheduleService = {
   generate: async (startDate: Date, endDate: Date): Promise<Schedule> => {
     const response = await apiClient.post('/schedule/generate', {
