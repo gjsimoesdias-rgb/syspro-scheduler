@@ -65,7 +65,7 @@ export interface JobPeg { salesOrder: string; line: number; customerName?: strin
 const norm = (s: unknown) => String(s ?? '').trim();
 const toDate = (v: unknown): Date | null => {
   if (!v) return null;
-  const d = v instanceof Date ? v : new Date(v as any);
+  const d = v instanceof Date ? v : new Date(v as string | number);
   return Number.isNaN(d.getTime()) ? null : d;
 };
 const r4 = (n: number) => Math.round(n * 10000) / 10000;

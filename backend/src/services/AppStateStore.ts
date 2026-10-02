@@ -146,7 +146,7 @@ export class AppStateStore {
    * replacing whatever the previous company left there. Called at startup
    * and on every company switch.
    */
-  async hydrateAppLocals(appLocals: Record<string, any>): Promise<void> {
+  async hydrateAppLocals(appLocals: Record<string, unknown>): Promise<void> {
     let restored = 0;
     let adopted = 0;
     for (const key of APP_STATE_KEYS) {

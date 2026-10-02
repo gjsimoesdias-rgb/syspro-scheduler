@@ -23,7 +23,7 @@ import { stripCompletedOperations } from '../../utils/jobFilters';
 import { effectiveJobFlags, pinsForJobs } from '../../utils/jobFlags';
 import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
-import { saveAsLatest, saveIntoWhatIf, getVersion, revertToVersion, VersionError, masterRevision } from '../../services/ScheduleStore';
+import { saveAsLatest, saveIntoWhatIf, getVersion, revertToVersion, VersionError, masterRevision, parseStoredSchedule } from '../../services/ScheduleStore';
 import type { DbExecutor } from '../../database/connection';
 import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordError, resetPublish, jobIdFromExportError } from '../../services/publishStatus';
 import { mapEmployeeRow } from '../../utils/crews';
@@ -380,7 +380,7 @@ export async function generateHandler(req: Request, res: Response) {
           `IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData; ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`
         );
         if (latest.recordset?.length) {
-          const saved = JSON.parse(latest.recordset[0].ScheduleData);
+          const saved = parseStoredSchedule(latest.recordset[0].ScheduleData);
           // Pinned jobs (right-click → Pin) keep every op where the master has it.
           if (jobFlags.pinned.size > 0) {
             const { pins, notInPlan } = pinsForJobs(saved, jobFlags.pinned);
@@ -838,7 +838,7 @@ router.get('/latest', async (req: Request, res: Response) => {
     }
 
     const row = result.recordset[0];
-    const schedule = JSON.parse(row.ScheduleData);
+    const schedule = parseStoredSchedule(row.ScheduleData);
     // The row's Status is authoritative (export updates the row, not
     // the JSON), so the board doesn't show an exported plan as "Draft".
     if (row.Status) schedule.status = row.Status;
@@ -962,7 +962,7 @@ router.post('/pins/time-fence', requireAuth, requirePlanner, async (req: AuthReq
       ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`);
     const data = latest.recordset?.[0]?.ScheduleData;
     if (!data) return res.status(404).json({ error: 'There is no master plan to lock yet' });
-    const schedule = JSON.parse(data);
+    const schedule = parseStoredSchedule(data);
     const pins: Record<string, PinnedOperation> = { ...(req.app.locals.pinnedOperations || {}) };
     const now = new Date().toISOString();
     let added = 0;
@@ -1025,7 +1025,7 @@ router.get('/publish-status', async (req: Request, res: Response) => {
       ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`);
     const data = latest.recordset?.[0]?.ScheduleData;
     if (!data) return res.json({ jobs: [], counts: { Published: 0, Pending: 0, Error: 0 } });
-    const jobs = publishStateFor(JSON.parse(data), await loadPublishRows(await planDbFor(req.app)));
+    const jobs = publishStateFor(parseStoredSchedule(data), await loadPublishRows(await planDbFor(req.app)));
     const counts = { Published: 0, Pending: 0, Error: 0 } as Record<string, number>;
     for (const j of jobs) counts[j.state]++;
     res.json({ jobs, counts });
@@ -1068,7 +1068,7 @@ router.get('/:scheduleId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Schedule not found' });
     }
 
-    res.json({ schedule: JSON.parse(result.recordset[0].ScheduleData) });
+    res.json({ schedule: parseStoredSchedule(result.recordset[0].ScheduleData) });
   } catch (error) {
     res.status(500).json({ error: errorMessage(error) });
   }
@@ -1116,7 +1116,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
     const row = saved.recordset?.[0];
     if (!row) return res.status(404).json({ error: 'Schedule not found' });
     await auditPlan(req, 'export_to_syspro', scheduleId);
-    const schedule = JSON.parse(row.ScheduleData);
+    const schedule = parseStoredSchedule(row.ScheduleData);
 
     // Incremental publish: only jobs whose machine or dates changed since the
     // last successful send. { full: true } re-sends every scheduled job.
@@ -1302,7 +1302,7 @@ router.get('/constraints/violations', async (req: Request, res: Response) => {
     }
 
     const row = result.recordset[0];
-    const schedule = JSON.parse(row.ScheduleData);
+    const schedule = parseStoredSchedule(row.ScheduleData);
     const violations = Array.isArray(schedule?.constraintViolations)
       ? schedule.constraintViolations
       : [];

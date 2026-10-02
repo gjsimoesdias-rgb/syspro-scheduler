@@ -10,6 +10,7 @@ import { buildBomTree } from '../../services/BomTreeService';
 import { applyAssignedShiftCalendars } from './scheduleShared';
 import { planDbFor } from '../../services/planStore';
 import { errorMessage } from '../../utils/errors';
+import { parseStoredSchedule } from '../../services/ScheduleStore';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.post('/ctp', async (req: Request, res: Response) => {
         `IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData; ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`
       );
       if (latest.recordset?.length) {
-        const saved = JSON.parse(latest.recordset[0].ScheduleData);
+        const saved = parseStoredSchedule(latest.recordset[0].ScheduleData);
         for (const js of saved.jobSchedules || []) {
           for (const os of js.operationSchedules || []) {
             const start = new Date(os.plannedStartDate).getTime();

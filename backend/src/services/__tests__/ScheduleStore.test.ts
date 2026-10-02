@@ -24,7 +24,7 @@ function fakeDb(existing = true, currentRevision: number | null = 4) {
   return { db, calls };
 }
 
-const schedule = {
+const schedule: any = {
   scheduleId: 'S1',
   status: 'Approved',
   planningHorizon: { startDate: '2026-10-01T00:00:00Z', endDate: '2026-10-08T00:00:00Z' },

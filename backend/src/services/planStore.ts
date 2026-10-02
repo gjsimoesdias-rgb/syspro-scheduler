@@ -15,6 +15,7 @@
  */
 import type { DbExecutor, DbParams, DbRow } from '../database/connection';
 import { logger } from '../utils/logger';
+import type { AppLike } from '../types/appLocals';
 
 const PLAN_TABLES = ['SavedSchedules', 'JobPublishStatus', 'Scenarios'] as const;
 
@@ -23,8 +24,10 @@ export interface PlanExecutor extends DbExecutor {
 }
 
 /** SYSPRO company DB name of a connection (DatabaseConnection keeps its config). */
-export const companyDbOf = (sysproDb: any): string =>
-  String(sysproDb?.config?.database || sysproDb?.config?.options?.database || 'default').trim() || 'default';
+export const companyDbOf = (sysproDb: unknown): string => {
+  const cfg = (sysproDb as { config?: { database?: string; options?: { database?: string } } } | null)?.config;
+  return String(cfg?.database || cfg?.options?.database || 'default').trim() || 'default';
+};
 
 /** Schema for a company: co_ + letters/digits/underscore only. */
 export const planSchemaFor = (companyDb: string): string =>
@@ -138,7 +141,7 @@ const COPY_COLUMNS: Record<string, string[]> = {
 };
 
 /** Create the company schema + tables, then copy any legacy SYSPRO rows once. */
-export async function ensurePlanStore(plan: PlanDb, sysproDb: any): Promise<{ copied: Record<string, number> }> {
+export async function ensurePlanStore(plan: PlanDb, sysproDb: DbExecutor | null | undefined): Promise<{ copied: Record<string, number> }> {
   await plan.query(`IF SCHEMA_ID('${plan.schema}') IS NULL EXEC('CREATE SCHEMA [${plan.schema}]');`);
   for (const d of PLAN_DDL) await plan.query(d.sql);
 
@@ -149,7 +152,7 @@ export async function ensurePlanStore(plan: PlanDb, sysproDb: any): Promise<{ co
       const existing = await plan.query(`SELECT COUNT(*) AS n FROM aps.${table}`);
       if (Number(existing.recordset?.[0]?.n) > 0) continue; // already migrated / in use
       const src = await sysproDb.query(`IF OBJECT_ID('aps.${table}', 'U') IS NULL SELECT TOP 0 1 AS x; ELSE SELECT * FROM aps.${table}`);
-      const rows: any[] = src.recordset || [];
+      const rows = src.recordset || [];
       if (!rows.length || rows[0].x !== undefined) continue;
       const cols = COPY_COLUMNS[table].filter((c) => c in rows[0]);
       const insert = `INSERT INTO aps.${table} (${cols.join(', ')}) VALUES (${cols.map((c) => `@${c}`).join(', ')})`;
@@ -177,7 +180,7 @@ let ready = new WeakMap<object, Map<string, Promise<PlanDb>>>();
  * The plan store for the connected company, provisioned on first use.
  * Throws when the SCHEDULER or SYSPRO database is not connected.
  */
-export async function planDbFor(app: { locals: Record<string, any> }): Promise<PlanDb> {
+export async function planDbFor(app: AppLike): Promise<PlanDb> {
   const schedulerDb = app.locals.schedulerDb;
   const sysproDb = app.locals.sysproDb;
   if (!schedulerDb) throw Object.assign(new Error('Scheduler database not connected'), { status: 503 });

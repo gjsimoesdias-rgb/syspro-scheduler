@@ -15,6 +15,7 @@
 import type { Request } from 'express';
 import { companyDbOf } from '../services/planStore';
 import type { DbExecutor } from '../database/connection';
+import type { AppLike } from '../types/appLocals';
 
 const CACHE_MS = 60_000;
 const cache = new Map<string, { at: number; id: number | null }>();
@@ -31,7 +32,7 @@ export function pickCompany(
 }
 
 /** Company of the connected SYSPRO database (cached for a minute). */
-export async function connectedCompanyId(app: { locals: Record<string, unknown> & { schedulerDb?: DbExecutor | null; sysproDb?: unknown } }): Promise<number | null> {
+export async function connectedCompanyId(app: AppLike): Promise<number | null> {
   const schedulerDb = app.locals.schedulerDb;
   if (!schedulerDb) return null;
   const companyDb = companyDbOf(app.locals.sysproDb);

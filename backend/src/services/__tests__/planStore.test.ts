@@ -50,13 +50,13 @@ describe('ensurePlanStore', () => {
       }),
     };
     const plan = new PlanDb(sch.db as any, 'co_X', 'X');
-    const r1 = await ensurePlanStore(plan, syspro);
+    const r1 = await ensurePlanStore(plan, syspro as any);
     expect(sch.calls[0]).toContain("CREATE SCHEMA [co_X]");
     expect(sch.calls.some((c) => c.includes('CREATE TABLE [co_X].SavedSchedules'))).toBe(true);
     expect(r1.copied).toEqual({ SavedSchedules: 1, JobPublishStatus: 1 });
     expect(sch.rows.SavedSchedules[0]).toEqual({ ScheduleID: 'm1', ScheduleData: '{}', Status: 'Draft', IsLatest: true });
     // second run: target not empty → nothing copied again
-    const r2 = await ensurePlanStore(plan, syspro);
+    const r2 = await ensurePlanStore(plan, syspro as any);
     expect(r2.copied).toEqual({});
   });
 
@@ -65,8 +65,8 @@ describe('ensurePlanStore', () => {
     await expect(planDbFor({ locals: {} })).rejects.toThrow('Scheduler database not connected');
     const sch = fakeScheduler();
     const app = { locals: { schedulerDb: sch.db, sysproDb: { config: { database: 'X' }, query: jest.fn(async () => ({ recordset: [] })) } } };
-    const a = await planDbFor(app);
-    const b = await planDbFor(app);
+    const a = await planDbFor(app as any);
+    const b = await planDbFor(app as any);
     expect(a).toBe(b);
     expect(a.schema).toBe('co_X');
     expect(sch.calls.filter((c) => c.includes('CREATE SCHEMA')).length).toBe(1);
@@ -77,16 +77,16 @@ describe('ensurePlanStore', () => {
     const syspro = (db: string) => ({ config: { database: db }, query: jest.fn(async () => ({ recordset: [] })) });
     const oldConn = fakeScheduler();
     const app: any = { locals: { schedulerDb: oldConn.db, sysproDb: syspro('A') } };
-    const aOld = await planDbFor(app);
+    const aOld = await planDbFor(app as any);
     app.locals.sysproDb = syspro('B');
-    await planDbFor(app);
+    await planDbFor(app as any);
 
     const newConn = fakeScheduler();
     app.locals.schedulerDb = newConn.db;
     app.locals.sysproDb = syspro('B');
-    await planDbFor(app);
+    await planDbFor(app as any);
     app.locals.sysproDb = syspro('A');               // back to a company cached on the old connection
-    const aNew = await planDbFor(app);
+    const aNew = await planDbFor(app as any);
     expect(aNew).not.toBe(aOld);
     await aNew.query('SELECT 1 FROM aps.SavedSchedules');
     expect(newConn.calls.some((c) => c.includes('[co_A].SavedSchedules'))).toBe(true);

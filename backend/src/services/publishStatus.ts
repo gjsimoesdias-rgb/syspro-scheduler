@@ -11,15 +11,30 @@ import { isSuggestedJobId } from '../utils/suggestedJobs';
 
 export type PublishState = 'Published' | 'Pending' | 'Error';
 
+/** The job fields publish tracking reads (a JobSchedule, or the same from JSON). */
+export interface PublishJob {
+  jobId: string;
+  plannedStartDate?: unknown;
+  plannedEndDate?: unknown;
+  operationSchedules?: Array<{
+    opId: string;
+    resourceId?: string;
+    workcentreId?: string;
+    plannedStartDate?: unknown;
+    plannedEndDate?: unknown;
+    runStart?: unknown;
+  }>;
+}
+
 const iso = (d: unknown): string => {
-  const t = new Date(d as any);
+  const t = new Date(d as string | number | Date);
   return Number.isNaN(t.getTime()) ? '' : t.toISOString().slice(0, 16); // minute precision
 };
 
 /** Hash of everything the export writes for a job: op machine + dates, job dates. */
-export function jobFingerprint(job: any): string {
+export function jobFingerprint(job: PublishJob): string {
   const ops = [...(job?.operationSchedules || [])]
-    .map((op: any) => [
+    .map((op) => [
       String(op.opId ?? ''),
       String(op.resourceId || op.workcentreId || ''),
       iso(op.plannedStartDate), iso(op.plannedEndDate), iso(op.runStart || op.plannedStartDate),
@@ -46,10 +61,10 @@ export async function loadPublishRows(db: DbExecutor): Promise<Map<string, Publi
 }
 
 /** Jobs to send: those with operations whose fingerprint differs from the last publish (or all, when `full`). */
-export function planPublish(schedule: any, rows: Map<string, PublishRow>, full = false): {
-  toPublish: any[]; unchanged: string[];
+export function planPublish<J extends PublishJob>(schedule: { jobSchedules?: J[] } | null | undefined, rows: Map<string, PublishRow>, full = false): {
+  toPublish: J[]; unchanged: string[];
 } {
-  const toPublish: any[] = [];
+  const toPublish: J[] = [];
   const unchanged: string[] = [];
   for (const job of schedule?.jobSchedules || []) {
     if (!job?.operationSchedules?.length) continue;
@@ -65,12 +80,12 @@ export function planPublish(schedule: any, rows: Map<string, PublishRow>, full =
 }
 
 /** Status of every job in `schedule` against what was last published. */
-export function publishStateFor(schedule: any, rows: Map<string, PublishRow>): Array<{
+export function publishStateFor(schedule: { jobSchedules?: PublishJob[] } | null | undefined, rows: Map<string, PublishRow>): Array<{
   jobId: string; state: PublishState; publishedAt: Date | null; lastError: string | null;
 }> {
   return (schedule?.jobSchedules || [])
-    .filter((j: any) => j?.operationSchedules?.length && !isSuggestedJobId(j.jobId))
-    .map((job: any) => {
+    .filter((j) => j?.operationSchedules?.length && !isSuggestedJobId(j.jobId))
+    .map((job) => {
       const prev = rows.get(String(job.jobId).trim());
       const state: PublishState = prev?.status === 'Error'
         ? 'Error'
@@ -91,9 +106,9 @@ const UPSERT = `
             CASE WHEN @status = 'Published' THEN GETDATE() ELSE NULL END,
             CASE WHEN @status = 'Published' THEN @user ELSE NULL END, @error);`;
 
-const toDate = (v: unknown) => { const d = new Date(v as any); return Number.isNaN(d.getTime()) ? null : d; };
+const toDate = (v: unknown) => { const d = new Date(v as string | number | Date); return Number.isNaN(d.getTime()) ? null : d; };
 
-export async function recordPublished(db: DbExecutor, jobs: any[], scheduleId: string, user?: string): Promise<void> {
+export async function recordPublished(db: DbExecutor, jobs: PublishJob[], scheduleId: string, user?: string): Promise<void> {
   for (const job of jobs) {
     await db.queryWithParams(UPSERT, {
       jobId: String(job.jobId).trim().slice(0, 30), scheduleId, status: 'Published',
@@ -103,7 +118,7 @@ export async function recordPublished(db: DbExecutor, jobs: any[], scheduleId: s
   }
 }
 
-export async function recordError(db: DbExecutor, job: any, scheduleId: string, error: string): Promise<void> {
+export async function recordError(db: DbExecutor, job: PublishJob, scheduleId: string, error: string): Promise<void> {
   await db.queryWithParams(UPSERT, {
     jobId: String(job.jobId).trim().slice(0, 30), scheduleId, status: 'Error',
     start: toDate(job.plannedStartDate), end: toDate(job.plannedEndDate),

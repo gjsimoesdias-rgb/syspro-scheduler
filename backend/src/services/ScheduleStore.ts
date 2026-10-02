@@ -6,8 +6,21 @@
  * "UPDATE IsLatest = 0" and the INSERT as separate statements: a failure in
  * between left NO latest schedule, so the Gantt came up empty after a reload.
  */
-import type { DbExecutor } from '../database/connection';
+import type { DbExecutor, DbRow } from '../database/connection';
 import type { PlanExecutor } from './planStore';
+import type { Schedule } from '../types';
+
+/**
+ * A schedule as the store handles it: the engine's Schedule, or the same
+ * shape posted back by the browser (JSON — dates as ISO strings, optional
+ * fields may be missing). Only scheduleId is required.
+ */
+export type StoredSchedule = Partial<Omit<Schedule, 'scheduleId'>> & {
+  scheduleId: string;
+  versionName?: string;
+  /** Added by the API on the way out; never stored (see stripClientFields). */
+  masterRevision?: number;
+};
 
 export interface SaveLatestOptions {
   status?: string;
@@ -41,9 +54,15 @@ export async function masterRevision(db: DbExecutor): Promise<number | null> {
 export const MASTER_CHANGED = 'MASTER_CHANGED';
 
 
+/**
+ * A saved plan's ScheduleData. JSON, so its dates are ISO strings at run time
+ * even though Schedule types them as Date — read them through new Date().
+ */
+export const parseStoredSchedule = (json: string): Schedule => JSON.parse(json) as Schedule;
+
 /** Compact KPI snapshot stored per version so the list/compare view never parses ScheduleData. */
-export const metricsSnapshot = (schedule: any): string | null => {
-  const m = schedule?.metrics;
+export const metricsSnapshot = (schedule: StoredSchedule | null | undefined): string | null => {
+  const m = schedule?.metrics as Record<string, unknown> | undefined;
   if (!m) return null;
   const keep = [
     'totalJobsScheduled', 'jobsUnscheduled', 'jobsOnTime', 'jobsTardy', 'averageTardiness', 'otdRate',
@@ -63,22 +82,22 @@ const defaultName = (d = new Date()) => {
   return `Plan ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-const countOps = (schedule: any): number =>
+const countOps = (schedule: StoredSchedule | null | undefined): number =>
   (schedule?.jobSchedules ?? []).reduce(
-    (sum: number, j: any) => sum + (j?.operationSchedules?.length || 0),
+    (sum, j) => sum + (j?.operationSchedules?.length || 0),
     0
   );
 
 const toDateOrNull = (v: unknown): Date | null => {
   if (!v) return null;
-  const d = new Date(v as any);
+  const d = new Date(v as string | number | Date);
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
 /** Insert/replace `schedule` and make it the single latest row, atomically. */
 export async function saveAsLatest(
   db: PlanExecutor,
-  schedule: any,
+  schedule: StoredSchedule,
   opts: SaveLatestOptions = {}
 ): Promise<{ scheduleId: string; jobCount: number; operationCount: number; revision: number }> {
   const jobCount = schedule?.jobSchedules?.length || 0;
@@ -134,7 +153,7 @@ export async function saveAsLatest(
 }
 
 /** Fields the API adds to a schedule on the way out that must not be stored inside it. */
-const stripClientFields = (schedule: any) => {
+const stripClientFields = (schedule: StoredSchedule): StoredSchedule => {
   if (!schedule || typeof schedule !== 'object' || !('masterRevision' in schedule)) return schedule;
   const { masterRevision: _r, ...rest } = schedule;
   return rest;
@@ -178,7 +197,7 @@ export interface VersionSummary {
   savedAt: Date;
   createdBy: string | null;
   basedOnId: string | null;
-  metrics: Record<string, any> | null;
+  metrics: Record<string, unknown> | null;
 }
 
 // SavedAt is written with GETDATE() (server local time, no offset). Attach the
@@ -187,8 +206,8 @@ const SUMMARY_COLS = `ScheduleID, Status, JobCount, OperationCount, HorizonStart
   TODATETIMEOFFSET(SavedAt, DATEPART(TZOFFSET, SYSDATETIMEOFFSET())) AS SavedAt,
   IsLatest, VersionKind, VersionName, BasedOnId, CreatedBy, MetricsJson`;
 
-const toSummary = (r: any): VersionSummary => {
-  let metrics: Record<string, any> | null = null;
+const toSummary = (r: DbRow): VersionSummary => {
+  let metrics: Record<string, unknown> | null = null;
   try { metrics = r.MetricsJson ? JSON.parse(r.MetricsJson) : null; } catch { metrics = null; }
   return {
     versionId: r.ScheduleID,
@@ -241,14 +260,15 @@ export async function listVersions(db: DbExecutor, historyLimit = 30): Promise<{
   };
 }
 
-export async function getVersion(db: DbExecutor, versionId: string): Promise<{ summary: VersionSummary; schedule: any } | null> {
+export async function getVersion(db: DbExecutor, versionId: string): Promise<{ summary: VersionSummary; schedule: Schedule } | null> {
   const r = await db.queryWithParams(
     `SELECT ${SUMMARY_COLS}, ScheduleData FROM aps.SavedSchedules WHERE ScheduleID = @versionId`,
     { versionId }
   );
   const row = r.recordset?.[0];
   if (!row) return null;
-  const schedule = JSON.parse(row.ScheduleData);
+  // JSON: dates come back as ISO strings; readers go through new Date().
+  const schedule = JSON.parse(row.ScheduleData) as Schedule;
   schedule.scheduleId = row.ScheduleID; // migrated scenarios carried their base id
   return { summary: toSummary(row), schedule };
 }
@@ -291,7 +311,7 @@ export async function createWhatIf(
 }
 
 /** Replace a what-if's schedule (e.g. regenerated with other settings, or edited on the board). */
-export async function saveIntoWhatIf(db: DbExecutor, versionId: string, schedule: any): Promise<void> {
+export async function saveIntoWhatIf(db: DbExecutor, versionId: string, schedule: StoredSchedule): Promise<void> {
   const kind = await db.queryWithParams(
     `SELECT VersionKind FROM aps.SavedSchedules WHERE ScheduleID = @versionId`, { versionId });
   const row = kind.recordset?.[0];

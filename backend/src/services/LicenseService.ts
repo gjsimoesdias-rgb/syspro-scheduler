@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { DatabaseConnection } from '../database/connection';
+import { DatabaseConnection, type DbParams, type DbRow } from '../database/connection';
 
 export interface LicenseRecord {
   id: number;
@@ -105,7 +105,7 @@ export class LicenseService {
     sysproCompanyDb?: string | null;
   }): Promise<LicenseRecord> {
     const sets: string[] = ['updated_at = GETDATE()'];
-    const params: Record<string, any> = { id };
+    const params: DbParams = { id };
     if (data.companyName !== undefined) { sets.push('company_name = @name'); params.name = data.companyName; }
     if (data.contactEmail !== undefined) { sets.push('contact_email = @email'); params.email = data.contactEmail; }
     if (data.maxUsers !== undefined) { sets.push('max_users = @maxUsers'); params.maxUsers = data.maxUsers; }
@@ -138,7 +138,7 @@ export class LicenseService {
     return res?.recordset?.[0] || null;
   }
 
-  private mapRow(row: any): LicenseRecord {
+  private mapRow(row: DbRow): LicenseRecord {
     return {
       id: row.id,
       licenseKey: row.license_key,

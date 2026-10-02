@@ -51,7 +51,7 @@ export interface ComponentProjection {
 const norm = (s: unknown) => String(s ?? '').trim();
 const toDate = (v: unknown): Date | null => {
   if (!v) return null;
-  const d = v instanceof Date ? v : new Date(v as any);
+  const d = v instanceof Date ? v : new Date(v as string | number);
   return Number.isNaN(d.getTime()) ? null : d;
 };
 const dayKey = (d: Date) =>

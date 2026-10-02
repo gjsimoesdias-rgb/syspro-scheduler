@@ -33,7 +33,7 @@ export interface JobFmad {
 const norm = (s: unknown) => String(s ?? '').trim();
 const toMs = (v: unknown): number | null => {
   if (!v) return null;
-  const d = v instanceof Date ? v : new Date(v as any);
+  const d = v instanceof Date ? v : new Date(v as string | number);
   return Number.isNaN(d.getTime()) ? null : d.getTime();
 };
 const RANK: Record<FmadStatus, number> = { 'no-materials': 0, 'in-stock': 1, 'on-order': 2, 'lead-time': 3, 'no-supply': 4 };

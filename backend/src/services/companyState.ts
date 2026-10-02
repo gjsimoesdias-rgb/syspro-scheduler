@@ -7,8 +7,9 @@
 import AppStateStore from './AppStateStore';
 import { companyDbOf } from './planStore';
 import { logger } from '../utils/logger';
+import type { AppLike } from '../types/appLocals';
 
-export async function loadCompanyState(app: { locals: Record<string, any> }): Promise<AppStateStore | null> {
+export async function loadCompanyState(app: AppLike): Promise<AppStateStore | null> {
   const schedulerDb = app.locals.schedulerDb;
   if (!schedulerDb) return null;
   const companyDb = companyDbOf(app.locals.sysproDb);

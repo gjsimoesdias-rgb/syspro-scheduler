@@ -14,6 +14,11 @@ import { planDbFor } from './planStore';
 import SysproDatabaseService from './SysproDatabaseService';
 import { AuditLogService } from './AuditLogService';
 import { errorMessage } from '../utils/errors';
+import type { Request, Response } from 'express';
+import type { DbExecutor } from '../database/connection';
+import type { AppLike } from '../types/appLocals';
+import type { Schedule, ScheduleMetrics } from '../types';
+import { asObj } from '../utils/loose';
 
 export const AUTO_PLAN_VERSION_ID = 'whatif-auto-plan';
 export const AUTO_PLAN_NAME = 'Auto plan';
@@ -24,8 +29,8 @@ const AUTO_PLAN_CREATOR = 'auto-schedule';
  * turns it into the master, so after the Auto plan is committed its id belongs
  * to a plan; the next run then starts a fresh what-if under a new id.
  */
-export async function autoPlanVersionId(plan: any): Promise<string> {
-  const r = await plan.queryWithParams(
+export async function autoPlanVersionId(plan: DbExecutor): Promise<string> {
+  const r = await plan.queryWithParams<{ ScheduleID: string }>(
     `SELECT TOP 1 ScheduleID FROM aps.SavedSchedules
      WHERE VersionKind = 'WhatIf' AND CreatedBy = @by ORDER BY SavedAt DESC`,
     { by: AUTO_PLAN_CREATOR });
@@ -66,26 +71,30 @@ export const DEFAULT_AUTO_CONFIG: AutoScheduleConfig = {
   enabled: false, intervalMinutes: 60, onJobChange: true, checkMinutes: 5,
 };
 
-export function normaliseAutoConfig(raw: any, prev: AutoScheduleConfig = DEFAULT_AUTO_CONFIG): AutoScheduleConfig {
-  const num = (v: any, d: number, lo: number, hi: number) => {
+export function normaliseAutoConfig(input: unknown, prev: AutoScheduleConfig = DEFAULT_AUTO_CONFIG): AutoScheduleConfig {
+  const raw = asObj(input);
+  const num = (v: unknown, d: number, lo: number, hi: number) => {
     const n = Number(v);
     return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : d;
   };
   return {
-    enabled: raw?.enabled === undefined ? prev.enabled : !!raw.enabled,
-    intervalMinutes: num(raw?.intervalMinutes, prev.intervalMinutes, 0, 24 * 60),
-    onJobChange: raw?.onJobChange === undefined ? prev.onJobChange : !!raw.onJobChange,
-    checkMinutes: num(raw?.checkMinutes, prev.checkMinutes, 1, 120),
-    companyId: raw?.companyId ?? prev.companyId,
-    enabledBy: raw?.enabledBy ?? prev.enabledBy,
+    enabled: raw.enabled === undefined ? prev.enabled : !!raw.enabled,
+    intervalMinutes: num(raw.intervalMinutes, prev.intervalMinutes, 0, 24 * 60),
+    onJobChange: raw.onJobChange === undefined ? prev.onJobChange : !!raw.onJobChange,
+    checkMinutes: num(raw.checkMinutes, prev.checkMinutes, 1, 120),
+    companyId: (raw.companyId as number | string | undefined) ?? prev.companyId,
+    enabledBy: (raw.enabledBy as string | undefined) ?? prev.enabledBy,
   };
 }
 
 /** What the open SYSPRO jobs look like, for change detection. */
-export function jobsFingerprint(jobs: Array<any>): string {
+export function jobsFingerprint(jobs: Array<{
+  jobId: string; quantity?: unknown; dueDate?: unknown; status?: unknown;
+  operations?: Array<{ opId: string; status?: unknown; workcentreId?: string; duration?: unknown }>;
+}>): string {
   const rows = jobs.map((j) => [
-    String(j.jobId).trim(), Number(j.quantity) || 0, new Date(j.dueDate).getTime() || 0, j.status ?? '',
-    (j.operations || []).map((o: any) => `${o.opId}:${o.status ?? ''}:${o.workcentreId ?? ''}:${Math.round(Number(o.duration) || 0)}`).join(','),
+    String(j.jobId).trim(), Number(j.quantity) || 0, new Date(j.dueDate as string).getTime() || 0, j.status ?? '',
+    (j.operations || []).map((o) => `${o.opId}:${o.status ?? ''}:${o.workcentreId ?? ''}:${Math.round(Number(o.duration) || 0)}`).join(','),
   ].join('|')).sort();
   return crypto.createHash('sha1').update(rows.join('\n')).digest('hex');
 }
@@ -103,19 +112,19 @@ export function decideAutoRun(cfg: AutoScheduleConfig, st: AutoScheduleStatus, n
   return { action: 'wait' };
 }
 
-type Handler = (req: any, res: any) => Promise<any>;
+type Handler = (req: Request, res: Response) => Promise<unknown>;
 
 export class AutoScheduler {
   private timer: NodeJS.Timeout | null = null;
   readonly status: AutoScheduleStatus = { running: false };
 
-  constructor(private app: any, private generate: Handler) {}
+  constructor(private app: AppLike, private generate: Handler) {}
 
   get config(): AutoScheduleConfig {
     return normaliseAutoConfig(this.app.locals.autoSchedule || {});
   }
 
-  setConfig(raw: any): AutoScheduleConfig {
+  setConfig(raw: unknown): AutoScheduleConfig {
     const cfg = normaliseAutoConfig(raw, this.config);
     setLocal(this.app.locals, 'autoSchedule', cfg);
     this.updateNextRun();
@@ -184,7 +193,7 @@ export class AutoScheduler {
       if (!db) throw new Error('SYSPRO database not connected');
       const versionId = await autoPlanVersionId(await planDbFor(this.app));
       this.status.versionId = versionId;
-      const opts = { ...(this.app.locals.lastGenerateOptions || {}) };
+      const opts: Record<string, unknown> = { ...(this.app.locals.lastGenerateOptions || {}) };
       const horizonDays = Number(opts.horizonDays) > 0 ? Number(opts.horizonDays) : 14;
       delete opts.horizonDays;
       const start = new Date();
@@ -195,25 +204,26 @@ export class AutoScheduler {
         versionId,
       };
       let statusCode = 200;
-      let payload: any;
-      const req: any = {
+      let payload: { error?: string; schedule?: Schedule } | undefined;
+      // A minimal stand-in for the Express request/response the handler uses.
+      const req = {
         app: this.app, body, headers: {}, query: {}, params: {},
         user: this.syntheticUser(), autoSchedule: true,
         log: logger.child({ autoSchedule: true, reason }),
-      };
-      const res: any = {
+      } as unknown as Request;
+      const res = {
         status(code: number) { statusCode = code; return res; },
-        json(obj: any) { payload = obj; return res; },
-      };
+        json(obj: typeof payload) { payload = obj; return res; },
+      } as unknown as Response;
       await this.generate(req, res);
       if (statusCode >= 400) throw new Error(payload?.error || `Generate failed (${statusCode})`);
       const js = payload?.schedule?.jobSchedules || [];
-      const m = payload?.schedule?.metrics || {};
+      const m: Partial<ScheduleMetrics> = payload?.schedule?.metrics || {};
       this.status.lastResult = {
         ok: true, jobs: js.length,
-        scheduled: m.totalJobsScheduled ?? js.filter((j: any) => j.operationSchedules?.length).length,
+        scheduled: m.totalJobsScheduled ?? js.filter((j) => j.operationSchedules?.length).length,
         unscheduled: m.jobsUnscheduled ?? 0,
-        late: m.jobsTardy ?? js.filter((j: any) => Number(j.estimatedTardiness) > 0).length,
+        late: m.jobsTardy ?? js.filter((j) => Number(j.estimatedTardiness) > 0).length,
         ms: Date.now() - started,
       };
       // Remember the job state this plan was built from.

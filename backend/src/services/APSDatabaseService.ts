@@ -24,7 +24,7 @@ export class APSDatabaseService {
   constructor(private sysproDb: DatabaseConnection) {}
 
   private toSysproDateValue(dateValue: Date | string | number | undefined): string {
-    const parsed = dateValue instanceof Date ? dateValue : new Date(dateValue as any);
+    const parsed = dateValue instanceof Date ? dateValue : new Date(dateValue as string | number);
     if (Number.isNaN(parsed.getTime())) {
       throw new Error(`Invalid Syspro date value: ${String(dateValue)}`);
     }
@@ -40,7 +40,7 @@ export class APSDatabaseService {
       return dateValue.getHours() * 100 + dateValue.getMinutes();
     }
 
-    const parsed = new Date(dateValue as any);
+    const parsed = new Date(dateValue as string | number);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed.getHours() * 100 + parsed.getMinutes();
     }
@@ -558,12 +558,12 @@ export class APSDatabaseService {
       for (const op of jobSchedule.operationSchedules || []) {
         const opIdText = String(op.opId || '');
         const opMatch = opIdText.match(/OP(\d+)$/i);
-        const sequence = Number((op as any).sequence || opMatch?.[1] || 0);
+        const sequence = Number(op.sequence || opMatch?.[1] || 0);
         if (!sequence) continue;
 
         const startDate = new Date(op.plannedStartDate);
         const endDate = new Date(op.plannedEndDate);
-        const runStartDate = new Date((op as any).runStart || op.plannedStartDate);
+        const runStartDate = new Date(op.runStart || op.plannedStartDate);
         if (
           Number.isNaN(startDate.getTime()) ||
           Number.isNaN(endDate.getTime()) ||

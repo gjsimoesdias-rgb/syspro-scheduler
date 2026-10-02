@@ -10,7 +10,7 @@
 
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { saveAsLatest } from '../../services/ScheduleStore';
+import { saveAsLatest, parseStoredSchedule } from '../../services/ScheduleStore';
 import { requireAuth, requirePlanner } from '../middleware/requireAuth';
 import { planDbFor } from '../../services/planStore';
 import { errorMessage } from '../../utils/errors';
@@ -111,7 +111,7 @@ router.get('/:scenarioId', requireAuth, async (req: Request, res: Response) => {
     );
     if (!result.recordset?.length) return res.status(404).json({ error: 'Scenario not found' });
     const row = result.recordset[0];
-    res.json({ ...row, schedule: JSON.parse(row.ScheduleData) });
+    res.json({ ...row, schedule: parseStoredSchedule(row.ScheduleData) });
   } catch (err) {
     req.log.error({ err }, 'Error fetching scenario');
     res.status(500).json({ error: errorMessage(err) });
@@ -141,7 +141,7 @@ router.post('/:scenarioId/promote', requireAuth, requirePlanner, async (req: Req
     }
 
     const newScheduleId = uuidv4();
-    const scheduleData = JSON.parse(row.ScheduleData);
+    const scheduleData = parseStoredSchedule(row.ScheduleData);
     scheduleData.scheduleId = newScheduleId;
 
     // Becomes the live schedule as a Draft: it still goes through Approve

@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { isLocalUserId, saveNamed } from './SettingsService';
-import { DatabaseConnection } from '../database/connection';
+import { DatabaseConnection, type DbParams, type DbRow } from '../database/connection';
 
 export interface UserRecord {
   id: number;
@@ -26,7 +26,7 @@ export class UserService {
       FROM   dbo.lic_users u
       LEFT JOIN dbo.lic_companies c ON c.id = u.company_id
     `;
-    const params: Record<string, any> = {};
+    const params: DbParams = {};
     if (role !== 'super_admin') {
       sql += ` WHERE u.company_id = @cid`;
       params.cid = companyId;
@@ -98,7 +98,7 @@ export class UserService {
     isActive?: boolean;
   }): Promise<UserRecord> {
     const sets: string[] = [];
-    const params: Record<string, any> = { id };
+    const params: DbParams = { id };
     if (data.username !== undefined) { sets.push('username = @username'); params.username = data.username; }
     if (data.email !== undefined) { sets.push('email = @email'); params.email = data.email; }
     if (data.password) { sets.push('password_hash = @hash'); params.hash = await bcrypt.hash(data.password, 10); }
@@ -164,7 +164,7 @@ export class UserService {
     );
   }
 
-  private mapRow(row: any): UserRecord {
+  private mapRow(row: DbRow): UserRecord {
     return {
       id: row.id,
       companyId: row.company_id,

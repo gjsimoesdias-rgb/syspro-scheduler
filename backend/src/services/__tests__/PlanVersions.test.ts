@@ -54,8 +54,8 @@ describe('plan versions', () => {
 
   it('saveIntoWhatIf refuses the master/history and stamps the version id into the schedule', async () => {
     const { db, calls } = fakeDb({ W: { VersionKind: 'WhatIf' }, M: { VersionKind: 'Plan' } });
-    await expect(saveIntoWhatIf(db, 'M', { jobSchedules: [] })).rejects.toMatchObject({ status: 409 });
-    await saveIntoWhatIf(db, 'W', { scheduleId: 'gen-1', jobSchedules: [{ operationSchedules: [{}, {}] }], metrics: { otdRate: 50 } });
+    await expect(saveIntoWhatIf(db, 'M', { jobSchedules: [] } as any)).rejects.toMatchObject({ status: 409 });
+    await saveIntoWhatIf(db, 'W', { scheduleId: 'gen-1', jobSchedules: [{ operationSchedules: [{}, {}] }], metrics: { otdRate: 50 } } as any);
     const upd = calls.find((c) => /UPDATE aps\.SavedSchedules SET ScheduleData/.test(c.sql))!;
     expect(JSON.parse(upd.params.data).scheduleId).toBe('W');
     expect(upd.params.opCount).toBe(2);
@@ -77,8 +77,8 @@ describe('plan versions', () => {
   });
 
   it('metricsSnapshot keeps the KPI set only', () => {
-    expect(metricsSnapshot({ metrics: { otdRate: 80, junk: 1 }, constraintViolations: [{}, {}] }))
+    expect(metricsSnapshot({ metrics: { otdRate: 80, junk: 1 }, constraintViolations: [{}, {}] } as any))
       .toBe(JSON.stringify({ otdRate: 80, violations: 2 }));
-    expect(metricsSnapshot({})).toBeNull();
+    expect(metricsSnapshot({} as any)).toBeNull();
   });
 });

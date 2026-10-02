@@ -10,18 +10,21 @@ import { createSchedulingEngine } from './ISchedulingEngine';
 import ConstraintManager from './ConstraintManager';
 import { crewLookupFrom } from '../utils/crews';
 import { errorMessage } from '../utils/errors';
+import type { SchedulingContext } from './SchedulingEngine';
+import type { Job, Operation } from '../types';
+import type { WorkerPayload } from './scheduleWorkerTypes';
 
 // Reconstruct non-serialisable types (Maps, Dates) from the plain-object payload
-const ctx = workerData as any;
+const ctx = workerData as WorkerPayload;
 
 // Worker thread serialisation turns Date objects into ISO strings.
 // Reconstruct them so the engine's comparisons and .getTime() calls work.
-const hydrateJobs = (jobs: any[]) =>
-  jobs.map((j: any) => ({
+const hydrateJobs = (jobs: Job[]): Job[] =>
+  jobs.map((j) => ({
     ...j,
     dueDate: new Date(j.dueDate),
     releaseDate: new Date(j.releaseDate),
-    operations: (j.operations || []).map((op: any) => ({
+    operations: (j.operations || []).map((op: Operation & { SchStartDate?: string | Date; SchEndDate?: string | Date }) => ({
       ...op,
       // Dates inside operations (if any) are also rehydrated
       SchStartDate: op.SchStartDate ? new Date(op.SchStartDate) : undefined,
@@ -29,27 +32,29 @@ const hydrateJobs = (jobs: any[]) =>
     })),
   }));
 
-const context = {
+const context: SchedulingContext & {
+  setupSequences?: WorkerPayload['setupSequences'];
+  cpSatWeights?: WorkerPayload['cpSatWeights'];
+  cpSatTimeLimitSeconds?: number;
+} = {
   jobs: hydrateJobs(ctx.jobs),
-  workcentres: new Map<string, any>(ctx.workcentres),
-  resources: new Map<string, any>(ctx.resources),
-  materials: new Map<string, any>(ctx.materials),
+  workcentres: new Map(ctx.workcentres),
+  resources: new Map(ctx.resources),
+  materials: new Map(ctx.materials),
   resourceCapacities: ctx.resourceCapacities ? new Map<string, number>(ctx.resourceCapacities) : undefined,
   workcentreCapacities: ctx.workcentreCapacities ? new Map<string, number>(ctx.workcentreCapacities) : undefined,
   // Per-job material plan from the route handler. Built once in the parent
   // process via SysproDatabaseService.getJobMaterialPlans so the worker
   // doesn't need its own DB connection.
-  materialPlan: ctx.materialPlan ? new Map<string, any>(ctx.materialPlan) : undefined,
-  pinnedOperations: ctx.pinnedOperations
-    ? new Map<string, any>(ctx.pinnedOperations as [string, any][])
-    : undefined,
+  materialPlan: ctx.materialPlan ? new Map(ctx.materialPlan) : undefined,
+  pinnedOperations: ctx.pinnedOperations ? new Map(ctx.pinnedOperations) : undefined,
   planningHorizonStart: new Date(ctx.planningHorizonStart),
   planningHorizonEnd: new Date(ctx.planningHorizonEnd),
   schedulingRule: ctx.schedulingRule,
   schedulingDirection: ctx.schedulingDirection,
   dateAnchorMode: ctx.dateAnchorMode,
   anchorDate: ctx.anchorDate ? new Date(ctx.anchorDate) : undefined,
-  setupSequences: ctx.setupSequences as Array<{ fromItemCode: string; toItemCode: string; setupTimeMinutes: number }> | undefined,
+  setupSequences: ctx.setupSequences,
   cpSatWeights: ctx.cpSatWeights,
   cpSatTimeLimitSeconds: ctx.cpSatTimeLimitSeconds,
   productionMode: ctx.productionMode,
@@ -64,7 +69,7 @@ const context = {
     const constraintManager = new ConstraintManager();
     constraintManager.initializeConstraints(
       context.workcentres,
-      context.jobs.flatMap((j: any) => j.operations || [])
+      context.jobs.flatMap((j) => j.operations || [])
     );
     // Load externally-supplied sequence matrix (from sch_SetupMatrix or similar)
     if (context.setupSequences?.length) {
@@ -79,7 +84,7 @@ const context = {
     // block the board with a Critical violation.
     if (
       ctx.engineType === 'cp-sat' &&
-      schedule.constraintViolations.some((v: any) =>
+      schedule.constraintViolations.some((v) =>
         typeof v.description === 'string' && v.description.includes('CP-SAT sidecar unavailable')
       )
     ) {
