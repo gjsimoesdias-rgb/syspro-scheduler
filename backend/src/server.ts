@@ -13,7 +13,7 @@ import app from './app';
 import { sysproConfig, schedulerConfig } from './config/database';
 import environment from './config/environment';
 import DatabaseConnection from './database/connection';
-import AppStateStore from './services/AppStateStore';
+import { loadCompanyState } from './services/companyState';
 import { AutoScheduler } from './services/autoScheduler';
 import { generateHandler } from './api/routes/schedule';
 import AuthService from './services/AuthService';
@@ -107,10 +107,8 @@ async function startServer() {
         // only in app.locals (importedJobs, shifts, constraintOverrides...).
         // Hydrate the in-memory cache from sch_AppState so a server
         // restart no longer loses imported data.
-        const appState = new AppStateStore(schedulerDb);
-        app.locals.appState = appState;
-        await appState.ensureTable();
-        await appState.hydrateAppLocals(app.locals);
+        // Scoped to the connected SYSPRO company (see services/companyState).
+        await loadCompanyState(app);
 
         // Run all pending DB migrations (idempotent — already-applied files
         // are skipped via the sch_Migrations tracking table).

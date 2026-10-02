@@ -83,7 +83,7 @@ const newStore = () => {
   // AppStateStore expects a DatabaseConnection; FakeDb is structurally
   // compatible because every consumer only ever calls query /
   // queryWithParams. The `as any` cast is intentional and confined here.
-  return { db, store: new AppStateStore(db as any) };
+  return { db, store: new AppStateStore(db as any, 'CoH') };
 };
 
 // ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ describe('AppStateStore.get', () => {
     expect(value).toEqual({ hello: 'world', count: 7 });
 
     expect(db.calls[0].kind).toBe('queryWithParams');
-    expect(db.calls[0].params).toEqual({ key: 'importedJobs' });
+    expect(db.calls[0].params).toEqual({ key: 'co:CoH|importedJobs' });
   });
 
   it('returns undefined for a missing row', async () => {
@@ -163,7 +163,7 @@ describe('AppStateStore.set', () => {
     expect(db.calls[0].sql).toMatch(/MERGE sch_AppState/);
     expect(db.calls[0].sql).toMatch(/WITH \(HOLDLOCK\)/);
     expect(db.calls[0].params).toEqual({
-      key: 'importedJobs',
+      key: 'co:CoH|importedJobs',
       payload: JSON.stringify([{ jobId: 'WO-1' }]),
       updatedBy: 'user-42',
     });
@@ -198,7 +198,7 @@ describe('AppStateStore.clear', () => {
     await store.clear('shiftTemplates');
 
     expect(db.calls[0].sql).toMatch(/DELETE FROM sch_AppState/);
-    expect(db.calls[0].params).toEqual({ key: 'shiftTemplates' });
+    expect(db.calls[0].params).toEqual({ key: 'co:CoH|shiftTemplates' });
   });
 });
 
@@ -218,10 +218,10 @@ describe('AppStateStore.hydrateAppLocals', () => {
     const locals: Record<string, any> = {};
     await store.hydrateAppLocals(locals);
 
-    // Every known key is queried exactly once.
+    // Every known key is queried (scoped to the company).
     const keysQueried = db.calls
-      .filter((c) => c.kind === 'queryWithParams')
-      .map((c) => c.params!.key);
+      .filter((c) => c.kind === 'queryWithParams' && /SELECT payload/.test(c.sql))
+      .map((c) => String(c.params!.key).replace('co:CoH|', ''));
     expect(new Set(keysQueried)).toEqual(
       new Set([
         'importedJobs',
@@ -296,5 +296,65 @@ describe('AppStateStore roundtrip', () => {
     expect(await store.get('importedJobs')).toEqual(sample);
     await store.clear('importedJobs');
     expect(await store.get('importedJobs')).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-company scoping (review 2026-10-02 #12)
+// ---------------------------------------------------------------------------
+
+describe('AppStateStore per-company scope', () => {
+  const memoryDb = (seed: Record<string, unknown> = {}) => {
+    const memory = new Map<string, string>(Object.entries(seed).map(([k, v]) => [k, JSON.stringify(v)]));
+    const db: any = {
+      memory,
+      async query() { return { recordset: [] }; },
+      async queryWithParams(sql: string, params: Record<string, any>) {
+        if (sql.includes('SELECT payload FROM sch_AppState')) {
+          const row = memory.get(params.key);
+          return { recordset: row !== undefined ? [{ payload: row }] : [] };
+        }
+        if (sql.includes('MERGE sch_AppState')) { memory.set(params.key, params.payload); return { recordset: [] }; }
+        if (sql.includes('DELETE FROM sch_AppState')) { memory.delete(params.key); return { recordset: [] }; }
+        return { recordset: [] };
+      },
+    };
+    return db;
+  };
+
+  it('a company switch replaces the in-memory state instead of carrying it over', async () => {
+    const db = memoryDb();
+    const a = new AppStateStore(db, 'CoA');
+    await a.set('pinnedOperations', { 'J1::OP10': { jobId: 'J1' } });
+    const locals: Record<string, any> = {};
+    await a.hydrateAppLocals(locals);
+    expect(locals.pinnedOperations).toBeTruthy();
+
+    await new AppStateStore(db, 'CoB').hydrateAppLocals(locals);
+    expect(locals.pinnedOperations).toBeUndefined();
+
+    await new AppStateStore(db, 'CoA').hydrateAppLocals(locals);
+    expect(locals.pinnedOperations).toEqual({ 'J1::OP10': { jobId: 'J1' } });
+  });
+
+  it('pre-scoping rows are adopted once by the first company, then removed', async () => {
+    const db = memoryDb({ shiftTemplates: [{ shiftId: 'night' }] });
+    const first: Record<string, any> = {};
+    await new AppStateStore(db, 'CoA').hydrateAppLocals(first);
+    expect(first.shiftTemplates).toEqual([{ shiftId: 'night' }]);
+    expect(db.memory.has('shiftTemplates')).toBe(false);
+    expect(db.memory.has('co:CoA|shiftTemplates')).toBe(true);
+
+    const second: Record<string, any> = {};
+    await new AppStateStore(db, 'CoB').hydrateAppLocals(second);
+    expect(second.shiftTemplates).toBeUndefined();
+  });
+
+  it('never adopts pre-scoping rows before a SYSPRO company is connected', async () => {
+    const db = memoryDb({ jobMarkers: { definitions: [] } });
+    const locals: Record<string, any> = {};
+    await new AppStateStore(db).hydrateAppLocals(locals);
+    expect(locals.jobMarkers).toBeUndefined();
+    expect(db.memory.has('jobMarkers')).toBe(true);
   });
 });

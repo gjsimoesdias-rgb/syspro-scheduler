@@ -10,7 +10,7 @@ import { MigrationRunner } from '../../database/MigrationRunner';
 import { ensureSysproObjects } from '../../database/ensureSysproObjects';
 import { planDbFor } from '../../services/planStore';
 import AuthService from '../../services/AuthService';
-import AppStateStore from '../../services/AppStateStore';
+import { loadCompanyState } from '../../services/companyState';
 import { validateBody } from '../middleware/validateBody';
 import { listDatabasesSchema, connectSchema } from '../validators/statusValidators';
 
@@ -403,15 +403,14 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
       } catch (seedErr: any) {
         req.log.warn({ err: seedErr }, 'Seed warning during connect');
       }
-      // Hydrate AppStateStore so session-level data is available immediately.
-      try {
-        const appState = new AppStateStore(nextSchedulerDb);
-        req.app.locals.appState = appState;
-        await appState.ensureTable();
-        await appState.hydrateAppLocals(req.app.locals);
-      } catch (stateErr: any) {
-        req.log.warn({ err: stateErr }, 'AppState warning during connect');
-      }
+    }
+
+    // Load the newly connected company's state (pins, shifts, crews, markers…)
+    // — also when only the SYSPRO company changed, so nothing carries across.
+    try {
+      await loadCompanyState(req.app);
+    } catch (stateErr: any) {
+      req.log.warn({ err: stateErr }, 'AppState warning during connect');
     }
 
     // Plan store for the newly connected company (SCHEDULER DB schema co_<db>).

@@ -121,6 +121,15 @@ export class AutoScheduler {
     return cfg;
   }
 
+  /** Forget the last run (e.g. after a company switch). */
+  resetStatus(): void {
+    if (this.status.running) return;
+    for (const k of Object.keys(this.status) as Array<keyof AutoScheduleStatus>) {
+      if (k !== 'running') delete this.status[k];
+    }
+    this.updateNextRun();
+  }
+
   start(tickMs = 60000): void {
     if (this.timer) return;
     this.timer = setInterval(() => { void this.tick(); }, tickMs);

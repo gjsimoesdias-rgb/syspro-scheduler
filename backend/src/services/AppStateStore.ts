@@ -11,6 +11,11 @@
  *  - All writes are best-effort with try/catch + warn — losing one
  *    persistence write must NOT break the running server.
  *
+ *  - Scoped per SYSPRO company: rows are keyed 'co:<CompanyDb>|<key>', so
+ *    pins, shifts, crews, markers... of one company never leak into another
+ *    after a company switch. Rows written before scoping (plain '<key>') are
+ *    adopted once by the first real company that loads them, then removed.
+ *
  * Once the UI shapes are stable, peel keys out into typed tables.
  */
 
@@ -32,8 +37,33 @@ export type AppStateKey =
   | 'jobMarkers'
   | 'jobFlags';
 
+/** Every key kept per company (hydrated on connect / company switch). */
+export const APP_STATE_KEYS: AppStateKey[] = [
+  'importedJobs',
+  'importedOperations',
+  'resourceDefinitions',
+  'shiftTemplates',
+  'constraintOverrides',
+  'alternativeGroups',
+  'pinnedOperations',
+  'calendarExceptions',
+  'crewSetup',
+  'autoSchedule',
+  'lastGenerateOptions',
+  'jobFlags',
+  'jobMarkers',
+];
+
+/** Scope used before a SYSPRO company is connected. Never adopts legacy rows. */
+export const NO_COMPANY = 'default';
+
 export class AppStateStore {
-  constructor(private db: DatabaseConnection) {}
+  constructor(private db: DatabaseConnection, readonly companyDb: string = NO_COMPANY) {}
+
+  /** sch_AppState.stateKey for a key in this company (column is NVARCHAR(100)). */
+  rowKey(key: AppStateKey): string {
+    return `co:${this.companyDb}|${key}`.slice(-100);
+  }
 
   /**
    * Create the table if missing. Safe to call on every boot.
@@ -60,10 +90,14 @@ export class AppStateStore {
 
   /** Return the parsed payload, or undefined if the row is missing or malformed. */
   async get<T = unknown>(key: AppStateKey): Promise<T | undefined> {
+    return this.readRow<T>(this.rowKey(key), key);
+  }
+
+  private async readRow<T>(stateKey: string, key: AppStateKey): Promise<T | undefined> {
     try {
       const result = await this.db.queryWithParams(
         `SELECT payload FROM sch_AppState WHERE stateKey = @key`,
-        { key }
+        { key: stateKey }
       );
       const row = result.recordset?.[0];
       if (!row?.payload) return undefined;
@@ -91,7 +125,7 @@ export class AppStateStore {
           INSERT (stateKey, payload, updatedBy)
           VALUES (src.stateKey, src.payload, src.updatedBy);
         `,
-        { key, payload, updatedBy }
+        { key: this.rowKey(key), payload, updatedBy }
       );
     } catch (err: any) {
       logger.warn({ err, key }, 'AppStateStore.set failed (state retained in memory only)');
@@ -101,42 +135,49 @@ export class AppStateStore {
   /** Delete a row. Used by tests and admin endpoints; not required during normal use. */
   async clear(key: AppStateKey): Promise<void> {
     try {
-      await this.db.queryWithParams(`DELETE FROM sch_AppState WHERE stateKey = @key`, { key });
+      await this.db.queryWithParams(`DELETE FROM sch_AppState WHERE stateKey = @key`, { key: this.rowKey(key) });
     } catch (err: any) {
       logger.warn({ err, key }, 'AppStateStore.clear failed');
     }
   }
 
   /**
-   * Hydrate the live in-memory `app.locals` cache from the persisted store.
-   * Called once at server startup, after the SCHEDULER DB connects.
+   * Load this company's state into the in-memory `app.locals` cache,
+   * replacing whatever the previous company left there. Called at startup
+   * and on every company switch.
    */
   async hydrateAppLocals(appLocals: Record<string, any>): Promise<void> {
-    const keys: AppStateKey[] = [
-      'importedJobs',
-      'importedOperations',
-      'resourceDefinitions',
-      'shiftTemplates',
-      'constraintOverrides',
-      'alternativeGroups',
-      'pinnedOperations',
-      'calendarExceptions',
-      'crewSetup',
-      'autoSchedule',
-      'lastGenerateOptions',
-      'jobFlags',
-      'jobMarkers',
-    ];
     let restored = 0;
-    for (const key of keys) {
-      const value = await this.get(key);
+    let adopted = 0;
+    for (const key of APP_STATE_KEYS) {
+      delete appLocals[key];
+      let value = await this.get(key);
+      if (value === undefined && this.companyDb !== NO_COMPANY) {
+        // Pre-scoping row: adopt it for this company once, then remove it so
+        // the next company doesn't inherit the same pins / shifts / crews.
+        const legacy = await this.readRow(key, key);
+        if (legacy !== undefined) {
+          await this.set(key, legacy, 'migration');
+          await this.dropLegacy(key);
+          value = legacy;
+          adopted++;
+        }
+      }
       if (value !== undefined) {
         appLocals[key] = value;
         restored++;
       }
     }
-    if (restored > 0) {
-      logger.info({ restored }, `AppStateStore hydrated ${restored} keys from sch_AppState`);
+    if (restored > 0 || adopted > 0) {
+      logger.info({ restored, adopted, companyDb: this.companyDb }, `AppStateStore hydrated ${restored} keys from sch_AppState`);
+    }
+  }
+
+  private async dropLegacy(key: AppStateKey): Promise<void> {
+    try {
+      await this.db.queryWithParams(`DELETE FROM sch_AppState WHERE stateKey = @key`, { key });
+    } catch (err: any) {
+      logger.warn({ err, key }, 'AppStateStore: could not remove adopted pre-scoping row');
     }
   }
 }
