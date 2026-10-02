@@ -153,6 +153,17 @@ export interface OperationSchedule {
   slackTime: number; // minutes
   /** Operation status from SYSPRO WipJobAllLab.OperationStatus */
   opStatus?: 'NotStarted' | 'InProgress' | 'Complete';
+  /** True when this operation was pinned by the user and its time slot was frozen. */
+  pinned?: boolean;
+  // ── Explainability (forward scheduling) ──
+  /** Earliest the op could start: release / previous op (+queue, move, wait, overlap). */
+  readyAt?: Date | string;
+  /** Minutes between readyAt and the actual start. */
+  waitMinutes?: number;
+  /** Why it waited: the line/machine was busy, no free operators in its crew, no shift time, or a mix. */
+  waitReason?: 'line' | 'crew' | 'calendar' | 'mixed';
+  /** Other jobs holding the line or machine during the wait (up to 5). */
+  blockedBy?: string[];
 }
 
 export interface ResourceLoad {

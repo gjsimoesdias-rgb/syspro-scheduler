@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { addDays, format, differenceInMinutes, startOfDay, endOfDay, startOfWeek } from 'date-fns';
-import { Resource, Schedule, Job, ConstraintViolation } from '../types';
+import { Resource, Schedule, Job, ConstraintViolation, Shift } from '../types';
 import { GanttSettingsState, GANTT_SETTINGS_DEFAULTS } from './GanttSettings';
 import GanttTooltip from './GanttTooltip';
 import GanttContextMenu, { ContextMenuState } from './GanttContextMenu';
@@ -15,6 +15,10 @@ import { useUiStore, GANTT_PERIOD_DAYS } from '../stores/uiStore';
 import './MachineGanttBoard.css';
 import { BarChart3, List, LocateFixed, Lock, Unlock, PanelLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 import { confirmDialog, promptDialog } from './DialogHost';
+
+/** A calendar's first shift as the board reads it (every field may be missing). */
+type DiversionLike = Partial<NonNullable<Shift['diversions']>[number]>;
+type ShiftLike = Partial<Omit<Shift, 'diversions'>> & { diversions?: DiversionLike[] };
 
 /** Reload locks from the server into the store (after a bulk lock/unlock). */
 const refreshPins = async () => {
@@ -160,7 +164,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
 
   // Derive a Set of affected opIds from constraint violations for fast bar lookup
   const violatedOpIds = useMemo(
-    () => new Set(constraintViolations.filter(v => v.affectedOperationId).map(v => v.affectedOperationId!)),
+    () => new Set(constraintViolations.flatMap(v => (v.affectedOperationId ? [v.affectedOperationId] : []))),
     [constraintViolations]
   );
 
@@ -391,7 +395,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       if (js?.operationSchedules?.length) {
         const sorted = [...js.operationSchedules].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
         for (const op of sorted) {
-          const ids = [op.workcentreId, (op as any).resourceId ? String((op as any).resourceId) : ''].filter(Boolean);
+          const ids = [op.workcentreId, op.resourceId ? String(op.resourceId) : ''].filter(Boolean);
           for (const id of ids) {
             if (!matches.has(id)) {
               matches.add(id);
@@ -497,8 +501,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 0;
 
       const workingDays = calendar?.workingDays || [1, 2, 3, 4, 5];
-      const shift = (calendar?.shifts?.[0] || {}) as any;
-      const isSchedulable = (diversion: any) => {
+      const shift: ShiftLike = calendar?.shifts?.[0] || {};
+      const isSchedulable = (diversion: DiversionLike) => {
         if (typeof diversion?.schedulable === 'boolean') return diversion.schedulable;
         const key = String(diversion?.type || '').toLowerCase();
         return key.includes('production') || key.includes('overtime');
@@ -506,8 +510,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
 
       const productiveSlots = Array.isArray(shift.diversions) && shift.diversions.length
         ? [...shift.diversions]
-            .filter((diversion: any) => isSchedulable(diversion))
-            .sort((a: any, b: any) => toMinutes(a.startTime) - toMinutes(b.startTime))
+            .filter((diversion) => isSchedulable(diversion))
+            .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))
         : [{ startTime: shift.startTime || '08:00', endTime: shift.endTime || '16:00' }];
 
       let totalMs = 0;
@@ -540,7 +544,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     for (const wc of workcentres) {
       const calendar = workcentreCalendars[wc];
       const available = getProductiveHours(timelineStart, timelineEnd, calendar);
-      availableHoursByLane[wc] = available > 0 ? available : Math.max(1, totalDays * ((calendar as any)?.workingHoursPerDay || 8));
+      availableHoursByLane[wc] = available > 0 ? available : Math.max(1, totalDays * (calendar?.workingHoursPerDay || 8));
     }
 
     // Booked hours per workcentre lane — clipped to the planning window so
@@ -549,8 +553,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     const bookedByLane: Record<string, number> = {};
     for (const js of schedule.jobSchedules) {
       for (const op of js.operationSchedules) {
-        const rawStart = new Date((op as any).setupStart || op.plannedStartDate);
-        const rawEnd   = new Date((op as any).runEnd   || op.plannedEndDate);
+        const rawStart = new Date(op.setupStart || op.plannedStartDate);
+        const rawEnd   = new Date(op.runEnd   || op.plannedEndDate);
         // Clip to the visible planning window
         const clippedStart = rawStart < timelineStart ? new Date(timelineStart) : rawStart;
         const clippedEnd   = rawEnd   > timelineEnd   ? new Date(timelineEnd)   : rawEnd;
@@ -662,8 +666,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     return schedule.jobSchedules.flatMap((jobSchedule) =>
       jobSchedule.operationSchedules
         .filter((op) => {
-          const opStart = new Date((op as any).setupStart || op.plannedStartDate).getTime();
-          const opEnd   = new Date((op as any).moveEnd   || op.plannedEndDate).getTime();
+          const opStart = new Date(op.setupStart || op.plannedStartDate).getTime();
+          const opEnd   = new Date(op.moveEnd   || op.plannedEndDate).getTime();
           // Keep operation only if it overlaps the visible window
           return opEnd > winStart && opStart < winEnd;
         })
@@ -746,8 +750,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     if (end.getTime() <= start.getTime()) return [];
 
     const workingDays = calendar?.workingDays || [1, 2, 3, 4, 5];
-    const shift = (calendar?.shifts?.[0] || {}) as any;
-    const isSchedulable = (diversion: any) => {
+    const shift: ShiftLike = calendar?.shifts?.[0] || {};
+    const isSchedulable = (diversion: DiversionLike) => {
       if (typeof diversion?.schedulable === 'boolean') return diversion.schedulable;
       const key = String(diversion?.type || '').toLowerCase();
       return key.includes('production') || key.includes('overtime');
@@ -755,8 +759,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
 
     const productiveDiversions = Array.isArray(shift.diversions)
       ? [...shift.diversions]
-          .filter((diversion: any) => isSchedulable(diversion))
-          .sort((a: any, b: any) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+          .filter((diversion) => isSchedulable(diversion))
+          .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
       : [];
 
     const segments: Array<{ start: Date; end: Date }> = [];
@@ -830,21 +834,21 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       jobId = dragged.jobId;
       const job = jobs?.find(j => j.jobId === dragged.jobId);
       if (job) {
-        jobType = String((job as any).Type || '');
+        jobType = String(job.Type || '');
         stockCode = job.itemCode || '';
-        stockDesc = String((job as any).StockDescription || '');
+        stockDesc = String(job.StockDescription || '');
       }
       if (dragged.type === 'operation') {
         const scheduledOp = laneOperations.find(o => o.jobId === dragged.jobId && o.opId === dragged.opId);
         const origOp = job?.operations?.find(o => o.opId === dragged.opId);
         if (origOp) {
           opSeq = String(origOp.sequence || '');
-          opDesc = String((origOp as any).Description || origOp.workcentreName || '');
+          opDesc = String(origOp.Description || origOp.workcentreName || '');
         }
         if (scheduledOp) {
-          opSeq = opSeq || String((scheduledOp as any).sequence || '');
-          const previewStart = new Date((scheduledOp as any).setupStart || scheduledOp.plannedStartDate);
-          const previewEnd = new Date((scheduledOp as any).runEnd || scheduledOp.plannedEndDate);
+          opSeq = opSeq || String(scheduledOp.sequence || '');
+          const previewStart = new Date(scheduledOp.setupStart || scheduledOp.plannedStartDate);
+          const previewEnd = new Date(scheduledOp.runEnd || scheduledOp.plannedEndDate);
           const opSpanMs = previewEnd.getTime() - previewStart.getTime();
           endDate = new Date(dropDate.getTime() + opSpanMs);
         }
@@ -854,13 +858,13 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
       jobId = highlightJobId;
       const job = jobs?.find(j => j.jobId === highlightJobId);
       if (job) {
-        jobType = String((job as any).Type || '');
+        jobType = String(job.Type || '');
         stockCode = job.itemCode || '';
-        stockDesc = String((job as any).StockDescription || '');
+        stockDesc = String(job.StockDescription || '');
         const firstOp = job.operations?.[0];
         if (firstOp) {
           opSeq = String(firstOp.sequence || '');
-          opDesc = String((firstOp as any).Description || firstOp.workcentreName || '');
+          opDesc = String(firstOp.Description || firstOp.workcentreName || '');
           const totalMs = ((firstOp.setupTime || 0) + (firstOp.duration || 0)) * 60000;
           endDate = new Date(dropDate.getTime() + totalMs);
         }
@@ -885,7 +889,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
           dragged?.type === 'operation' && dragged.opId
             ? sortedOps.find(o => o.opId === dragged.opId) ?? sortedOps[0]
             : sortedOps[0];
-        const anchorMs = new Date((anchorOp as any).setupStart || anchorOp.plannedStartDate).getTime();
+        const anchorMs = new Date(anchorOp.setupStart || anchorOp.plannedStartDate).getTime();
         // For op drags: subtract grab offset so ghost bar moves WITH the cursor, not left-edge → cursor
         const grabOffsetMs = dragged?.type === 'operation' ? (dragAnchorRef.current?.grabOffsetMs ?? 0) : 0;
         const deltaMs  = (dropDate.getTime() - grabOffsetMs) - anchorMs;
@@ -894,11 +898,11 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
         // Build ghost bars using the same productive-segment logic as real bars so
         // the ghost width matches the rendered bar width exactly (no non-working gaps).
         const newBars: GhostBar[] = sortedOps.flatMap(op => {
-          const gStart = new Date(new Date((op as any).setupStart || op.plannedStartDate).getTime() + deltaMs);
-          const gEnd   = new Date(new Date((op as any).runEnd   || op.plannedEndDate  ).getTime() + deltaMs);
+          const gStart = new Date(new Date(op.setupStart || op.plannedStartDate).getTime() + deltaMs);
+          const gEnd   = new Date(new Date(op.runEnd   || op.plannedEndDate  ).getTime() + deltaMs);
           const laneId = String(op.workcentreId);
-          const label  = `Op ${(op as any).sequence ?? op.opId}`;
-          const wcId   = String((op as any).workcentreId || '');
+          const label  = `Op ${op.sequence ?? op.opId}`;
+          const wcId   = String(op.workcentreId || '');
           const calendar = workcentreCalendars[wcId];
 
           // Use the same productive-segment function as the real bars to get segments
@@ -953,20 +957,20 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
   const getShiftBlocks = useCallback((calendar: Resource['calendar'] | undefined, day: Date): Array<{ start: number; end: number; kind: 'work' | 'overtime' | 'break' }> => {
     const workingDays = calendar?.workingDays || [1, 2, 3, 4, 5];
     if (!workingDays.includes(day.getDay())) return [];
-    const shift = (calendar?.shifts?.[0] || {}) as any;
+    const shift: ShiftLike = calendar?.shifts?.[0] || {};
     const diversions = Array.isArray(shift.diversions) ? shift.diversions : [];
     if (!diversions.length) {
       return [{ start: timeToMinutes(shift.startTime || '08:00'), end: timeToMinutes(shift.endTime || '16:00'), kind: 'work' }];
     }
     return diversions
-      .map((d: any) => {
+      .map((d) => {
         const key = String(d.type || '').toLowerCase();
-        const kind = key.includes('overtime') ? 'overtime'
+        const kind: 'work' | 'overtime' | 'break' | null = key.includes('overtime') ? 'overtime'
           : (key.includes('break') || key.includes('lunch')) ? 'break'
           : (key.includes('non') || d.schedulable === false) ? null : 'work';
         return kind ? { start: timeToMinutes(d.startTime), end: timeToMinutes(d.endTime), kind } : null;
       })
-      .filter((b: any) => b && b.end > b.start);
+      .filter((b): b is { start: number; end: number; kind: 'work' | 'overtime' | 'break' } => !!b && b.end > b.start);
   }, []);
 
   const daySlots = useMemo(() => {
@@ -1068,7 +1072,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     });
     if (!familyIds.has(highlightJobId) || familyIds.size < 2) return [];
 
-    const laneOf = (op: any): string => String(op.workcentreId);
+    const laneOf = (op: { workcentreId?: unknown }): string => String(op.workcentreId);
     const pxPerMs = pxPerDay / (1000 * 60 * 60 * 24);
     const xOf = (date: Date): number =>
       Math.max(0, Math.min(timelineWidth, (date.getTime() - timelineStart.getTime()) * pxPerMs));
@@ -1325,7 +1329,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
               <button
                 key={`legend-${wc}`}
                 className={`gantt-line-chip${active ? ' active' : ''}`}
-                style={{ ['--chip' as any]: color }}
+                style={{ ['--chip' as string]: color } as React.CSSProperties}
                 onClick={() => setSelectedWorkcentre((prev) => (prev === wcId ? null : wcId))}
                 title={`${wcId} — ${util}% loaded${active ? ' (highlighted)' : ''}`}
               >
@@ -1449,7 +1453,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                   {showShift && (
                     <span>
                       {workcentreCalendars[wc]?.shifts?.[0]
-                        ? `${workcentreCalendars[wc].shifts[0].name} • ${Math.round(((workcentreCalendars[wc] as any)?.workingHoursPerDay || 0) * 10) / 10}h productive`
+                        ? `${workcentreCalendars[wc].shifts[0].name} • ${Math.round((workcentreCalendars[wc]?.workingHoursPerDay || 0) * 10) / 10}h productive`
                         : 'Default shift'}
                     </span>
                   )}
@@ -1519,8 +1523,8 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                   {(opsByWorkcentre.get(wc) || [])
                     .filter((op) => {
                       // Skip bars far outside the scroll window (virtualisation).
-                      const s0 = new Date((op as any).setupStart || op.plannedStartDate).getTime();
-                      const e0 = new Date((op as any).moveEnd || op.plannedEndDate).getTime();
+                      const s0 = new Date(op.setupStart || op.plannedStartDate).getTime();
+                      const e0 = new Date(op.moveEnd || op.plannedEndDate).getTime();
                       return e0 >= visStartMs && s0 <= visEndMs;
                     })
                     .map((op) => {
@@ -1533,7 +1537,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                       const opEnd = new Date(op.plannedEndDate);
                       const jobMeta = jobsById.get(op.jobId);
                       const itemCode = jobMeta?.itemCode || '';
-                      const itemDesc = String((jobMeta as any)?.StockDescription || (jobMeta as any)?.description || '');
+                      const itemDesc = String(jobMeta?.StockDescription || jobMeta?.description || '');
                       const qty = jobMeta?.quantity ? `× ${jobMeta.quantity}` : '';
 
                       // Phase timestamps (with fallbacks for pre-upgrade data)
@@ -1566,7 +1570,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                           depRole={depRole}
                           masterJobId={parentMap.get(op.jobId)}
                           opId={op.opId}
-                          sequence={(op as any).sequence || '?'}
+                          sequence={op.sequence || '?'}
                           workcentreId={op.workcentreId}
                           resourceId={op.resourceId}
                           isLocked={isLocked}
@@ -1594,11 +1598,11 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
                           itemDesc={itemDesc}
                           qty={qty}
                           dueDate={jobDueDates[op.jobId]}
-                          wait={(op as any).waitMinutes > 0 ? {
-                            readyAt: new Date((op as any).readyAt),
-                            minutes: (op as any).waitMinutes,
-                            reason: (op as any).waitReason,
-                            blockedBy: (op as any).blockedBy,
+                          wait={op.waitMinutes && op.waitMinutes > 0 && op.readyAt ? {
+                            readyAt: new Date(op.readyAt),
+                            minutes: op.waitMinutes,
+                            reason: op.waitReason,
+                            blockedBy: op.blockedBy,
                           } : undefined}
                           opStatus={op.opStatus}
                           displaySegments={displaySegments}
