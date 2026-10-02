@@ -30,7 +30,7 @@ export const isWeakSecret = (value: string | undefined): boolean =>
  */
 function resolveSecret(name: string, isWeak: (v: string | undefined) => boolean, bytes: number, purpose: string): string {
   const current = process.env[name];
-  if (!isWeak(current)) return current!.trim();
+  if (current !== undefined && !isWeak(current)) return current.trim();
 
   const generated = crypto.randomBytes(bytes).toString('hex');
   if (process.env.NODE_ENV === 'test') {

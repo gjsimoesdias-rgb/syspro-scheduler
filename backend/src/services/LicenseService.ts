@@ -91,7 +91,7 @@ export class LicenseService {
       { lid: newId, name: data.companyName, db: cleanDb(data.sysproCompanyDb) }
     );
 
-    return (await this.getLicenseById(newId))!;
+    return this.mustGet(newId);
   }
 
   async updateLicense(id: number, data: {
@@ -122,7 +122,14 @@ export class LicenseService {
         `UPDATE dbo.lic_companies SET syspro_company_id = @db WHERE license_id = @id`,
         { id, db: cleanDb(data.sysproCompanyDb) });
     }
-    return (await this.getLicenseById(id))!;
+    return this.mustGet(id);
+  }
+
+  /** Re-read a licence just written; a missing row means the write failed. */
+  private async mustGet(id: number): Promise<LicenseRecord> {
+    const lic = await this.getLicenseById(id);
+    if (!lic) throw new Error(`Licence ${id} not found after saving`);
+    return lic;
   }
 
   async deleteLicense(id: number): Promise<void> {

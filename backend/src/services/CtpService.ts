@@ -279,14 +279,15 @@ export function computeCtp(params: {
     assumptions.add('No saved schedule found — promise computed against an empty shop load.');
   }
 
-  const hasFamily = Array.isArray(subRoutings) && subRoutings.length > 0;
+  const legs = Array.isArray(subRoutings) ? subRoutings : [];
+  const hasFamily = legs.length > 0;
   const legEnds: Array<{ leg: string; end: string }> = [];
   let masterEarliest = earliestStart.getTime();
 
   // 1. Sub-job legs — parallel start, shared capacity (SYSPRO: subs feed the master).
   if (hasFamily) {
-    for (let s = 0; s < subRoutings!.length; s++) {
-      const sub = subRoutings![s];
+    for (let s = 0; s < legs.length; s++) {
+      const sub = legs[s];
       const legName = sub.label?.trim() || `Sub ${s + 1}`;
       if (!sub.operations?.length) continue;
       const placed = placeRouting(sub.operations, legName, earliestStart.getTime(), resources, sortedBusy, assumptions);

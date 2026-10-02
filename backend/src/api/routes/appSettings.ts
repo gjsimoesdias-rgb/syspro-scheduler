@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import SettingsService from '../../services/SettingsService';
-import { requireAuth, requireCompanyAdmin, AuthRequest } from '../middleware/requireAuth';
+import { requireAuth, requireCompanyAdmin, AuthRequest, authUser } from '../middleware/requireAuth';
 import { companyFor } from '../companyContext';
 import { errorMessage } from '../../utils/errors';
 
@@ -15,7 +15,7 @@ const getSvc = (req: AuthRequest): SettingsService => {
 // GET /api/settings/user — current user's settings
 router.get('/user', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const settings = await getSvc(req).getUserSettingsFor(req.user!.sub);
+    const settings = await getSvc(req).getUserSettingsFor(authUser(req).sub);
     res.json(settings);
   } catch (err) {
     res.status(500).json({ error: errorMessage(err) });
@@ -25,7 +25,7 @@ router.get('/user', requireAuth, async (req: AuthRequest, res: Response) => {
 // PUT /api/settings/user — save user settings
 router.put('/user', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    await getSvc(req).saveUserSettingsFor(req.user!.sub, req.body);
+    await getSvc(req).saveUserSettingsFor(authUser(req).sub, req.body);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: errorMessage(err) });
@@ -58,7 +58,7 @@ router.put('/company', requireAuth, requireCompanyAdmin, async (req: AuthRequest
       res.status(400).json({ error: 'No licensed company matches the connected SYSPRO database — set its SYSPRO company id under Licences' });
       return;
     }
-    const uid = Number(req.user!.sub);
+    const uid = Number(authUser(req).sub);
     await getSvc(req).saveCompanySettings(companyId, req.body, Number.isFinite(uid) && uid > 0 ? uid : undefined);
     res.json({ ok: true });
   } catch (err) {

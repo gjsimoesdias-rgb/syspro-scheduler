@@ -9,6 +9,8 @@ import { requirePlanner } from '../middleware/requireAuth';
 import { CalendarException, normaliseException } from '../../utils/calendarExceptions';
 import { normaliseCrewSetup, EMPTY_CREW_SETUP, mapEmployeeRow, type CrewSetup, type SysproEmployee } from '../../utils/crews';
 import { errorMessage } from '../../utils/errors';
+import { asObj } from '../../utils/loose';
+import type { DbRow } from '../../database/connection';
 
 const router = Router();
 
@@ -66,18 +68,21 @@ const toMinutes = (value: string): number => {
   return hours * 60 + minutes;
 };
 
-const validateShiftDiversions = (input: any[]) => {
+const validateShiftDiversions = (input: unknown) => {
   if (!Array.isArray(input) || input.length === 0) {
     return { valid: false, error: 'A shift must contain diversions covering the full 24 hours' };
   }
 
-  const diversions = input.map((item: any, index: number) => ({
+  const diversions = input.map((raw, index: number) => {
+    const item = asObj(raw);
+    return {
     id: String(item.id || `div-${index + 1}`),
     type: String(item.type || 'Non Productive'),
     startTime: String(item.startTime || '').trim(),
     endTime: String(item.endTime || '').trim(),
     schedulable: item.schedulable === undefined ? /production|overtime/i.test(String(item.type || '')) : !!item.schedulable
-  })).sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+    };
+  }).sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
 
   let cursor = 0;
   let productiveMinutes = 0;
@@ -115,7 +120,7 @@ const validateShiftDiversions = (input: any[]) => {
 };
 
 const ensureDefinitionStores = (req: Request): { shifts: ShiftTemplate[]; definitions: Record<string, ResourceDefinition> } => {
-  const appLocals = req.app.locals as any;
+  const appLocals = req.app.locals as Record<string, unknown>;
   if (!appLocals.shiftTemplates) {
     appLocals.shiftTemplates = [
       {
@@ -139,14 +144,16 @@ const ensureDefinitionStores = (req: Request): { shifts: ShiftTemplate[]; defini
 };
 
 const ensureAlternativeGroups = (req: Request): AlternativeGroup[] => {
-  const appLocals = req.app.locals as any;
+  const appLocals = req.app.locals as Record<string, unknown>;
   if (!appLocals.alternativeGroups) {
     appLocals.alternativeGroups = [];
   }
   return appLocals.alternativeGroups as AlternativeGroup[];
 };
 
-const applyShiftCalendarsToResources = (req: Request, resources: any[]) => {
+const applyShiftCalendarsToResources = <R extends {
+  resourceId: string; lineGroupId?: string; calendar?: { holidays?: unknown[] } | null;
+}>(req: Request, resources: R[]) => {
   const { shifts, definitions } = ensureDefinitionStores(req);
   const shiftById = new Map(shifts.map((shift) => [shift.shiftId, shift]));
 
@@ -331,7 +338,7 @@ router.post('/shifts', requirePlanner, (req: Request, res: Response) => {
     const { shifts } = ensureDefinitionStores(req);
     const name = String(req.body.name || '').trim();
     const workingDays = Array.isArray(req.body.workingDays)
-      ? req.body.workingDays.map((d: any) => Number(d)).filter((d: number) => d >= 0 && d <= 6)
+      ? (req.body.workingDays as unknown[]).map((d) => Number(d)).filter((d: number) => d >= 0 && d <= 6)
       : [1, 2, 3, 4, 5];
 
     if (!name) {
@@ -382,7 +389,7 @@ router.put('/shifts/:shiftId', requirePlanner, (req: Request, res: Response) => 
 
     const name = String(req.body.name || '').trim();
     const workingDays = Array.isArray(req.body.workingDays)
-      ? req.body.workingDays.map((d: any) => Number(d)).filter((d: number) => d >= 0 && d <= 6)
+      ? (req.body.workingDays as unknown[]).map((d) => Number(d)).filter((d: number) => d >= 0 && d <= 6)
       : existing.workingDays;
 
     if (!name) {
@@ -464,7 +471,7 @@ router.delete('/shifts/:shiftId', requirePlanner, (req: Request, res: Response) 
  * DELETE /api/resources/calendar-exceptions/:id
  */
 const getExceptions = (req: Request): CalendarException[] => {
-  const locals = req.app.locals as any;
+  const locals = req.app.locals as Record<string, unknown>;
   if (!Array.isArray(locals.calendarExceptions)) locals.calendarExceptions = [];
   return locals.calendarExceptions as CalendarException[];
 };
@@ -514,7 +521,7 @@ router.delete('/calendar-exceptions/:id', requirePlanner, (req: Request, res: Re
  * PUT /api/resources/crews  { enabled, pools: [{ id?, name, headcount }], lines: { [wc]: { poolId, operators } } }
  */
 router.get('/crews', (req: Request, res: Response) => {
-  const setup: CrewSetup = (req.app.locals as any).crewSetup || EMPTY_CREW_SETUP;
+  const setup = (req.app.locals.crewSetup as CrewSetup | undefined) || EMPTY_CREW_SETUP;
   res.json({ setup });
 });
 
@@ -530,7 +537,7 @@ router.get('/employees', async (req: Request, res: Response) => {
       `IF OBJECT_ID('BomEmployee') IS NULL SELECT TOP 0 1 AS x ELSE SELECT TOP 5000 * FROM BomEmployee`
     );
     const employees = (r.recordset || [])
-      .map((row: Record<string, any>) => mapEmployeeRow(row))
+      .map((row: DbRow) => mapEmployeeRow(row))
       .filter((e: SysproEmployee | null): e is SysproEmployee => !!e)
       .sort((a: SysproEmployee, b: SysproEmployee) => a.name.localeCompare(b.name));
     res.json({ employees });
@@ -589,7 +596,7 @@ router.post('/alternatives/groups', requirePlanner, (req: Request, res: Response
     const workcentreId = String(req.body.workcentreId || '').trim();
     const name = String(req.body.name || '').trim();
     const machineIds = Array.isArray(req.body.machineIds)
-      ? req.body.machineIds.map((value: any) => String(value || '').trim()).filter(Boolean)
+      ? (req.body.machineIds as unknown[]).map((value) => String(value || '').trim()).filter(Boolean)
       : [];
 
     if (!workcentreId || !name || machineIds.length === 0) {

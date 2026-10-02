@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import DatabaseConnection from '../../database/connection';
+import DatabaseConnection, { type DbConnectionConfig, type DbExecutor, type DbRow } from '../../database/connection';
 import { MigrationRunner } from '../../database/MigrationRunner';
 import { ensureSysproObjects } from '../../database/ensureSysproObjects';
 import { planDbFor } from '../../services/planStore';
@@ -14,7 +14,7 @@ import { loadCompanyState } from '../../services/companyState';
 import { validateBody } from '../middleware/validateBody';
 import { requireCompanyAdmin } from '../middleware/requireAuth';
 import { SHOPFLOOR_KEY } from '../../config/secrets';
-import { listDatabasesSchema, connectSchema } from '../validators/statusValidators';
+import { listDatabasesSchema, connectSchema, type ConnectionPayload } from '../validators/statusValidators';
 import { errorMessage } from '../../utils/errors';
 
 const router = Router();
@@ -37,7 +37,7 @@ const upsertEnvValue = (envContent: string, key: string, value: unknown): string
   return `${prefix}${prefix ? '\n' : ''}${nextLine}\n`;
 };
 
-const persistConnectionProfile = (payload: any, database: string, schedulerDatabase: string | null) => {
+const persistConnectionProfile = (payload: ConnectionPayload, database: string, schedulerDatabase: string | null) => {
   let envContent = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, 'utf8') : '';
 
   const updates: Record<string, unknown> = {
@@ -63,34 +63,31 @@ const persistConnectionProfile = (payload: any, database: string, schedulerDatab
 
   fs.writeFileSync(ENV_PATH, envContent, 'utf8');
 };
-const buildConnectionConfig = (payload: any, databaseOverride?: string) => {
+const buildConnectionConfig = (payload: ConnectionPayload, databaseOverride?: string): DbConnectionConfig => {
   const authMode = String(payload?.authMode || 'sql').toLowerCase();
   const server = String(payload?.server || 'localhost').trim() || 'localhost';
   const database = String(databaseOverride || payload?.database || 'master').trim() || 'master';
   const port = payload?.port ? Number(payload.port) : undefined;
   const instanceName = String(payload?.instanceName || '').trim();
 
-  const config: any = {
-    server,
-    database,
-    options: {
-      encrypt: false,
-      trustServerCertificate: true,
-      connectTimeout: 30000
-    }
+  const options: NonNullable<DbConnectionConfig['options']> & { trustedConnection?: boolean } = {
+    encrypt: false,
+    trustServerCertificate: true,
+    connectTimeout: 30000,
   };
+  const config: DbConnectionConfig = { server, database, options };
 
   // Always set instanceName when provided so SQL Browser can resolve the
   // dynamic port. If an explicit port is also given it takes precedence.
   if (instanceName && authMode !== 'windows') {
-    config.options.instanceName = instanceName;
+    options.instanceName = instanceName;
   }
   if (port) {
     config.port = port;
   }
 
   if (authMode === 'windows') {
-    config.options.trustedConnection = true;
+    options.trustedConnection = true;
   } else {
     config.authentication = {
       type: 'default',
@@ -107,7 +104,7 @@ const buildConnectionConfig = (payload: any, databaseOverride?: string) => {
 // ── Schema introspection (live database diagram) ────────────────────────────
 
 /** Render an mssql sys.types row into a human-friendly SQL type string. */
-const formatColumnType = (row: any): string => {
+const formatColumnType = (row: DbRow): string => {
   const t = String(row.typeName || '').toLowerCase();
   const len = Number(row.max_length);
   const prec = Number(row.precision);
@@ -132,7 +129,7 @@ const formatColumnType = (row: any): string => {
  * system catalog — no user data is touched.
  */
 const introspectDatabase = async (
-  db: any,
+  db: DbExecutor,
   role: 'syspro' | 'scheduler',
   name: string
 ) => {
@@ -188,17 +185,17 @@ const introspectDatabase = async (
       GROUP BY p.object_id
     `);
     rowCounts = new Map(
-      rowsRes.recordset.map((r: any) => [Number(r.objectId), Number(r.rows)] as [number, number])
+      rowsRes.recordset.map((r) => [Number(r.objectId), Number(r.rows)] as [number, number])
     );
   } catch {
     // VIEW_DATABASE_STATE may be denied for the login — row counts are optional.
   }
 
   const pkSet = new Set(
-    pkRes.recordset.map((r: any) => `${r.objectId}:${r.columnId}`)
+    pkRes.recordset.map((r) => `${r.objectId}:${r.columnId}`)
   );
 
-  const colsByObject = new Map<number, any[]>();
+  const colsByObject = new Map<number, Array<{ name: string; type: string; nullable: boolean; pk: boolean }>>();
   for (const c of columnsRes.recordset) {
     const list = colsByObject.get(Number(c.objectId)) || [];
     list.push({
@@ -210,7 +207,7 @@ const introspectDatabase = async (
     colsByObject.set(Number(c.objectId), list);
   }
 
-  const objects = objectsRes.recordset.map((o: any) => ({
+  const objects = objectsRes.recordset.map((o) => ({
     schema: o.schemaName,
     name: o.objName,
     type: o.objType as 'table' | 'view',
@@ -218,7 +215,7 @@ const introspectDatabase = async (
     columns: colsByObject.get(Number(o.objectId)) || [],
   }));
 
-  const relationships = fkRes.recordset.map((r: any) => ({
+  const relationships = fkRes.recordset.map((r) => ({
     name: r.fkName,
     fromSchema: r.fromSchema,
     fromTable: r.fromTable,
@@ -231,8 +228,8 @@ const introspectDatabase = async (
   return {
     name,
     role,
-    tableCount: objects.filter((o: any) => o.type === 'table').length,
-    viewCount: objects.filter((o: any) => o.type === 'view').length,
+    tableCount: objects.filter((o) => o.type === 'table').length,
+    viewCount: objects.filter((o) => o.type === 'view').length,
     objects,
     relationships,
   };
@@ -253,7 +250,7 @@ router.get('/schema', async (req: Request, res: Response) => {
   }
 
   try {
-    const databases: any[] = [];
+    const databases: Array<Awaited<ReturnType<typeof introspectDatabase>>> = [];
     if (sysproDb) {
       databases.push(await introspectDatabase(sysproDb, 'syspro', profile.database || 'SYSPRO'));
     }
@@ -338,7 +335,7 @@ router.get('/shopfloor-link', requireCompanyAdmin, (_req: Request, res: Response
 router.post('/databases', validateBody(listDatabasesSchema), async (req: Request, res: Response) => {
   let tempDb: DatabaseConnection | null = null;
   try {
-    tempDb = new DatabaseConnection(buildConnectionConfig(req.body, 'master') as any);
+    tempDb = new DatabaseConnection(buildConnectionConfig(req.body, 'master'));
     await tempDb.connect();
     const result = await tempDb.query(`
       SELECT name
@@ -346,7 +343,7 @@ router.post('/databases', validateBody(listDatabasesSchema), async (req: Request
       WHERE database_id > 4 AND state_desc = 'ONLINE'
       ORDER BY name ASC
     `);
-    res.json({ databases: result.recordset.map((row: any) => row.name) });
+    res.json({ databases: result.recordset.map((row) => row.name) });
   } catch (error) {
     res.status(500).json({ error: errorMessage(error, 'Failed to load company databases') });
   } finally {
@@ -371,12 +368,12 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
       return res.status(400).json({ error: 'Company / database is required' });
     }
 
-    nextSysproDb = new DatabaseConnection(buildConnectionConfig(payload, database) as any);
+    nextSysproDb = new DatabaseConnection(buildConnectionConfig(payload, database));
     await nextSysproDb.connect();
 
     const schedulerDatabase = String(payload.schedulerDatabase || req.app.locals.connectionProfile?.schedulerDatabase || '').trim();
     if (schedulerDatabase) {
-      nextSchedulerDb = new DatabaseConnection(buildConnectionConfig(payload, schedulerDatabase) as any);
+      nextSchedulerDb = new DatabaseConnection(buildConnectionConfig(payload, schedulerDatabase));
       await nextSchedulerDb.connect();
     }
 

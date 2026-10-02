@@ -11,7 +11,7 @@ import { sysproServiceFor } from '../sysproServiceFor';
 import SettingsService, { type SchedulingRulesSettings } from '../../services/SettingsService';
 import APSDatabaseService from '../../services/APSDatabaseService';
 import environment from '../../config/environment';
-import { Job, ScheduleRequest, PinnedOperation } from '../../types';
+import { Job, ScheduleRequest, PinnedOperation, Schedule } from '../../types';
 import { validate, generateScheduleSchema, saveScheduleSchema, approveOverrideSchema, optimizeScheduleSchema } from '../validators/scheduleValidators';
 import { applyAssignedShiftCalendars } from './scheduleShared';
 import changeoverRoutes, { buildClassChangeoverSequences } from './changeovers';
@@ -31,6 +31,13 @@ import { AUTO_PLAN_VERSION_ID } from '../../services/autoScheduler';
 import { planDbFor } from '../../services/planStore';
 import { companyFor } from '../companyContext';
 import { errorMessage, errorStatus } from '../../utils/errors';
+import type { WorkerOptions } from 'worker_threads';
+import type { AppLike } from '../../types/appLocals';
+import type { WorkerPayload, WorkerMessage } from '../../services/scheduleWorkerTypes';
+import type { JobMaterialPlan } from '../../services/SysproDatabaseService';
+import type { CrewSetup, SysproEmployee } from '../../utils/crews';
+import type { StoredSchedule } from '../../services/ScheduleStore';
+import type { z } from 'zod';
 
 /**
  * Operation overlap from Settings → Transfer/Overlap: "Use transfer" on and
@@ -42,16 +49,16 @@ import { errorMessage, errorStatus } from '../../utils/errors';
  * follow its people's shifts. Skipped when crews are off or nobody is mapped;
  * best-effort (an error just means no shift data → employees count always).
  */
-async function loadCrewEmployees(sysproDb: any, setup: any): Promise<Array<{ code: string; shiftId?: string }> | undefined> {
+async function loadCrewEmployees(sysproDb: DbExecutor | null | undefined, setup: CrewSetup | undefined): Promise<Array<{ code: string; shiftId?: string }> | undefined> {
   if (!sysproDb || !setup?.enabled) return undefined;
-  const mapped = new Set<string>((setup.pools || []).flatMap((p: any) => p.employees || []));
+  const mapped = new Set<string>((setup.pools || []).flatMap((p) => p.employees || []));
   if (!mapped.size) return undefined;
   try {
     const r = await sysproDb.query(`IF OBJECT_ID('BomEmployee') IS NULL SELECT TOP 0 1 AS x ELSE SELECT * FROM BomEmployee`);
     return (r.recordset || [])
-      .map((row: any) => mapEmployeeRow(row))
-      .filter((e: any) => e && mapped.has(e.code))
-      .map((e: any) => ({ code: e.code, shiftId: e.shiftId }));
+      .map((row) => mapEmployeeRow(row))
+      .filter((e): e is SysproEmployee => !!e && mapped.has(e.code))
+      .map((e) => ({ code: e.code, shiftId: e.shiftId }));
   } catch {
     return undefined;
   }
@@ -62,6 +69,9 @@ function overlapFractionFrom(rules: SchedulingRulesSettings | undefined): number
   const pct = Number(rules.overlapPercent);
   return Number.isFinite(pct) && pct > 0 && pct < 100 ? pct / 100 : undefined;
 }
+
+/** Body of POST /optimize (validated by optimizeScheduleSchema). */
+type OptimizeBody = z.infer<typeof optimizeScheduleSchema>;
 
 const router = Router();
 
@@ -80,14 +90,14 @@ const WORKER_TIMEOUT_MS = Math.max(
  * The worker is terminated if it runs past WORKER_TIMEOUT_MS, so a stuck run
  * can no longer hang the HTTP request (and the planner's screen) forever.
  */
-export function runScheduleWorker(workerData: any, timeoutMs = WORKER_TIMEOUT_MS): Promise<any> {
-  return new Promise<any>((resolve, reject) => {
+export function runScheduleWorker(workerData: WorkerPayload, timeoutMs = WORKER_TIMEOUT_MS): Promise<Schedule> {
+  return new Promise<Schedule>((resolve, reject) => {
     // __dirname is .../dist/api/routes in production, .../src/api/routes in dev
     const isCompiled = __dirname.includes('dist');
     const workerPath = isCompiled
       ? path.resolve(__dirname, '../../services/scheduleWorker.js')
       : path.resolve(__dirname, '../../services/scheduleWorker.ts');
-    const workerOptions: any = { workerData };
+    const workerOptions: WorkerOptions = { workerData };
     if (!isCompiled) workerOptions.execArgv = ['--require', 'ts-node/register'];
     const worker = new Worker(workerPath, workerOptions);
 
@@ -106,7 +116,7 @@ export function runScheduleWorker(workerData: any, timeoutMs = WORKER_TIMEOUT_MS
       void worker.terminate();
     }, timeoutMs);
 
-    worker.on('message', (msg: any) =>
+    worker.on('message', (msg: WorkerMessage<Schedule>) =>
       finish(() => (msg.success ? resolve(msg.schedule) : reject(new Error(msg.error))))
     );
     worker.on('error', (err) => finish(() => reject(err)));
@@ -117,12 +127,12 @@ export function runScheduleWorker(workerData: any, timeoutMs = WORKER_TIMEOUT_MS
 }
 
 const buildCapacityMaps = (
-  app: any,
+  app: AppLike,
   resources: Array<{ resourceId: string; worcentreId: string }>
 ): { resourceCapacities: Map<string, number>; workcentreCapacities: Map<string, number> } => {
   const resourceCapacities = new Map<string, number>();
   const workcentreCapacities = new Map<string, number>();
-  const definitions = app.locals.resourceDefinitions || {};
+  const definitions = (app.locals.resourceDefinitions || {}) as Record<string, { activated?: boolean; quantity?: number } | undefined>;
 
   for (const resource of resources) {
     const definition = definitions[resource.resourceId];
@@ -141,8 +151,8 @@ const buildCapacityMaps = (
   return { resourceCapacities, workcentreCapacities };
 };
 
-const mergeImportedJobs = (app: any, jobs: Job[]): Job[] => {
-  const importedJobs: Job[] = app.locals.importedJobs || [];
+const mergeImportedJobs = (app: AppLike, jobs: Job[]): Job[] => {
+  const importedJobs = (app.locals.importedJobs || []) as Job[];
   if (!importedJobs.length) return jobs;
 
   const merged = [...jobs];
@@ -210,7 +220,7 @@ export async function generateHandler(req: Request, res: Response) {
       sysproService.getResources(),
       sysproService.getInventory()
     ]);
-    const resources = applyAssignedShiftCalendars(req.app, rawResources as any);
+    const resources = applyAssignedShiftCalendars(req.app, rawResources);
     const requestedDirection = schedulingDirection === 'backward' ? 'backward' : 'forward';
     const requestedAnchorMode = dateAnchorMode === 'manual' ? 'manual' : 'syspro';
     const parsedAnchorDate = anchorDate ? new Date(anchorDate) : null;
@@ -308,16 +318,16 @@ export async function generateHandler(req: Request, res: Response) {
     const workcentreMap = new Map(workcentres.map((wc) => [wc.worcentreId, wc]));
     const resourceMap = new Map(resources.map((r) => [r.resourceId, r]));
     const materialMap = new Map(materials.map((m) => [m.materialId, m]));
-    const { resourceCapacities, workcentreCapacities } = buildCapacityMaps(req.app, resources as any);
+    const { resourceCapacities, workcentreCapacities } = buildCapacityMaps(req.app, resources);
 
     // Build per-job material availability once and pass it to the engine.
     // The engine emits one Critical/Warning ConstraintViolation per shortage
     // line and refuses to place jobs that have any uncovered components.
     req.log.info('Building material availability plan');
-    let materialPlan: Map<string, any> | undefined;
+    let materialPlan: Map<string, JobMaterialPlan> | undefined;
     try {
-      materialPlan = await sysproService.getJobMaterialPlans(jobs as any);
-      const shortJobs = Array.from(materialPlan.values()).filter((p: any) => !p.available).length;
+      materialPlan = await sysproService.getJobMaterialPlans(jobs);
+      const shortJobs = Array.from(materialPlan.values()).filter((p) => !p.available).length;
       req.log.info({ jobsAnalysed: materialPlan.size, shortJobs }, 'Material plan ready');
     } catch (err) {
       req.log.warn({ err }, 'Material plan failed; continuing without enforcement');
@@ -363,7 +373,7 @@ export async function generateHandler(req: Request, res: Response) {
     // Expand ProductClass-level changeovers into item pairs (prepended so any
     // explicit item-level sch_SetupMatrix row still overrides).
     try {
-      const classDerived = await buildClassChangeoverSequences(req.app.locals.schedulerDb, sysproDb, jobs as any, req.log);
+      const classDerived = await buildClassChangeoverSequences(req.app.locals.schedulerDb, sysproDb, jobs, req.log);
       if (classDerived.length) setupSequences = [...classDerived, ...setupSequences];
     } catch (e) { req.log.debug({ err: e }, 'class changeover expansion skipped'); }
 
@@ -425,7 +435,7 @@ export async function generateHandler(req: Request, res: Response) {
     req.log.info('Running finite capacity scheduler (worker thread)');
 
     // Serialize Maps to arrays of entries for transfer to worker
-    const workerPayload = {
+    const workerPayload: WorkerPayload = {
       jobs,
       workcentres: Array.from(workcentreMap.entries()),
       resources: Array.from(resourceMap.entries()),
@@ -456,9 +466,9 @@ export async function generateHandler(req: Request, res: Response) {
       // Frozen-zone auto-pins are merged first; manual pins override them.
       pinnedOperations: (() => {
         // Precedence: frozen zone < pinned jobs < manual operation pins.
-        const merged = new Map<string, any>(frozenPins);
+        const merged = new Map<string, PinnedOperation>(frozenPins);
         for (const [key, pin] of jobPins) merged.set(key, pin);
-        const pins: Record<string, any> = req.app.locals.pinnedOperations || {};
+        const pins: Record<string, PinnedOperation> = req.app.locals.pinnedOperations || {};
         for (const [key, pin] of Object.entries(pins)) merged.set(key, pin);
         return merged.size ? Array.from(merged.entries()) : undefined;
       })(),
@@ -474,12 +484,12 @@ export async function generateHandler(req: Request, res: Response) {
     if (materialPlan) {
       try {
         const scheduledOrder: string[] = [...schedule.jobSchedules]
-          .sort((a: any, b: any) =>
+          .sort((a, b) =>
             new Date(a.plannedStartDate).getTime() - new Date(b.plannedStartDate).getTime()
           )
-          .map((js: any) => String(js.jobId));
+          .map((js) => String(js.jobId));
 
-        const refinedPlan = await sysproService.getJobMaterialPlans(jobs as any, scheduledOrder);
+        const refinedPlan = await sysproService.getJobMaterialPlans(jobs, scheduledOrder);
 
         // Emit new violations only for jobs that are now short due to
         // schedule-order depletion but were OK in the pre-schedule plan.
@@ -538,8 +548,8 @@ export async function generateHandler(req: Request, res: Response) {
       // New master revision when the run replaced the master (not for what-ifs).
       ...(masterRevisionOut !== undefined ? { masterRevision: masterRevisionOut } : {}),
       executionTimeMs: Date.now() - startedAt,
-      warningCount: schedule.constraintViolations.filter((c: any) => c.severity === 'Warning').length,
-      errorCount: schedule.constraintViolations.filter((c: any) => c.severity === 'Critical').length
+      warningCount: schedule.constraintViolations.filter((c) => c.severity === 'Warning').length,
+      errorCount: schedule.constraintViolations.filter((c) => c.severity === 'Critical').length
     });
   } catch (error) {
     req.log.error({ err: error }, 'Error generating schedule');
@@ -572,7 +582,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
       selectedJobIds,
       productionMode,
       lineGroupOverrides,
-    } = req.body as any;
+    } = req.body as OptimizeBody;
 
     const candidateRules: SchedulingRule[] =
       Array.isArray(rules) && rules.length ? rules : ALL_RULES;
@@ -590,7 +600,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
       sysproService.getResources(),
       sysproService.getInventory(),
     ]);
-    const resources = applyAssignedShiftCalendars(req.app, rawResources as any);
+    const resources = applyAssignedShiftCalendars(req.app, rawResources);
     const requestedDirection = schedulingDirection === 'backward' ? 'backward' : 'forward';
     const requestedAnchorMode = dateAnchorMode === 'manual' ? 'manual' : 'syspro';
     const parsedAnchorDate = anchorDate ? new Date(anchorDate) : null;
@@ -648,11 +658,11 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
     const workcentreMap = new Map(workcentres.map((wc) => [wc.worcentreId, wc]));
     const resourceMap = new Map(resources.map((r) => [r.resourceId, r]));
     const materialMap = new Map(materials.map((m) => [m.materialId, m]));
-    const { resourceCapacities, workcentreCapacities } = buildCapacityMaps(req.app, resources as any);
+    const { resourceCapacities, workcentreCapacities } = buildCapacityMaps(req.app, resources);
 
-    let materialPlan: Map<string, any> | undefined;
+    let materialPlan: Map<string, JobMaterialPlan> | undefined;
     try {
-      materialPlan = await sysproService.getJobMaterialPlans(jobs as any);
+      materialPlan = await sysproService.getJobMaterialPlans(jobs);
     } catch {
       materialPlan = undefined;
     }
@@ -671,11 +681,11 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
       }
     } catch { /* optional */ }
     try {
-      const classDerived = await buildClassChangeoverSequences(req.app.locals.schedulerDb, sysproDb, jobs as any, req.log);
+      const classDerived = await buildClassChangeoverSequences(req.app.locals.schedulerDb, sysproDb, jobs, req.log);
       if (classDerived.length) setupSequences = [...classDerived, ...setupSequences];
     } catch (e) { req.log.debug({ err: e }, 'class changeover expansion skipped'); }
 
-    const basePayload = {
+    const basePayload: Omit<WorkerPayload, 'jobs'> = {
       workcentres: Array.from(workcentreMap.entries()),
       resources: Array.from(resourceMap.entries()),
       materials: Array.from(materialMap.entries()),
@@ -708,7 +718,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
     for (const rule of candidateRules) {
       try {
         const schedule = await runWorker(rule);
-        runResults.push({ rule, metrics: schedule.metrics as any });
+        runResults.push({ rule, metrics: schedule.metrics });
       } catch (err) {
         req.log.warn({ err, rule }, 'Rule run failed during optimization');
         runResults.push({
@@ -774,7 +784,7 @@ router.post('/auto/run', requireAuth, requirePlanner, async (req: AuthRequest, r
 });
 
 /** Which of these job numbers have no WipMaster row (checked in chunks of 500). */
-async function jobsMissingFromSyspro(sysproDb: any, jobIds: string[]): Promise<Set<string>> {
+async function jobsMissingFromSyspro(sysproDb: DbExecutor, jobIds: string[]): Promise<Set<string>> {
   const missing = new Set(jobIds);
   for (let i = 0; i < jobIds.length; i += 500) {
     const chunk = jobIds.slice(i, i + 500);
@@ -873,10 +883,10 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
   if (!validation.ok) return res.status(400).json(validation.error);
 
   try {
-    const { schedule } = req.body as { schedule: any };
+    const { schedule } = req.body as { schedule: StoredSchedule };
     // The master revision the board was loaded from. Omitted by old clients
     // (no check); null = "no master when I loaded".
-    const rawBase = (req.body as any).baseRevision;
+    const rawBase: unknown = req.body?.baseRevision;
     const baseRevision = rawBase === undefined ? undefined : rawBase === null ? null : Number(rawBase);
     if (baseRevision !== undefined && baseRevision !== null && !Number.isFinite(baseRevision)) {
       return res.status(400).json({ error: 'baseRevision must be a number or null' });
@@ -896,7 +906,8 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
     res.json({ saved: true, scheduleId: schedule.scheduleId, revision });
   } catch (error) {
     if (error instanceof VersionError) {
-      return res.status(error.status).json({ error: error.message, code: (error as any).code, currentRevision: (error as any).currentRevision });
+      const extra = error as VersionError & { code?: string; currentRevision?: number | null };
+      return res.status(error.status).json({ error: error.message, code: extra.code, currentRevision: extra.currentRevision });
     }
     req.log.error({ err: error }, 'Error saving schedule');
     res.status(500).json({ error: errorMessage(error) });
@@ -1102,7 +1113,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
 
     // One export per company at a time: a double click or a second planner
     // would otherwise write the same jobs (and LYNQ BPL orders) twice.
-    const lockKey = String((plan as any).schema ?? 'default');
+    const lockKey = String((plan as { schema?: string }).schema ?? 'default');
     if (exportsRunning.has(lockKey)) {
       return res.status(409).json({ error: 'A send to SYSPRO is already running for this company — wait for it to finish.' });
     }
@@ -1128,12 +1139,12 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
 
     // Bulk-imported jobs that SYSPRO doesn't have would fail "No WipMaster row
     // updated" and roll back the whole send. Leave them out and say so.
-    const importedIds = new Set<string>(((req.app.locals.importedJobs || []) as any[]).map((j) => String(j?.jobId ?? '').trim()));
-    const importedCandidates = planned.toPublish.filter((j: any) => importedIds.has(String(j.jobId).trim()));
+    const importedIds = new Set<string>(((req.app.locals.importedJobs || []) as Array<{ jobId?: string }>).map((j) => String(j?.jobId ?? '').trim()));
+    const importedCandidates = planned.toPublish.filter((j) => importedIds.has(String(j.jobId).trim()));
     const notInSyspro = importedCandidates.length
-      ? await jobsMissingFromSyspro(sysproDb, importedCandidates.map((j: any) => String(j.jobId).trim()))
+      ? await jobsMissingFromSyspro(sysproDb, importedCandidates.map((j) => String(j.jobId).trim()))
       : new Set<string>();
-    const toPublish = planned.toPublish.filter((j: any) => !notInSyspro.has(String(j.jobId).trim()));
+    const toPublish = planned.toPublish.filter((j) => !notInSyspro.has(String(j.jobId).trim()));
     const skipped = Array.from(notInSyspro);
     if (skipped.length) req.log.info({ skipped }, 'Imported jobs not in SYSPRO left out of the send');
 
@@ -1197,8 +1208,8 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
       // error names (if any) so it shows as Error in the job list.
       try {
         const message = exportResult.errorMessages.join('; ');
-        const culprit = jobIdFromExportError(message, toPublish.map((j: any) => j.jobId));
-        const job = culprit ? toPublish.find((j: any) => j.jobId === culprit) : null;
+        const culprit = jobIdFromExportError(message, toPublish.map((j) => j.jobId));
+        const job = culprit ? toPublish.find((j) => j.jobId === culprit) : null;
         if (job) await recordError(await planDbFor(req.app), job, scheduleId, message);
       } catch (statusErr) {
         req.log.warn({ err: statusErr }, 'Could not record per-job publish error');

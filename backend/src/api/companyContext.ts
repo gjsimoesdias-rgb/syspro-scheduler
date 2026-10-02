@@ -14,7 +14,6 @@
  */
 import type { Request } from 'express';
 import { companyDbOf } from '../services/planStore';
-import type { DbExecutor } from '../database/connection';
 import type { AppLike } from '../types/appLocals';
 
 const CACHE_MS = 60_000;

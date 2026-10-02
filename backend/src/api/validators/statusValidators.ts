@@ -20,3 +20,9 @@ export const connectSchema = connectionPayloadBase.extend({
   database: z.string().min(1, 'database is required'),
   schedulerDatabase: z.string().optional(),
 });
+
+/** A connection request body (database is optional when listing databases). */
+export type ConnectionPayload = z.infer<typeof connectionPayloadBase> & {
+  database?: string;
+  schedulerDatabase?: string;
+};

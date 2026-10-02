@@ -2,19 +2,34 @@
  * Helpers shared by the schedule, CTP and changeover routers.
  */
 import { applyCalendarExceptions } from '../../utils/calendarExceptions';
+import type { CalendarException, CalendarLike } from '../../utils/calendarExceptions';
+import type { AppLike } from '../../types/appLocals';
 
 /** Resource calendars from their assigned shift template, plus calendar exceptions. */
-export const applyAssignedShiftCalendars = (app: any, resources: any[]) =>
-  applyCalendarExceptions(applyShiftTemplates(app, resources), app.locals.calendarExceptions);
+/** A shift template (Resources > Shifts) as stored in app state. */
+interface ShiftTemplate {
+  shiftId: string;
+  name: string;
+  workingDays?: number[];
+  hoursPerDay?: number;
+  startTime?: string;
+  endTime?: string;
+  diversions?: NonNullable<NonNullable<CalendarLike['shifts']>[number]['diversions']>;
+}
 
-export const applyShiftTemplates = (app: any, resources: any[]) => {
-  const definitions = app.locals.resourceDefinitions || {};
-  const shifts = app.locals.shiftTemplates || [];
-  const shiftById = new Map<string, any>(shifts.map((shift: any) => [String(shift.shiftId), shift]));
+type ResourceWithCalendar = { resourceId: string; worcentreId?: string; calendar?: CalendarLike | null };
 
-  return resources.map((resource: any) => {
+export const applyAssignedShiftCalendars = <R extends ResourceWithCalendar>(app: AppLike, resources: R[]): R[] =>
+  applyCalendarExceptions(applyShiftTemplates(app, resources), app.locals.calendarExceptions as CalendarException[] | undefined);
+
+export const applyShiftTemplates = <R extends ResourceWithCalendar>(app: AppLike, resources: R[]): R[] => {
+  const definitions = (app.locals.resourceDefinitions || {}) as Record<string, { shiftId?: string } | undefined>;
+  const shifts = (app.locals.shiftTemplates || []) as ShiftTemplate[];
+  const shiftById = new Map<string, ShiftTemplate>(shifts.map((shift) => [String(shift.shiftId), shift]));
+
+  return resources.map((resource) => {
     const definition = definitions[resource.resourceId];
-    const assignedShift: any = shiftById.get(String(definition?.shiftId || 'default'));
+    const assignedShift = shiftById.get(String(definition?.shiftId || 'default'));
     if (!assignedShift) {
       return resource;
     }

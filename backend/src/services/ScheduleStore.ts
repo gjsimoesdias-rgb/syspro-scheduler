@@ -307,7 +307,8 @@ export async function createWhatIf(
     }
   );
   const created = await getVersion(db, opts.newId);
-  return created!.summary;
+  if (!created) throw new VersionError('The new what-if could not be read back', 500);
+  return created.summary;
 }
 
 /** Replace a what-if's schedule (e.g. regenerated with other settings, or edited on the board). */

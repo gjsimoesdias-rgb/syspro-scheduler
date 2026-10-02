@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import SysproDatabaseService from '../../services/SysproDatabaseService';
 import { sysproServiceFor, includeSuggestedJobsFor } from '../sysproServiceFor';
-import { Job, Operation } from '../../types';
+import { Job, Material, Operation } from '../../types';
 import { setLocal } from '../../utils/setLocal';
 import { normaliseJobFlags, setJobFlag, EMPTY_JOB_FLAGS } from '../../utils/jobFlags';
 import { validateBody } from '../middleware/validateBody';
@@ -13,6 +13,8 @@ import { bulkImportJobsSchema, bulkImportOperationsSchema } from '../validators/
 import { requirePlanner } from '../middleware/requireAuth';
 import { normaliseMarkers, EMPTY_MARKERS } from '../../utils/jobMarkers';
 import { errorMessage } from '../../utils/errors';
+import type { AppLike } from '../../types/appLocals';
+import type { DbResult, DbRow } from '../../database/connection';
 
 const router = Router();
 
@@ -81,27 +83,25 @@ const createImportedJob = (input: ImportedJobPayload): Job => {
   };
 };
 
-const buildMergedImportedJobs = (app: any): Job[] => {
-  const importedJobs: Job[] = app.locals.importedJobs || [];
-  const importedOps: ImportedOperationPayload[] = app.locals.importedOperations || [];
+const buildMergedImportedJobs = (app: AppLike): Job[] => {
+  const importedJobs = (app.locals.importedJobs || []) as Job[];
+  const importedOps = (app.locals.importedOperations || []) as ImportedOperationPayload[];
 
   const jobsMap = new Map<string, Job>(importedJobs.map((job) => [job.jobId, { ...job, operations: [...job.operations] }]));
 
   for (const op of importedOps) {
-    if (!jobsMap.has(op.jobId)) {
-      jobsMap.set(
-        op.jobId,
-        createImportedJob({
+    let target = jobsMap.get(op.jobId);
+    if (!target) {
+      target = createImportedJob({
           jobId: op.jobId,
           dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           quantity: 1,
           priority: 'Normal',
           description: `Imported ${op.jobId}`
-        })
-      );
+      });
+      jobsMap.set(op.jobId, target);
     }
 
-    const target = jobsMap.get(op.jobId)!;
     const built = buildImportedOperation(op);
     const existingIndex = target.operations.findIndex((x) => x.sequence === built.sequence);
     if (existingIndex >= 0) {
@@ -317,8 +317,8 @@ router.post('/material-plan', async (req: Request, res: Response) => {
     const sysproService = await sysproServiceFor(req, sysproDb);
     const inputJobs = Array.isArray(req.body?.jobs) ? req.body.jobs : await sysproService.getOpenJobs();
     const inventory = await sysproService.getInventory().catch(() => []);
-    const inventoryByCode = new Map<string, any>(
-      (inventory as any[]).map((item: any) => [String(item.code || item.materialId || '').trim(), item] as [string, any])
+    const inventoryByCode = new Map<string, Material>(
+      inventory.map((item) => [String(item.code || item.materialId || '').trim(), item] as [string, Material])
     );
 
     const poResult = await sysproDb.query(`
@@ -336,16 +336,16 @@ router.post('/material-plan', async (req: Request, res: Response) => {
       BEGIN CATCH
         SELECT TOP 0 CAST('' AS varchar(50)) AS materialCode, CAST(0 AS decimal(18,4)) AS openQty;
       END CATCH
-    `).catch(() => ({ recordset: [] }));
+    `).catch((): DbResult => ({ recordset: [] }));
     const poByCode = new Map<string, number>(
-      (poResult.recordset || []).map((row: any) => [String(row.materialCode || '').trim(), Number(row.openQty) || 0] as [string, number])
+      (poResult.recordset || []).map((row: DbRow) => [String(row.materialCode || '').trim(), Number(row.openQty) || 0] as [string, number])
     );
 
-    const materials: any[] = [];
+    const materials: Array<Record<string, unknown>> = [];
     const jobStatuses: Record<string, 'Materials' | 'Partial' | 'No Materials'> = {};
 
     for (const rawJob of inputJobs) {
-      const job = rawJob as Job & Record<string, any>;
+      const job = rawJob as Job;
       const bomLines = await sysproService.getMaterialsByJob(
         String(job.itemCode || job.jobId || ''),
         String(job.jobId || '')
@@ -361,7 +361,7 @@ router.post('/material-plan', async (req: Request, res: Response) => {
 
       for (const line of bomLines) {
         const requiredQty = Math.max(0, Number(line.quantityRequired || 0) * Math.max(1, Number(job.quantity) || 1) * (1 + Number(line.scrapFactor || 0)));
-        const stock = inventoryByCode.get(String(line.componentCode || '').trim()) as any;
+        const stock = inventoryByCode.get(String(line.componentCode || '').trim());
         const stockOnHand = Number(stock?.stockQty) || 0;
         const reservedQty = Number(stock?.reservedQty) || 0;
         const openPoQty = Number(poByCode.get(String(line.componentCode || '').trim()) || 0);
@@ -487,7 +487,7 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
     const thisJobId = String(jobId).trim();
     const holdsByCode = new Map<string, number>();
     const ownOutstandingByCode = new Map<string, number>();
-    for (const [otherJobId, reqLines] of requirementsByJob as Map<string, any[]>) {
+    for (const [otherJobId, reqLines] of requirementsByJob) {
       for (const l of reqLines) {
         const target = otherJobId === thisJobId ? ownOutstandingByCode : holdsByCode;
         target.set(l.componentCode, (target.get(l.componentCode) || 0) + (Number(l.outstandingQty) || 0));
@@ -507,7 +507,7 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
     let partialCount = 0;
     let shortCount = 0;
 
-    const lines = bomLines.map((line: any) => {
+    const lines = bomLines.map((line) => {
       const code = String(line.componentCode || '').trim();
       const whs = warehousesByCode.get(code) || [];
       const incoming = receiptsByCode.get(code) || [];
@@ -517,7 +517,7 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
       const wipAlloc = whs.reduce((s, w) => s + w.qtyAllocWip, 0);
       const soAlloc = whs.reduce((s, w) => s + w.qtyAllocSO, 0);
       const description =
-        whs.find((w) => w.description)?.description || line.description || '';
+        whs.find((w) => w.description)?.description || '';
       const unitOfMeasure =
         line.unitOfMeasure || whs.find((w) => w.unitOfMeasure)?.unitOfMeasure || 'EA';
       const leadTimeDays = whs.find((w) => w.leadTimeDays > 0)?.leadTimeDays || 0;
@@ -532,9 +532,8 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
       const scrap = Math.max(0, Number(line.scrapFactor) || 0);
       // Prefer the job's real outstanding need (required − issued) from
       // WipJobAllMat; fall back to qty-per × order qty for non-SYSPRO jobs.
-      const requiredQty = ownOutstandingByCode.has(code)
-        ? ownOutstandingByCode.get(code)!
-        : Math.max(0, (Number(line.quantityRequired) || 0) * orderQty * (1 + scrap));
+      const requiredQty = ownOutstandingByCode.get(code)
+        ?? Math.max(0, (Number(line.quantityRequired) || 0) * orderQty * (1 + scrap));
       const shortageQty = Math.max(0, requiredQty - availableQty);
 
       let status: 'Materials' | 'Partial' | 'No Materials';
@@ -596,9 +595,9 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
     res.json({
       jobId,
       itemCode: job.itemCode,
-      itemDescription: (job as any).description || (job as any).itemDescription || '',
+      itemDescription: (job as Job & { itemDescription?: string }).description || (job as Job & { itemDescription?: string }).itemDescription || '',
       quantity: orderQty,
-      dueDate: (job as any).dueDate || null,
+      dueDate: job.dueDate || null,
       status: overallStatus,
       lineCount: lines.length,
       okCount,

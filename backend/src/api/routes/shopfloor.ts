@@ -15,6 +15,9 @@ import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
+/** One operation on the shop-floor board. */
+interface ShopOp { jobId: string; opId: string; resourceId?: string; plannedStartDate: Date | string; plannedEndDate: Date | string }
+
 /** Plant-local YYYY-MM-DD (toISOString() would give the UTC date). */
 const localDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -47,7 +50,7 @@ router.get('/today', async (req: Request, res: Response) => {
     todayEnd.setHours(23, 59, 59, 999);
 
     // Group today's operations by workcentre
-    const byWC = new Map<string, any[]>();
+    const byWC = new Map<string, ShopOp[]>();
     for (const jobSched of schedule.jobSchedules ?? []) {
       for (const op of jobSched.operationSchedules ?? []) {
         const start = new Date(op.plannedStartDate);
@@ -56,8 +59,9 @@ router.get('/today', async (req: Request, res: Response) => {
         if (end < todayStart || start > todayEnd) continue;
 
         const wc = op.workcentreId || 'Unknown';
-        if (!byWC.has(wc)) byWC.set(wc, []);
-        byWC.get(wc)!.push({
+        const list = byWC.get(wc) ?? [];
+        byWC.set(wc, list);
+        list.push({
           jobId:            jobSched.jobId,
           opId:             op.opId,
           resourceId:       op.resourceId,
@@ -104,7 +108,7 @@ router.get('/workcentre/:wcId', async (req: Request, res: Response) => {
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
     const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
 
-    const ops: any[] = [];
+    const ops: ShopOp[] = [];
     for (const jobSched of schedule.jobSchedules ?? []) {
       for (const op of jobSched.operationSchedules ?? []) {
         if (op.workcentreId !== wcId) continue;

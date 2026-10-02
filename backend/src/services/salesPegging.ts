@@ -94,8 +94,9 @@ export function pegSalesOrders(args: {
     const q = Number(j.quantity) || 0;
     if (!code || q <= 0) continue;
     const end = toDate(j.end);
-    const s: Supply = { jobId: norm(j.jobId), at: end && end < now ? now : end, left: q };
-    jobById.set(s.jobId!, s);
+    const jobId = norm(j.jobId);
+    const s: Supply = { jobId, at: end && end < now ? now : end, left: q };
+    jobById.set(jobId, s);
     const list = jobSupply.get(code) || [];
     list.push(s);
     jobSupply.set(code, list);
@@ -147,7 +148,7 @@ export function pegSalesOrders(args: {
   const lines: PeggedLine[] = work.map((w) => {
     const shortQty = w.need > EPS ? r4(w.need) : 0;
     const undated = w.pegs.some((p) => !p.availableAt);
-    const times = w.pegs.filter((p) => p.availableAt).map((p) => new Date(p.availableAt!).getTime());
+    const times = w.pegs.flatMap((p) => (p.availableAt ? [new Date(p.availableAt).getTime()] : []));
     const availableAt = !undated && times.length ? new Date(Math.max(...times)).toISOString() : null;
     // Late = available after the end of the ship day.
     const shipEnd = w.ship ? new Date(w.ship.getFullYear(), w.ship.getMonth(), w.ship.getDate() + 1) : null;

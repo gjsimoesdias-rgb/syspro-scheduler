@@ -11,8 +11,12 @@ import { applyAssignedShiftCalendars } from './scheduleShared';
 import { planDbFor } from '../../services/planStore';
 import { errorMessage } from '../../utils/errors';
 import { parseStoredSchedule } from '../../services/ScheduleStore';
+import type { DbRow } from '../../database/connection';
 
 const router = Router();
+
+/** One operation of a CTP quote routing. */
+interface CtpOp { workcentreId: string; setupMinutes: number; runMinutes: number; description: string }
 
 // ═══════════════════ Capable-to-Promise (order promising) ════════════════════
 
@@ -33,7 +37,7 @@ router.post('/ctp', async (req: Request, res: Response) => {
     // Resources (with assigned shift calendars, same as /generate).
     const sysproService = new SysproDatabaseService(sysproDb);
     const rawResources = await sysproService.getResources();
-    const resources = applyAssignedShiftCalendars(req.app, rawResources as any);
+    const resources = applyAssignedShiftCalendars(req.app, rawResources);
 
     // Committed load = busy intervals from the latest saved schedule.
     const busyByResource = new Map<string, { start: number; end: number }[]>();
@@ -48,8 +52,9 @@ router.post('/ctp', async (req: Request, res: Response) => {
             const start = new Date(os.plannedStartDate).getTime();
             const end = new Date(os.plannedEndDate).getTime();
             if (!os.resourceId || Number.isNaN(start) || Number.isNaN(end) || end <= start) continue;
-            if (!busyByResource.has(os.resourceId)) busyByResource.set(os.resourceId, []);
-            busyByResource.get(os.resourceId)!.push({ start, end });
+            const busy = busyByResource.get(os.resourceId) ?? [];
+            busy.push({ start, end });
+            busyByResource.set(os.resourceId, busy);
           }
         }
       }
@@ -70,7 +75,7 @@ router.post('/ctp', async (req: Request, res: Response) => {
       subRoutings: subJobs?.length
         ? subJobs.map((sj) => ({ label: sj.label, operations: mapOps(sj.operations) }))
         : undefined,
-      resources: resources as any,
+      resources,
       busyByResource,
       earliestStart: earliestStart ? new Date(earliestStart) : new Date(),
       desiredDueDate: desiredDueDate ? new Date(desiredDueDate) : undefined,
@@ -181,13 +186,13 @@ router.get('/ctp/stock-routing/:stockCode', async (req: Request, res: Response) 
       END
     `;
 
-    const buildOps = (rows: any[], qty: number) =>
-      (rows || []).map((r: any) => ({
+    const buildOps = (rows: DbRow[], qty: number): CtpOp[] =>
+      (rows || []).map((r) => ({
         workcentreId: String(r.workcentreId || '').trim(),
         setupMinutes: Math.round((Number(r.setupHours) || 0) * 60),
         runMinutes: Math.max(1, Math.round((Number(r.unitRunHours) || 0) * 60 * qty)),
         description: `Op ${String(r.operation ?? '').trim()}`,
-      })).filter((op: any) => op.workcentreId);
+      })).filter((op) => op.workcentreId);
 
     const routingResult = await sysproDb.queryWithParams(routingSql, { stockCode });
     const operations = buildOps(routingResult.recordset, quantity);
@@ -207,7 +212,7 @@ router.get('/ctp/stock-routing/:stockCode', async (req: Request, res: Response) 
     // exactly for chains and is conservative (never optimistic) when a branch
     // itself has parallel children. Children are traversed even when they have
     // no routing of their own (phantoms), so deeper made-in levels are found.
-    const subJobs: Array<{ label: string; operations: any[] }> = [];
+    const subJobs: Array<{ label: string; operations: CtpOp[] }> = [];
     try {
       const structureSql = `
         IF OBJECT_ID('BomStructure', 'U') IS NULL
@@ -262,7 +267,7 @@ router.get('/ctp/stock-routing/:stockCode', async (req: Request, res: Response) 
         qty: number,
         depth: number,
         ancestors: Set<string>,
-        acc: any[]
+        acc: CtpOp[]
       ): Promise<void> => {
         if (depth > MAX_DEPTH) {
           warnings.push(`BOM deeper than ${MAX_DEPTH} levels under ${code} — deeper levels omitted.`);
@@ -280,7 +285,7 @@ router.get('/ctp/stock-routing/:stockCode', async (req: Request, res: Response) 
           await explodeBranch(childCode, childQty, depth + 1, ancestors, acc);
         }
         const routing = await sysproDb.queryWithParams(routingSql, { stockCode: code });
-        const ownOps = buildOps(routing.recordset, qty).map((op: any) => ({
+        const ownOps = buildOps(routing.recordset, qty).map((op) => ({
           ...op,
           description: `${code} · ${op.description}`,
         }));
@@ -296,7 +301,7 @@ router.get('/ctp/stock-routing/:stockCode', async (req: Request, res: Response) 
         }
         const compCode = String(comp.component).trim();
         const compQty = Math.max(1, Math.ceil((Number(comp.qtyPer) || 1) * quantity));
-        const branchOps: any[] = [];
+        const branchOps: CtpOp[] = [];
         await explodeBranch(compCode, compQty, 1, new Set([stockCode]), branchOps);
         if (branchOps.length > 50) {
           warnings.push(`${compCode}: branch has ${branchOps.length} operations — trimmed to 50 for simulation.`);

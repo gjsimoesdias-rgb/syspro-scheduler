@@ -843,10 +843,10 @@ export class SchedulingEngine {
         const overlapFraction = validFraction(prevTransfer) ? prevTransfer : validFraction(globalOverlap) ? globalOverlap : undefined;
         const overlapping = overlapFraction !== undefined && !!previousSlot && !previousWasSubcontract && !operation.isSubcontract;
         let chainFromMs = predecessorEnd.getTime();
-        if (overlapping && previousSlot) {
+        if (overlapping && previousSlot && overlapFraction !== undefined) {
           const runMs = previousSlot.runEnd.getTime() - previousSlot.runStart.getTime();
           const moveMs = Math.max(0, previousSlot.moveEnd.getTime() - previousSlot.runEnd.getTime());
-          chainFromMs = Math.min(chainFromMs, previousSlot.runStart.getTime() + overlapFraction! * runMs + moveMs);
+          chainFromMs = Math.min(chainFromMs, previousSlot.runStart.getTime() + overlapFraction * runMs + moveMs);
         }
         // SYSPRO wait time after the previous op (elapsed, books no machine).
         const waitMinutes = context.ruleToggles?.useWaitTime && prevOp ? Math.max(0, prevOp.waitTime || 0) : 0;
@@ -923,9 +923,9 @@ export class SchedulingEngine {
           // Overlap tail rule: the last transfer batch of the previous op
           // arrives at its move end; this op still needs a share of its own
           // run after that, so it cannot finish earlier. Push and retry.
-          if (overlapping && previousSlot) {
+          if (overlapping && previousSlot && overlapFraction !== undefined) {
             const ownRunMs = Math.max(0, (operation.duration || 0) * 60000);
-            const requiredEndMs = previousSlot.moveEnd.getTime() + overlapFraction! * ownRunMs
+            const requiredEndMs = previousSlot.moveEnd.getTime() + overlapFraction * ownRunMs
               + waitMinutes * 60000;
             let startMs = earliestStart.getTime();
             for (let attempt = 0; attempt < 20 && operationSlot && operationSlot.runEnd.getTime() < requiredEndMs; attempt++) {
@@ -2063,8 +2063,8 @@ export class SchedulingEngine {
         byDay.forEach((mins, key) => {
           const [y, m, d] = key.split('-').map(Number);
           const dayKey = new Date(y, m - 1, d).toDateString();
-          if (!dayLoads.has(dayKey)) dayLoads.set(dayKey, { regular: 0, overtime: 0 });
-          const load = dayLoads.get(dayKey)!;
+          const load = dayLoads.get(dayKey) ?? { regular: 0, overtime: 0 };
+          dayLoads.set(dayKey, load);
           load.regular += mins.regular / 60;
           load.overtime += mins.overtime / 60;
         });

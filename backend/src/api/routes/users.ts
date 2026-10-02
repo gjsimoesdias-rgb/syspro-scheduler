@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import UserService, { UserRecord } from '../../services/UserService';
-import { requireAuth, requireCompanyAdmin, AuthRequest } from '../middleware/requireAuth';
+import { requireAuth, requireCompanyAdmin, AuthRequest, authUser } from '../middleware/requireAuth';
 import { validateBody } from '../middleware/validateBody';
 import { createUserSchema, updateUserSchema, changePasswordSchema } from '../validators/userValidators';
 import { errorMessage } from '../../utils/errors';
@@ -49,7 +49,7 @@ const loadManageable = async (req: AuthRequest): Promise<UserRecord | null> => {
 // GET /api/users — list users for current company (or all for super_admin)
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const users = await getUsers(req).listUsers(req.user!.companyId, req.user!.role);
+    const users = await getUsers(req).listUsers(authUser(req).companyId, authUser(req).role);
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: errorMessage(err) });
@@ -76,7 +76,7 @@ router.post('/', requireAuth, requireCompanyAdmin, validateBody(createUserSchema
       res.status(403).json({ error: `You can't create a user with role '${newRole}'` }); return;
     }
     // company admins can only add to their own company
-    const targetCompanyId = req.user!.role === 'super_admin' ? (companyId || req.user!.companyId) : req.user!.companyId;
+    const targetCompanyId = authUser(req).role === 'super_admin' ? (companyId || authUser(req).companyId) : authUser(req).companyId;
     if (!targetCompanyId) { res.status(400).json({ error: 'companyId required' }); return; }
 
     const user = await getUsers(req).createUser({
@@ -114,7 +114,7 @@ router.put('/:id', requireAuth, requireCompanyAdmin, validateBody(updateUserSche
 // DELETE /api/users/:id
 router.delete('/:id', requireAuth, requireCompanyAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    if (Number(req.params.id) === Number(req.user!.sub)) {
+    if (Number(req.params.id) === Number(authUser(req).sub)) {
       res.status(400).json({ error: 'Cannot delete your own account' }); return;
     }
     const target = await loadManageable(req);
@@ -130,7 +130,7 @@ router.delete('/:id', requireAuth, requireCompanyAdmin, async (req: AuthRequest,
 router.post('/me/change-password', requireAuth, validateBody(changePasswordSchema), async (req: AuthRequest, res: Response) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    await getUsers(req).changePassword(Number(req.user!.sub), String(currentPassword), String(newPassword));
+    await getUsers(req).changePassword(Number(authUser(req).sub), String(currentPassword), String(newPassword));
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: errorMessage(err) });
@@ -140,7 +140,7 @@ router.post('/me/change-password', requireAuth, validateBody(changePasswordSchem
 // GET /api/users/me/column-profile — load the calling user's saved column profile
 router.get('/me/column-profile', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const profile = await getUsers(req).getColumnProfileFor(req.user!.sub);
+    const profile = await getUsers(req).getColumnProfileFor(authUser(req).sub);
     res.json(profile || { visibleJobColumns: [], profileName: '' });
   } catch (err) {
     res.status(500).json({ error: errorMessage(err) });
@@ -154,7 +154,7 @@ router.put('/me/column-profile', requireAuth, async (req: AuthRequest, res: Resp
     if (!Array.isArray(visibleJobColumns)) {
       res.status(400).json({ error: 'visibleJobColumns must be an array' }); return;
     }
-    await getUsers(req).saveColumnProfileFor(req.user!.sub, {
+    await getUsers(req).saveColumnProfileFor(authUser(req).sub, {
       visibleJobColumns: visibleJobColumns.map(String),
       profileName: profileName ? String(profileName).slice(0, 80) : undefined,
     });

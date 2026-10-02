@@ -7,6 +7,8 @@ import { Router, Request, Response } from 'express';
 import DatabaseConnection from '../../database/connection';
 import { sysproServiceFor } from '../sysproServiceFor';
 import { errorMessage } from '../../utils/errors';
+import { asObj } from '../../utils/loose';
+import type { DbParams } from '../../database/connection';
 
 const router = Router();
 
@@ -61,7 +63,7 @@ router.get('/stock', async (req: Request, res: Response) => {
       WHERE 1=1
     `;
 
-    const params: Record<string, any> = {};
+    const params: DbParams = {};
 
     if (warehouse) {
       sql += ` AND w.Warehouse = @warehouse`;
@@ -139,8 +141,8 @@ router.get('/stock/:stockCode', async (req: Request, res: Response) => {
     }
 
     const master = result.recordset[0];
-    const totalOnHand = result.recordset.reduce((s: number, r: any) => s + (Number(r.QtyOnHand) || 0), 0);
-    const totalFree = result.recordset.reduce((s: number, r: any) => s + (Number(r.FreeOnHand) || 0), 0);
+    const totalOnHand = result.recordset.reduce((s: number, r) => s + (Number(r.QtyOnHand) || 0), 0);
+    const totalFree = result.recordset.reduce((s: number, r) => s + (Number(r.FreeOnHand) || 0), 0);
 
     return res.json({
       stockCode: master.StockCode,
@@ -212,7 +214,7 @@ router.get('/purchase-orders', async (req: Request, res: Response) => {
         AND d.LineType = 1
     `;
 
-    const params: Record<string, any> = {};
+    const params: DbParams = {};
 
     if (supplier) {
       sql += ` AND h.Supplier = @supplier`;
@@ -293,7 +295,7 @@ router.get('/purchase-orders/:stockCode', async (req: Request, res: Response) =>
       stockCode,
       items: result.recordset,
       count: result.recordset.length,
-      totalOutstanding: result.recordset.reduce((s: number, r: any) => s + (Number(r.OutstandingQty) || 0), 0)
+      totalOutstanding: result.recordset.reduce((s: number, r) => s + (Number(r.OutstandingQty) || 0), 0)
     });
   } catch (err) {
     req.log.error({ err }, 'PO by stock code query failed');
@@ -358,7 +360,7 @@ router.get('/shortages', async (req: Request, res: Response) => {
     `);
 
     // Filter to actual shortages: outstanding qty > FreeOnHand + OpenPoQty
-    const shortages = result.recordset.map((r: any) => {
+    const shortages = result.recordset.map((r) => {
       const outstanding = Number(r.QtyOutstanding) || 0;
       const freeOnHand  = Number(r.FreeOnHand)     || 0;
       const openPoQty   = Number(r.OpenPoQty)      || 0;
@@ -381,12 +383,12 @@ router.get('/shortages', async (req: Request, res: Response) => {
         abcClass:          r.AbcClass         || '',
         productClass:      r.ProductClass     || ''
       };
-    }).filter((r: any) => r.shortage > 0);
+    }).filter((r) => r.shortage > 0);
 
     return res.json({
       items: shortages,
       count: shortages.length,
-      affectedJobs: [...new Set(shortages.map((s: any) => s.job))].length
+      affectedJobs: [...new Set(shortages.map((s) => s.job))].length
     });
   } catch (err) {
     req.log.error({ err }, 'PO by stock code query failed');
@@ -402,18 +404,21 @@ router.get('/shortages', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────
 /** Planned jobs from the request body: [{ jobId, itemCode, quantity, start, end }]. */
 function planJobsFrom(req: Request) {
-  const raw = Array.isArray(req.body?.jobs) ? req.body.jobs : null;
+  const raw: unknown[] | null = Array.isArray(req.body?.jobs) ? req.body.jobs : null;
   if (!raw || raw.length > 20000) return null;
   return raw
-    .map((j: any) => ({
-      jobId: String(j?.jobId ?? '').trim(),
-      itemCode: String(j?.itemCode ?? '').trim(),
-      quantity: Number(j?.quantity) || 0,
-      start: j?.start ?? null,
-      end: j?.end ?? null,
-      dueDate: j?.dueDate ?? null,
-    }))
-    .filter((j: any) => j.jobId);
+    .map((item) => {
+      const j = asObj(item);
+      return {
+        jobId: String(j.jobId ?? '').trim(),
+        itemCode: String(j.itemCode ?? '').trim(),
+        quantity: Number(j.quantity) || 0,
+        start: (j.start ?? null) as string | null,
+        end: (j.end ?? null) as string | null,
+        dueDate: (j.dueDate ?? null) as string | null,
+      };
+    })
+    .filter((j) => j.jobId);
 }
 
 router.post('/projection', async (req: Request, res: Response) => {
@@ -498,7 +503,7 @@ router.get('/warehouses', async (req: Request, res: Response) => {
       const result2 = await db.query(
         `SELECT DISTINCT Warehouse FROM InvWarehouse ORDER BY Warehouse`
       );
-      return res.json({ items: result2.recordset.map((r: any) => ({ Warehouse: r.Warehouse, Description: r.Warehouse })) });
+      return res.json({ items: result2.recordset.map((r) => ({ Warehouse: r.Warehouse, Description: r.Warehouse })) });
     } catch (err2) {
       return res.status(500).json({ error: errorMessage(err2), items: [] });
     }

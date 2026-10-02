@@ -86,7 +86,7 @@ export class UserService {
       }
     );
     const newId = res?.recordset?.[0]?.id;
-    return (await this.getUserById(newId))!;
+    return this.mustGet(newId);
   }
 
   async updateUser(id: number, data: {
@@ -111,11 +111,18 @@ export class UserService {
       `UPDATE dbo.lic_users SET ${sets.join(', ')} WHERE id = @id`,
       params
     );
-    return (await this.getUserById(id))!;
+    return this.mustGet(id);
   }
 
   async deleteUser(id: number): Promise<void> {
     await this.db.queryWithParams(`DELETE FROM dbo.lic_users WHERE id = @id`, { id });
+  }
+
+  /** Re-read a user just written; a missing row means the write failed. */
+  private async mustGet(id: number): Promise<UserRecord> {
+    const user = await this.getUserById(id);
+    if (!user) throw new Error(`User ${id} not found after saving`);
+    return user;
   }
 
   async getColumnProfile(userId: number): Promise<{ visibleJobColumns: string[]; profileName?: string } | null> {

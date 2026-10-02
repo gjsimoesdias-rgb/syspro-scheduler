@@ -25,6 +25,15 @@ declare module 'express-serve-static-core' {
 /** Kept for existing imports: any Express request (user is optional). */
 export type AuthRequest = Request;
 
+/**
+ * The signed-in user of a request that went through requireAuth. Throws a
+ * 401 error if there is none (a route mounted without requireAuth).
+ */
+export function authUser(req: Request): AuthUser {
+  if (!req.user) throw Object.assign(new Error('Authentication required'), { status: 401 });
+  return req.user;
+}
+
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {

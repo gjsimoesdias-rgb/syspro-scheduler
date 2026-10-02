@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import AuthService from '../../services/AuthService';
-import { requireAuth, AuthRequest } from '../middleware/requireAuth';
+import { requireAuth, AuthRequest, authUser } from '../middleware/requireAuth';
 import { validateBody } from '../middleware/validateBody';
 import { loginSchema, refreshSchema, logoutSchema } from '../validators/authValidators';
 import { errorMessage } from '../../utils/errors';
@@ -77,7 +77,7 @@ router.post('/logout', validateBody(logoutSchema), async (req: Request, res: Res
 // GET /api/auth/me
 router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await getAuth(req).getUserById(Number(req.user!.sub));
+    const user = await getAuth(req).getUserById(Number(authUser(req).sub));
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
     res.json(user);
   } catch (err) {
