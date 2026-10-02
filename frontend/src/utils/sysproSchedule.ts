@@ -48,12 +48,12 @@ export function buildScheduleFromSysproJobs(jobs: Job[]): Schedule | null {
     const operationSchedules = (job.operations || [])
       .map((operation) => {
         const plannedStartDate = combineSysproDateTime(
-          (operation as any).plannedStartDate || (operation as any).SchStartDate,
-          (operation as any).SchStartTime
+          operation.plannedStartDate || operation.SchStartDate,
+          operation.SchStartTime
         );
         const plannedEndDate = combineSysproDateTime(
-          (operation as any).plannedEndDate || (operation as any).SchEndDate,
-          (operation as any).SchEndTime
+          operation.plannedEndDate || operation.SchEndDate,
+          operation.SchEndTime
         );
         if (!plannedStartDate || !plannedEndDate) {
           return null;
@@ -77,9 +77,9 @@ export function buildScheduleFromSysproJobs(jobs: Job[]): Schedule | null {
         return {
           opId: operation.opId,
           workcentreId: operation.workcentreId,
-          resourceId: normalizeMachineValue((operation as any).ScheduledMachine)
-            || normalizeMachineValue((operation as any).assignedResourceId)
-            || normalizeMachineValue((operation as any).IMachine)
+          resourceId: normalizeMachineValue(operation.ScheduledMachine)
+            || normalizeMachineValue(operation.assignedResourceId)
+            || normalizeMachineValue(operation.IMachine)
             || operation.workcentreId,
           plannedStartDate,
           plannedEndDate,

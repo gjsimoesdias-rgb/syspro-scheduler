@@ -9,7 +9,7 @@ import React from 'react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Schedule, Job, JobSchedule, OperationSchedule, Resource } from '../types';
-import { resourceService } from '../services/api';
+import { resourceService, type ResourceDefinitionDto } from '../services/api';
 import { convertScheduleDates } from '../utils/scheduleDates';
 import { findEarliestSlotOrForce, findEarliestSlotWithRetry } from '../utils/slotFinder';
 import { clampMasterDropStart, describeDependencyViolation } from '../utils/masterSub';
@@ -140,7 +140,7 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
         return;
       }
 
-      const definitionsResponse = await resourceService.getDefinitions().catch(() => ({ definitions: [] as any[] }));
+      const definitionsResponse = await resourceService.getDefinitions().catch(() => ({ definitions: [] as ResourceDefinitionDto[] }));
       const quantityByWorkcentre: Record<string, number> = {};
       for (const definition of definitionsResponse.definitions || []) {
         const wc = String(definition.workcentreId || '');
@@ -206,10 +206,9 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
         if (js.jobId === job.jobId) continue;
         for (const op of js.operationSchedules) {
           const key = op.workcentreId;
-          if (!intervalsByWorkcentre.has(key)) {
-            intervalsByWorkcentre.set(key, []);
-          }
-          intervalsByWorkcentre.get(key)!.push({
+          const intervals = intervalsByWorkcentre.get(key) ?? [];
+          intervalsByWorkcentre.set(key, intervals);
+          intervals.push({
             start: new Date(op.plannedStartDate).getTime(),
             end: new Date(op.plannedEndDate).getTime()
           });
@@ -502,7 +501,7 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
     const op = job.operations.find((o) => String(o.opId) === String(opId));
     if (!op) { toast.error(`Operation ${opId} not found`); return; }
 
-    const wc: string = (op as any).workcentreId || (op as any).workCentre || '';
+    const wc = String(op.workcentreId || op.workCentre || '');
     if (!wc) { toast.error(`Operation ${opId} has no workcentre assigned`); return; }
 
     const baseSchedule = schedule ? convertScheduleDates(schedule) : {
@@ -537,10 +536,10 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
     // rather than overlapping another operation on the same line.
     const capacity = 1;
 
-    const setupMinutes = Math.max(0, Number((op as any).setupTime || 0));
-    const runMinutes   = Math.max(1, Number((op as any).runTime || (op as any).duration || 1));
-    const queueMinutes = Math.max(0, Number((op as any).queueTime || 0));
-    const moveMinutes  = Math.max(0, Number((op as any).moveTime || 0));
+    const setupMinutes = Math.max(0, Number(op.setupTime || 0));
+    const runMinutes   = Math.max(1, Number(op.runTime || op.duration || 1));
+    const queueMinutes = Math.max(0, Number(op.queueTime || 0));
+    const moveMinutes  = Math.max(0, Number(op.moveTime || 0));
     const bookedMinutes = setupMinutes + runMinutes;
     const durationMs   = bookedMinutes * 60_000;
 
@@ -579,7 +578,7 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
     const altMachines = alternativeGroups
       .filter((g) => g.workcentreId === wc)
       .flatMap((g) => g.machineIds || []);
-    const candidateMachines = Array.from(new Set([...((op as any).qualifiedResourceIds || []), ...altMachines].filter(Boolean)));
+    const candidateMachines = Array.from(new Set([...(op.qualifiedResourceIds || []), ...altMachines].filter(Boolean)));
     const assignedMachine = candidateMachines[0] || wc;
 
     const opSchedule: OperationSchedule = {
@@ -599,9 +598,9 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
       runEnd:           new Date(endMs),
       queueEnd:         new Date(startMs),
       moveEnd:          new Date(endMs + moveMinutes * 60_000),
-      sequence:         (op as any).sequence ?? 0,
+      sequence:         op.sequence ?? 0,
       isOvertimeSlot:   false,
-      batchSize:        (op as any).batchSize || 1,
+      batchSize:        op.batchSize || 1,
       slackTime:        0
     };
 
@@ -940,10 +939,10 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
     // Extend the working horizon when the user drops past the planning-horizon end.
     if (precedenceCursorMs > horizonBounds.endMs) {
       horizonBounds.endMs = precedenceCursorMs + 90 * 24 * 60 * 60 * 1000;
-      (horizonBounds as any).endDate = new Date(horizonBounds.endMs);
+      horizonBounds.endDate = new Date(horizonBounds.endMs);
     }
 
-    const definitionsResponse = await resourceService.getDefinitions().catch(() => ({ definitions: [] as any[] }));
+    const definitionsResponse = await resourceService.getDefinitions().catch(() => ({ definitions: [] as ResourceDefinitionDto[] }));
     const quantityByWorkcentre: Record<string, number> = {};
     for (const definition of definitionsResponse.definitions || []) {
       const wc = String(definition.workcentreId || '');
@@ -994,7 +993,7 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
     const recalculatedTail = sortedOps.map((op) => ({ ...op }));
 
     for (let i = movedIdx; i < recalculatedTail.length; i++) {
-      const op = recalculatedTail[i] as any;
+      const op = recalculatedTail[i];
       const setupMinutes = Math.max(Number(op.setupTime || 0), 0);
       const runMinutes = Math.max(Number(op.runTime || op.duration || 1), 1);
       const queueMinutes = Math.max(Number(op.queueTime || 0), 0);

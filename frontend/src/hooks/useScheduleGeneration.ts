@@ -120,7 +120,7 @@ export function useScheduleGeneration({
           // An open what-if receives the run; the master plan stays as it is.
           ...(activeVersion ? { versionId: activeVersion.versionId } : {}),
         },
-        { timeout: 300000 } as any
+        { timeout: 300000 }
       );
 
       setGenerationProgress(100);

@@ -30,6 +30,8 @@ export interface Job {
   masterJobId?: string | null;
   isMasterJob?: boolean;
   isSubJob?: boolean;
+  /** SYSPRO MRP suggestion planned as a job (id MRP-…), not a WipMaster job yet. */
+  isSuggested?: boolean;
   [key: string]: unknown;
 }
 

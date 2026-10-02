@@ -30,11 +30,11 @@ export function analyseMachines(schedule: Schedule | null, resources: Resource[]
 
   // Machines: the resources, plus any machine id the plan uses that isn't one.
   const meta = new Map<string, { name: string; lineId: string; calendar: any }>();
-  for (const r of resources) meta.set(r.resourceId, { name: (r as any).name || r.resourceId, lineId: r.worcentreId, calendar: r.calendar });
+  for (const r of resources) meta.set(r.resourceId, { name: r.name || r.resourceId, lineId: r.worcentreId, calendar: r.calendar });
   type Seg = { s0: number; s1: number; r0: number; r1: number };
   const segs = new Map<string, Seg[]>();
   for (const js of schedule?.jobSchedules || []) {
-    if ((js as any).status === 'Unschedulable') continue;
+    if (js.status === 'Unschedulable') continue;
     for (const op of js.operationSchedules || []) {
       const id = op.resourceId || op.workcentreId;
       if (!id) continue;

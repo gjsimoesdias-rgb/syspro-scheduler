@@ -75,7 +75,7 @@ export interface ContentTabPanelProps {
   boardIntervalEnd: string;
   schedulingHorizonStart: string;
   schedulingHorizonEnd: string;
-  materialPlan: any[];
+  materialPlan: Array<Record<string, unknown>>;
   selectedViolation: ConstraintViolation | null;
   loading: boolean;
   previousScheduleForCompare: any | null;

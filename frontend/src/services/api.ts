@@ -5,7 +5,7 @@
 import axios from 'axios';
 import { Schedule, Job, Resource } from '../types';
 import { setTypedClientTokenProvider } from './typed-client';
-import { errorMessage } from '../utils/errors';
+import { errorMessage, errorStatus } from '../utils/errors';
 
 export type BomLineStatus = 'Materials' | 'Partial' | 'No Materials';
 
@@ -171,19 +171,32 @@ export const masterRevision = {
   inConflict: () => masterConflict,
 };
 
-export const isMasterChangedError = (err: any): boolean =>
-  err?.response?.status === 409 && err?.response?.data?.code === 'MASTER_CHANGED';
+export const isMasterChangedError = (err: unknown): boolean =>
+  errorStatus(err) === 409 && (err as { response?: { data?: { code?: string } } })?.response?.data?.code === 'MASTER_CHANGED';
 
 /**
  * JSON request through apiClient — so it gets the token, the 401 refresh +
  * retry and server error messages. Throws Error(message) on failure.
  */
-export async function apiJson<T = any>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
+export async function apiJson<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
   try {
     return (await apiClient.request<T>({ method, url: path, data: body })).data;
   } catch (err) {
     throw new Error(apiErrorMessage(err, 'Request failed'));
   }
+}
+
+/** A shift's time block (Resources > Shifts). Diversions cover the 24 h day. */
+export interface ShiftDiversionDto { id: string; type: string; startTime: string; endTime: string; schedulable: boolean }
+/** A shift template as /api/resources/definitions returns it. */
+export interface ShiftTemplateDto {
+  shiftId: string; name: string; startTime: string; endTime: string;
+  workingDays: number[]; hoursPerDay: number; diversions?: ShiftDiversionDto[];
+}
+/** A machine's planning settings as /api/resources/definitions returns them. */
+export interface ResourceDefinitionDto {
+  resourceId: string; machine: string; workcentreId: string; description: string;
+  quantity: number; shiftId: string; activated: boolean; loadingResourcePct: number; lineGroupId?: string;
 }
 
 export const scheduleService = {
@@ -392,7 +405,7 @@ export const resourceService = {
     return response.data;
   },
 
-  getDefinitions: async (): Promise<{ definitions: any[]; shifts: any[]; warning?: string }> => {
+  getDefinitions: async (): Promise<{ definitions: ResourceDefinitionDto[]; shifts: ShiftTemplateDto[]; warning?: string }> => {
     const response = await apiClient.get('/resources/definitions');
     return {
       definitions: response.data.definitions || [],
@@ -412,7 +425,7 @@ export const resourceService = {
     endTime?: string;
     workingDays: number[];
     hoursPerDay: number;
-    diversions?: any[];
+    diversions?: ShiftDiversionDto[];
   }) => {
     const response = await apiClient.post('/resources/shifts', payload);
     return response.data.shift;
@@ -424,7 +437,7 @@ export const resourceService = {
     endTime?: string;
     workingDays: number[];
     hoursPerDay: number;
-    diversions?: any[];
+    diversions?: ShiftDiversionDto[];
   }) => {
     const response = await apiClient.put(`/resources/shifts/${shiftId}`, payload);
     return response.data.shift;

@@ -48,7 +48,7 @@ export function getProductiveWindowsForDate(calendar: any, baseDate: Date): Prod
   const windows: ProductiveWindow[] = [];
 
   for (const shift of shifts) {
-    const diversions = Array.isArray((shift as any)?.diversions) ? (shift as any).diversions : [];
+    const diversions = Array.isArray(shift?.diversions) ? shift.diversions : [];
     if (diversions.length) {
       for (const diversion of diversions) {
         if (!diversion?.schedulable) continue;
@@ -62,9 +62,9 @@ export function getProductiveWindowsForDate(calendar: any, baseDate: Date): Prod
       }
     } else {
       const start = new Date(day);
-      start.setMinutes(timeToMinutes((shift as any)?.startTime || '08:00'), 0, 0);
+      start.setMinutes(timeToMinutes(shift?.startTime || '08:00'), 0, 0);
       const end = new Date(day);
-      end.setMinutes(timeToMinutes((shift as any)?.endTime || '16:00'), 0, 0);
+      end.setMinutes(timeToMinutes(shift?.endTime || '16:00'), 0, 0);
       if (end.getTime() > start.getTime()) {
         windows.push({ startMs: start.getTime(), endMs: end.getTime() });
       }

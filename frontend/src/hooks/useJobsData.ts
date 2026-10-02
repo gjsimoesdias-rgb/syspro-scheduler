@@ -33,7 +33,7 @@ export interface JobsDataResult {
   setResources: React.Dispatch<React.SetStateAction<Resource[]>>;
   dataLoading: boolean;
   dataWarning: string | null;
-  materialPlan: Array<Record<string, any>>;
+  materialPlan: Array<Record<string, unknown>>;
   materialStatusByJob: Record<string, 'Materials' | 'Partial' | 'No Materials'>;
   setMaterialStatusByJob: React.Dispatch<React.SetStateAction<Record<string, 'Materials' | 'Partial' | 'No Materials'>>>;
   workcentreRows: Array<Record<string, unknown>>;
@@ -67,7 +67,7 @@ export function useJobsData(): JobsDataResult {
   const [resources, setResources] = useState<Resource[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataWarning, setDataWarning] = useState<string | null>(null);
-  const [materialPlan, setMaterialPlan] = useState<Array<Record<string, any>>>([]);
+  const [materialPlan, setMaterialPlan] = useState<Array<Record<string, unknown>>>([]);
   const [materialStatusByJob, setMaterialStatusByJob] = useState<Record<string, 'Materials' | 'Partial' | 'No Materials'>>({});
   const [workcentreRows, setWorkcentreRows] = useState<Array<Record<string, unknown>>>([]);
   const [workcentreColumns, setWorkcentreColumns] = useState<string[]>([]);

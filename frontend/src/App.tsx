@@ -478,7 +478,7 @@ const App: React.FC = () => {
         const js = sched.jobSchedules.find(j => j.jobId === jobId);
         if (!js || !js.operationSchedules.length) return;
         // nudge first unfinished op (lowest sequence)
-        const op = [...js.operationSchedules].sort((a, b) => (a as any).sequence - (b as any).sequence)[0];
+        const op = [...js.operationSchedules].sort((a, b) => a.sequence - b.sequence)[0];
         const newStart = new Date(new Date(op.plannedStartDate).getTime() - 60 * 60_000);
         moveOp(jobId, op.opId, newStart, op.workcentreId);
       }
@@ -494,7 +494,7 @@ const App: React.FC = () => {
         if (!jobId || !sched || !moveOp) return;
         const js = sched.jobSchedules.find(j => j.jobId === jobId);
         if (!js || !js.operationSchedules.length) return;
-        const op = [...js.operationSchedules].sort((a, b) => (a as any).sequence - (b as any).sequence)[0];
+        const op = [...js.operationSchedules].sort((a, b) => a.sequence - b.sequence)[0];
         const newStart = new Date(new Date(op.plannedStartDate).getTime() + 60 * 60_000);
         moveOp(jobId, op.opId, newStart, op.workcentreId);
       }
@@ -587,9 +587,9 @@ const App: React.FC = () => {
       // explicitly chosen 'previous-loaded' mode (or before settings have
       // loaded). For 'from-today' / 'custom' the planning interval takes
       // precedence so old Syspro dates don't overwrite the setting.
-      const piLocked = activePlanningInterval && activePlanningInterval.mode !== 'previous-loaded';
-      const horizonStart = piLocked ? activePlanningInterval!.start : format(sysproSchedule.planningHorizon.startDate, 'yyyy-MM-dd');
-      const horizonEnd   = piLocked ? activePlanningInterval!.end   : format(sysproSchedule.planningHorizon.endDate,   'yyyy-MM-dd');
+      const lockedInterval = activePlanningInterval && activePlanningInterval.mode !== 'previous-loaded' ? activePlanningInterval : null;
+      const horizonStart = lockedInterval ? lockedInterval.start : format(sysproSchedule.planningHorizon.startDate, 'yyyy-MM-dd');
+      const horizonEnd   = lockedInterval ? lockedInterval.end   : format(sysproSchedule.planningHorizon.endDate,   'yyyy-MM-dd');
       setBoardIntervalStart(horizonStart);
       setBoardIntervalEnd(horizonEnd);
       setDraftIntervalStart(horizonStart);
@@ -756,14 +756,14 @@ const App: React.FC = () => {
       operations: jobSchedule.operationSchedules.map((op) => ({
         opId: String(op.opId),
         jobId: jobSchedule.jobId,
-        sequence: Number((op as any).sequence || String(op.opId).replace(/\D/g, '') || 10),
+        sequence: Number(op.sequence || String(op.opId).replace(/\D/g, '') || 10),
         workcentreId: op.workcentreId,
         workcentreName: op.workcentreId,
-        duration: Math.max(1, Number((op as any).runTime || op.duration || 1)),
-        setupTime: Math.max(0, Number((op as any).setupTime || 0)),
-        queueTime: Math.max(0, Number((op as any).queueTime || 0)),
-        moveTime: Math.max(0, Number((op as any).moveTime || 0)),
-        batchSize: Math.max(1, Number((op as any).batchSize || 1)),
+        duration: Math.max(1, Number(op.runTime || op.duration || 1)),
+        setupTime: Math.max(0, Number(op.setupTime || 0)),
+        queueTime: Math.max(0, Number(op.queueTime || 0)),
+        moveTime: Math.max(0, Number(op.moveTime || 0)),
+        batchSize: Math.max(1, Number(op.batchSize || 1)),
         qualifiedResourceIds: [],
         status: 'NotStarted' as const
       })),
@@ -970,7 +970,7 @@ const App: React.FC = () => {
     catch { setMrpPreview({ included: false, jobs: [] }); }
   }, []);
   useEffect(() => { if (jobPaneMode === 'mrp') void loadMrpPreview(); }, [jobPaneMode, loadMrpPreview]);
-  const suggestedInPlan = useMemo(() => visibleJobSource.filter((j) => (j as any).isSuggested), [visibleJobSource]);
+  const suggestedInPlan = useMemo(() => visibleJobSource.filter((j) => (j as Job).isSuggested), [visibleJobSource]);
   const mrpIncluded = suggestedInPlan.length > 0 || !!mrpPreview?.included;
   const mrpJobCount = suggestedInPlan.length || mrpPreview?.jobs.length || 0;
   const toggleMrpPlanning = useCallback(async () => {
@@ -989,7 +989,7 @@ const App: React.FC = () => {
   const filteredJobs = useMemo(() => {
     const paneSource = jobPaneMode === 'mrp'
       ? (suggestedInPlan.length ? suggestedInPlan : (mrpPreview?.jobs || []))
-      : visibleJobSource.filter((j) => !(j as any).isSuggested);
+      : visibleJobSource.filter((j) => !(j as Job).isSuggested);
     let list = selectedWorkcentre.length
       ? paneSource.filter((job) => job.operations.some((op) => selectedWorkcentre.includes(op.workcentreId)))
       : paneSource;
@@ -1220,8 +1220,8 @@ const App: React.FC = () => {
         if (!map[wc]) map[wc] = new Set();
         const candidates = [
           ...(Array.isArray(op.qualifiedResourceIds) ? op.qualifiedResourceIds : []),
-          String((op as any).ScheduledMachine || '').trim(),
-          String((op as any).IMachine || '').trim()
+          String(op.ScheduledMachine || '').trim(),
+          String(op.IMachine || '').trim()
         ].filter((id) => id && id !== wc); // exclude WC code itself
         candidates.forEach((id) => map[wc].add(id));
       });
@@ -1823,7 +1823,7 @@ const App: React.FC = () => {
               <button
                 key={d.id}
                 className={`ctx-marker-swatch${markerAssignments[jobContextMenu.jobId || ''] === d.id ? ' is-on' : ''}`}
-                style={{ ['--mk' as any]: d.color }}
+                style={{ ['--mk' as string]: d.color } as React.CSSProperties}
                 title={d.name}
                 aria-label={`Marker ${d.name}`}
                 onClick={() => {

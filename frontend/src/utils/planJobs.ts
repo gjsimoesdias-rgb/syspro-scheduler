@@ -16,11 +16,11 @@ export function planJobsFrom(jobs: Job[], jobSchedules: JobSchedule[]): PlanJob[
     const ok = !!s && s.status !== 'Unschedulable';
     return {
       jobId: j.jobId,
-      itemCode: (j as any).itemCode,
-      quantity: Number((j as any).quantity) || 0,
+      itemCode: j.itemCode,
+      quantity: Number(j.quantity) || 0,
       start: ok ? iso(s!.plannedStartDate) : null,
       end: ok ? iso(s!.plannedEndDate) : null,
-      dueDate: iso((j as any).dueDate) ?? undefined,
+      dueDate: iso(j.dueDate) ?? undefined,
     };
   });
 }

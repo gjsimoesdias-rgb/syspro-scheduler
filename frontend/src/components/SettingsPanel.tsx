@@ -223,8 +223,8 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
   const fetchSettings = useCallback(async () => {
     try {
       const [cs, us] = await Promise.all([
-        apiJson('GET', '/settings/company').catch(() => null),
-        apiJson('GET', '/settings/user').catch(() => null),
+        apiJson<CompanySettings>('GET', '/settings/company').catch(() => null),
+        apiJson<UserSettings>('GET', '/settings/user').catch(() => null),
       ]);
       if (cs) setCompanySettings(cs);
       if (us) {
