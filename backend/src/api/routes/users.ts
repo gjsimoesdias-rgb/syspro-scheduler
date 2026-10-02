@@ -139,7 +139,7 @@ router.post('/me/change-password', requireAuth, validateBody(changePasswordSchem
 // GET /api/users/me/column-profile — load the calling user's saved column profile
 router.get('/me/column-profile', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const profile = await getUsers(req).getColumnProfile(Number(req.user!.sub));
+    const profile = await getUsers(req).getColumnProfileFor(req.user!.sub);
     res.json(profile || { visibleJobColumns: [], profileName: '' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -153,7 +153,7 @@ router.put('/me/column-profile', requireAuth, async (req: AuthRequest, res: Resp
     if (!Array.isArray(visibleJobColumns)) {
       res.status(400).json({ error: 'visibleJobColumns must be an array' }); return;
     }
-    await getUsers(req).saveColumnProfile(Number(req.user!.sub), {
+    await getUsers(req).saveColumnProfileFor(req.user!.sub, {
       visibleJobColumns: visibleJobColumns.map(String),
       profileName: profileName ? String(profileName).slice(0, 80) : undefined,
     });

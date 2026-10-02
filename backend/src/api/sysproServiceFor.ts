@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import { SysproDatabaseService } from '../services/SysproDatabaseService';
 import { SettingsService } from '../services/SettingsService';
+import { companyFor } from './companyContext';
 
 /**
  * Whether the signed-in company plans MRP suggested jobs
@@ -9,7 +10,7 @@ import { SettingsService } from '../services/SettingsService';
 export async function includeSuggestedJobsFor(req: Request): Promise<boolean> {
   try {
     const schedulerDb = req.app.locals.schedulerDb;
-    const companyId = (req as any).user?.companyId;
+    const companyId = await companyFor(req);
     if (!schedulerDb || !companyId) return false;
     const cs = await new SettingsService(schedulerDb).getCompanySettings(companyId);
     return (cs as any)?.fcs?.schedulingRules?.includeMrpSuggestedJobs === true;

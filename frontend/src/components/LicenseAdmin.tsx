@@ -15,6 +15,7 @@ interface License {
   isActive: boolean;
   expiryDate: string | null;
   notes: string | null;
+  sysproCompanyDb: string | null;
   createdAt: string;
 }
 
@@ -29,7 +30,7 @@ interface LicUser {
 
 const emptyForm = {
   companyName: '', contactEmail: '', maxUsers: 5,
-  plan: 'starter', expiryDate: '', notes: '',
+  plan: 'starter', expiryDate: '', notes: '', sysproCompanyDb: '',
 };
 
 const PLAN_OPTIONS = ['starter', 'professional', 'enterprise', 'unlimited'];
@@ -92,6 +93,7 @@ const LicenseAdmin: React.FC = () => {
       maxUsers: l.maxUsers, plan: l.plan,
       expiryDate: l.expiryDate ? l.expiryDate.slice(0, 10) : '',
       notes: l.notes || '',
+      sysproCompanyDb: l.sysproCompanyDb || '',
     });
     setShowForm(true);
   };
@@ -279,6 +281,10 @@ const LicenseAdmin: React.FC = () => {
               </label>
               <label>Expiry Date (leave blank = no expiry)
                 <input type="date" value={form.expiryDate} onChange={e => setForm(f => ({ ...f, expiryDate: e.target.value }))} />
+              </label>
+              <label>SYSPRO company database
+                <input value={form.sysproCompanyDb} onChange={e => setForm(f => ({ ...f, sysproCompanyDb: e.target.value }))} placeholder="e.g. SysproCompanyH" />
+                <small>Admins and Windows sign-ins without a company use the settings of the company linked to the connected database. Not needed with a single company.</small>
               </label>
               <label>Notes
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} />

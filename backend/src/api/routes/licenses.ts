@@ -40,9 +40,9 @@ router.get('/:id', requireAuth, requireSuperAdmin, async (req: AuthRequest, res:
 // POST /api/licenses — create new license + company
 router.post('/', requireAuth, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const { companyName, contactEmail, maxUsers, expiryDate, plan, notes } = req.body;
+    const { companyName, contactEmail, maxUsers, expiryDate, plan, notes, sysproCompanyDb } = req.body;
     if (!companyName) { res.status(400).json({ error: 'companyName is required' }); return; }
-    const lic = await getLicenses(req).createLicense({ companyName, contactEmail, maxUsers, expiryDate, plan, notes });
+    const lic = await getLicenses(req).createLicense({ companyName, contactEmail, maxUsers, expiryDate, plan, notes, sysproCompanyDb });
     res.status(201).json(lic);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -52,9 +52,9 @@ router.post('/', requireAuth, requireSuperAdmin, async (req: AuthRequest, res: R
 // PUT /api/licenses/:id — update license
 router.put('/:id', requireAuth, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const { companyName, contactEmail, maxUsers, isActive, expiryDate, plan, notes } = req.body;
+    const { companyName, contactEmail, maxUsers, isActive, expiryDate, plan, notes, sysproCompanyDb } = req.body;
     const lic = await getLicenses(req).updateLicense(Number(req.params.id), {
-      companyName, contactEmail, maxUsers, isActive, expiryDate, plan, notes
+      companyName, contactEmail, maxUsers, isActive, expiryDate, plan, notes, sysproCompanyDb
     });
     res.json(lic);
   } catch (err: any) {

@@ -141,3 +141,15 @@ describe('/api/jobs/flags (exclude / pin job)', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('settings for Windows (NTLM) sign-ins', () => {
+  it('stores personal settings by sign-in name instead of failing on a non-numeric id', async () => {
+    const qwp = jest.fn().mockResolvedValue({ recordset: [] });
+    app.locals.schedulerDb = { query: jest.fn().mockResolvedValue({ recordset: [] }), queryWithParams: qwp, execute: jest.fn() } as any;
+    const t = jwt.sign({ sub: 'ntlm:CORP\jo', username: 'jo', role: 'Approver', companyId: null }, JWT_SECRET, { expiresIn: '1h' });
+    const res = await request(app).put('/api/settings/user').set('Authorization', `Bearer ${t}`).send({ theme: 'dark' });
+    expect(res.status).toBe(200);
+    const call = qwp.mock.calls.find(([sql]: [string]) => /sch_NamedUserSettings/.test(sql));
+    expect(call?.[1]).toMatchObject({ key: 'ntlm:CORP\jo' });
+  });
+});

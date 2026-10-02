@@ -30,6 +30,7 @@ import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordE
 import { mapEmployeeRow } from '../../utils/crews';
 import { AUTO_PLAN_VERSION_ID } from '../../services/autoScheduler';
 import { planDbFor } from '../../services/planStore';
+import { companyFor } from '../companyContext';
 
 /**
  * Operation overlap from Settings → Transfer/Overlap: "Use transfer" on and
@@ -241,7 +242,7 @@ export async function generateHandler(req: Request, res: Response) {
     let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; enforceMaterial: boolean; setupOncePerGroup: boolean; overlapFraction?: number; useSysproTransfer: boolean; useWaitTime: boolean; allowFinishAfterHorizon: boolean } | undefined;
     try {
       const schedulerDb = req.app.locals.schedulerDb;
-      const companyId = (req as any).user?.companyId;
+      const companyId = await companyFor(req);
       if (schedulerDb && companyId) {
         const cs = await new SettingsService(schedulerDb).getCompanySettings(companyId);
         includeCompletedOps = !!(cs as any)?.jobManagement?.includeCompletedOps;
@@ -609,7 +610,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
     let ruleToggles: { useQueueTime: boolean; useSetupTime: boolean; useMoveTime: boolean; setupOncePerGroup: boolean; overlapFraction?: number; useSysproTransfer: boolean; useWaitTime: boolean; allowFinishAfterHorizon: boolean } | undefined;
     try {
       const schedulerDb = req.app.locals.schedulerDb;
-      const companyId = (req as any).user?.companyId;
+      const companyId = await companyFor(req);
       if (schedulerDb && companyId) {
         const cs = await new SettingsService(schedulerDb).getCompanySettings(companyId);
         includeCompletedOps = !!(cs as any)?.jobManagement?.includeCompletedOps;

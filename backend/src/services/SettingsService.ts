@@ -123,6 +123,20 @@ export const DEFAULT_USER_SETTINGS = {
   },
 };
 
+/** True for a lic_users id (local sign-in); false for Windows sign-ins like 'ntlm:DOMAIN\user'. */
+export const isLocalUserId = (sub: unknown): boolean =>
+  (typeof sub === 'number' || (typeof sub === 'string' && /^\d+$/.test(sub))) && Number(sub) > 0;
+
+/** Upsert one column of a sch_NamedUserSettings row. */
+export async function saveNamed(db: any, key: string, column: 'SettingsJson' | 'ColumnProfile', json: string): Promise<void> {
+  await db.queryWithParams(
+    `MERGE dbo.sch_NamedUserSettings WITH (HOLDLOCK) AS t
+     USING (SELECT @key AS UserKey) AS s ON t.UserKey = s.UserKey
+     WHEN MATCHED THEN UPDATE SET ${column} = @json, UpdatedAt = SYSUTCDATETIME()
+     WHEN NOT MATCHED THEN INSERT (UserKey, ${column}) VALUES (@key, @json);`,
+    { key: key.slice(0, 256), json });
+}
+
 export class SettingsService {
   private db: DatabaseConnection;
   constructor(db: DatabaseConnection) { this.db = db; }
@@ -187,6 +201,25 @@ export class SettingsService {
         { uid: userId, json }
       );
     }
+  }
+
+  /**
+   * Personal settings for a signed-in user. Local users (numeric id) use
+   * lic_user_settings; Windows sign-ins ('ntlm:DOMAIN\user') have no
+   * lic_users row and use sch_NamedUserSettings (migration 010).
+   */
+  async getUserSettingsFor(sub: number | string): Promise<any> {
+    if (isLocalUserId(sub)) return this.getUserSettings(Number(sub));
+    const res = await this.db.queryWithParams(
+      `SELECT SettingsJson FROM dbo.sch_NamedUserSettings WHERE UserKey = @key`, { key: String(sub) });
+    const raw = res?.recordset?.[0]?.SettingsJson;
+    if (!raw) return { ...DEFAULT_USER_SETTINGS };
+    try { return this.deepMerge({ ...DEFAULT_USER_SETTINGS }, JSON.parse(raw)); } catch { return { ...DEFAULT_USER_SETTINGS }; }
+  }
+
+  async saveUserSettingsFor(sub: number | string, settings: any): Promise<void> {
+    if (isLocalUserId(sub)) return this.saveUserSettings(Number(sub), settings);
+    await saveNamed(this.db, String(sub), 'SettingsJson', JSON.stringify(settings));
   }
 
   private deepMerge(target: any, source: any): any {

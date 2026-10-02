@@ -12,9 +12,16 @@ export interface LicenseRecord {
   expiryDate: string | null;
   plan: string;
   notes: string | null;
+  /** SYSPRO company database this licence's company plans (lic_companies.syspro_company_id). */
+  sysproCompanyDb: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const cleanDb = (v: unknown): string | null => {
+  const s = String(v ?? '').trim();
+  return s ? s.slice(0, 50) : null;
+};
 
 export class LicenseService {
   private db: DatabaseConnection;
@@ -27,7 +34,8 @@ export class LicenseService {
 
   async listLicenses(): Promise<LicenseRecord[]> {
     const res = await this.db.query(
-      `SELECT l.*, 
+      `SELECT l.*,
+              (SELECT TOP 1 c.syspro_company_id FROM dbo.lic_companies c WHERE c.license_id = l.id) AS syspro_company_db,
               (SELECT COUNT(*) FROM dbo.lic_users u
                JOIN dbo.lic_companies c2 ON c2.id = u.company_id
                WHERE c2.license_id = l.id AND u.is_active = 1) AS current_users
@@ -40,6 +48,7 @@ export class LicenseService {
   async getLicenseById(id: number): Promise<LicenseRecord | null> {
     const res = await this.db.queryWithParams(
       `SELECT l.*,
+              (SELECT TOP 1 c.syspro_company_id FROM dbo.lic_companies c WHERE c.license_id = l.id) AS syspro_company_db,
               (SELECT COUNT(*) FROM dbo.lic_users u
                JOIN dbo.lic_companies c2 ON c2.id = u.company_id
                WHERE c2.license_id = l.id AND u.is_active = 1) AS current_users
@@ -57,6 +66,7 @@ export class LicenseService {
     expiryDate?: string;
     plan?: string;
     notes?: string;
+    sysproCompanyDb?: string;
   }): Promise<LicenseRecord> {
     const key = this.generateKey();
     const res = await this.db.queryWithParams(
@@ -77,8 +87,8 @@ export class LicenseService {
 
     // Create linked company record
     await this.db.queryWithParams(
-      `INSERT INTO dbo.lic_companies (license_id, name) VALUES (@lid, @name)`,
-      { lid: newId, name: data.companyName }
+      `INSERT INTO dbo.lic_companies (license_id, name, syspro_company_id) VALUES (@lid, @name, @db)`,
+      { lid: newId, name: data.companyName, db: cleanDb(data.sysproCompanyDb) }
     );
 
     return (await this.getLicenseById(newId))!;
@@ -92,6 +102,7 @@ export class LicenseService {
     expiryDate?: string | null;
     plan?: string;
     notes?: string;
+    sysproCompanyDb?: string | null;
   }): Promise<LicenseRecord> {
     const sets: string[] = ['updated_at = GETDATE()'];
     const params: Record<string, any> = { id };
@@ -106,6 +117,11 @@ export class LicenseService {
     await this.db.queryWithParams(
       `UPDATE dbo.lic_licenses SET ${sets.join(', ')} WHERE id = @id`, params
     );
+    if (data.sysproCompanyDb !== undefined) {
+      await this.db.queryWithParams(
+        `UPDATE dbo.lic_companies SET syspro_company_id = @db WHERE license_id = @id`,
+        { id, db: cleanDb(data.sysproCompanyDb) });
+    }
     return (await this.getLicenseById(id))!;
   }
 
@@ -134,6 +150,7 @@ export class LicenseService {
       expiryDate: row.expiry_date ? new Date(row.expiry_date).toISOString().split('T')[0] : null,
       plan: row.plan,
       notes: row.notes,
+      sysproCompanyDb: row.syspro_company_db ?? null,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };

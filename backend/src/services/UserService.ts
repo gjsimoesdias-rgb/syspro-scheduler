@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { isLocalUserId, saveNamed } from './SettingsService';
 import { DatabaseConnection } from '../database/connection';
 
 export interface UserRecord {
@@ -124,6 +125,21 @@ export class UserService {
     const row = res?.recordset?.[0];
     if (!row || !row.column_profile) return null;
     try { return JSON.parse(row.column_profile); } catch { return null; }
+  }
+
+  /** Column profile for any signed-in user (Windows sign-ins are stored by name). */
+  async getColumnProfileFor(sub: number | string): Promise<{ visibleJobColumns: string[]; profileName?: string } | null> {
+    if (isLocalUserId(sub)) return this.getColumnProfile(Number(sub));
+    const res = await this.db.queryWithParams(
+      `SELECT ColumnProfile FROM dbo.sch_NamedUserSettings WHERE UserKey = @key`, { key: String(sub) });
+    const raw = res?.recordset?.[0]?.ColumnProfile;
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+
+  async saveColumnProfileFor(sub: number | string, profile: { visibleJobColumns: string[]; profileName?: string }): Promise<void> {
+    if (isLocalUserId(sub)) return this.saveColumnProfile(Number(sub), profile);
+    await saveNamed(this.db, String(sub), 'ColumnProfile', JSON.stringify(profile));
   }
 
   async saveColumnProfile(userId: number, profile: { visibleJobColumns: string[]; profileName?: string }): Promise<void> {
