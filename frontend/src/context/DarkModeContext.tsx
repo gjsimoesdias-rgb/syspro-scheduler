@@ -4,15 +4,8 @@
  * existing consumers of useDarkMode() continue to work unchanged.
  */
 
-import React, { createContext, useContext } from 'react';
+import React from 'react';
 import { useUiStore } from '../stores/uiStore';
-
-interface DarkModeContextType {
-  isDarkMode: boolean;
-  toggleDarkMode: () => void;
-}
-
-const DarkModeContext = createContext<DarkModeContextType | undefined>(undefined);
 
 /** Pass-through provider — dark mode state now lives in uiStore. */
 export const DarkModeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => (

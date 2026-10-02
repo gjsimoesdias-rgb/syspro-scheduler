@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle, Lightbulb, Search } from 'lucide-react';
+import { AlertTriangle, Lightbulb, Search } from 'lucide-react';
 import { ResourceLoad } from '../types';
 import './BottleneckAnalysis.css';
 

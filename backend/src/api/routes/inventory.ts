@@ -5,7 +5,6 @@
 
 import { Router, Request, Response } from 'express';
 import DatabaseConnection from '../../database/connection';
-import { SysproDatabaseService } from '../../services/SysproDatabaseService';
 import { sysproServiceFor } from '../sysproServiceFor';
 
 const router = Router();

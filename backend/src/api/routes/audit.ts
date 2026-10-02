@@ -5,7 +5,7 @@
  */
 import { Router, Request, Response } from 'express';
 import { AuditLogService } from '../../services/AuditLogService';
-import { requireAuth, AuthRequest } from '../middleware/requireAuth';
+import { requireAuth } from '../middleware/requireAuth';
 
 const router = Router();
 

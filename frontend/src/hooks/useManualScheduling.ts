@@ -990,7 +990,7 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
           toast(`⚠ ${wc}: no free calendar slot found — operation placed outside normal shift hours`, { icon: '⚠️' }),
       });
 
-    const recalculatedTail = sortedOps.map((op, idx) => ({ ...op }));
+    const recalculatedTail = sortedOps.map((op) => ({ ...op }));
 
     for (let i = movedIdx; i < recalculatedTail.length; i++) {
       const op = recalculatedTail[i] as any;

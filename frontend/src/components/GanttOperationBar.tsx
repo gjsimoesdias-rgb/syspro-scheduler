@@ -140,7 +140,6 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
   runMin,
   queueMin,
   moveMin,
-  durationH,
   itemCode,
   itemDesc,
   qty,

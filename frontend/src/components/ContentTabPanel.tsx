@@ -11,7 +11,6 @@ import { BarChart2, Target, BookOpen, Factory, Settings2, CalendarCheck, type Lu
 import { useUiStore, type ContentTab } from '../stores/uiStore';
 import { useScheduleStore } from '../stores/scheduleStore';
 import type { Resource, Job, ConstraintViolation } from '../types';
-import type { GanttSettingsState } from './GanttSettings';
 import SettingsPanel from './SettingsPanel';
 
 // Lazy tab content
@@ -120,7 +119,6 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
   boardIntervalEnd,
   schedulingHorizonStart,
   schedulingHorizonEnd,
-  materialPlan,
   selectedViolation,
   loading,
   previousScheduleForCompare,
@@ -133,7 +131,6 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
   onSelectViolation,
   onShowOverrideModal,
   onDraggableMove,
-  onRestoreVersion,
   onLoadData,
   onCreateWhatIf,
   onClearWhatIf,
@@ -167,7 +164,6 @@ const ContentTabPanel: React.FC<ContentTabPanelProps> = ({
   const highlightJobId    = useScheduleStore((s) => s.highlightJobId);
   const pinnedOps         = useScheduleStore((s) => s.pinnedOps);
   const setPinnedOps      = useScheduleStore((s) => s.setPinnedOps);
-  const scheduleVersions  = useScheduleStore((s) => s.scheduleVersions);
 
   // ── Local state ──────────────────────────────────────────────────────────
   const [showAllOverrides, setShowAllOverrides] = useState(false);

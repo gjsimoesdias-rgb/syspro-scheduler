@@ -87,11 +87,9 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
   const mainTab = useUiStore((s) => s.mainTab);
   const manageTab = useUiStore((s) => s.manageTab);
   const setManageTab = useUiStore((s) => s.setManageTab);
-  const setMainTab = useUiStore((s) => s.setMainTab);
   const isDarkMode = useUiStore((s) => s.isDarkMode);
   const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
   const setShowSchemaModal = useUiStore((s) => s.setShowSchemaModal);
-  const jobPaneMode = useUiStore((s) => s.jobPaneMode);
   const showResourceTree = useUiStore((s) => s.showResourceTree);
   const setShowResourceTree = useUiStore((s) => s.setShowResourceTree);
   const setJobPaneMode = useUiStore((s) => s.setJobPaneMode);

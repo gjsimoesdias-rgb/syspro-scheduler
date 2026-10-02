@@ -261,14 +261,6 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
     setCompanySettings(prev => prev ? fn(prev) : prev);
   };
 
-  const setUS = (fn: (s: UserSettings) => UserSettings) => {
-    setUserSettings(prev => {
-      if (!prev) return prev;
-      const next = fn(prev);
-      return next;
-    });
-  };
-
   const setGantt = (key: keyof GanttSettingsState, value: any) => {
     const next = { ...ganttPrefs, [key]: value };
     onGanttPrefsChange(next);

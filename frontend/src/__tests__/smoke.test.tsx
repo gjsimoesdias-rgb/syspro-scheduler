@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 // ---------------------------------------------------------------------------
@@ -232,7 +232,7 @@ describe('ScheduleVersionHistory', () => {
       />,
     );
     // The second version (v-002) should have a Restore button when expanded.
-    const items = screen.getAllByRole('button');
+    screen.getAllByRole('button');
     // Click the second version item (non-current)
     const nonCurrentItem = screen
       .getAllByText(/Generated v/i)

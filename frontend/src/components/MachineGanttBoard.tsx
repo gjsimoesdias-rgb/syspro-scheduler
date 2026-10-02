@@ -117,12 +117,6 @@ interface MachineGanttBoardProps {
 // ContextMenuState is re-exported from GanttContextMenu; re-import here for local use.
 // DragPreviewState is re-exported from DragPreview.
 
-const WORKCENTRE_COLORS = [
-  '#3e7fe7', '#e45c3c', '#2db87a', '#d4a017', '#9b59b6',
-  '#1abc9c', '#e67e22', '#e91e63', '#00bcd4', '#8bc34a',
-  '#ff5722', '#607d8b', '#795548', '#ff9800', '#009688',
-];
-
 const getLateness = (endDate: Date, jobDueDate?: Date): number => {
   if (!jobDueDate) return 0;
   return differenceInMinutes(endDate, jobDueDate);
@@ -964,52 +958,6 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
     const days = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
     return Math.max(12, days * pxPerDay);
   };
-
-  const getCalendarDayBackground = useCallback((calendar: Resource['calendar'] | undefined, day: Date): string => {
-    const offColor = 'var(--gantt-cal-off)';
-    const shiftOffColor = 'var(--gantt-cal-shift-off)';
-    const workingDays = calendar?.workingDays || [1, 2, 3, 4, 5];
-    if (!workingDays.includes(day.getDay())) {
-      return offColor;
-    }
-
-    const shift = (calendar?.shifts?.[0] || {}) as any;
-    const getTypeColor = (type?: string, schedulable?: boolean) => {
-      const key = String(type || '').toLowerCase();
-      if (key.includes('overtime')) return 'var(--gantt-cal-overtime)';
-      if (key.includes('lunch')) return 'var(--gantt-cal-break)';
-      if (key.includes('break')) return 'var(--gantt-cal-break)';
-      if (key.includes('non')) return 'var(--gantt-cal-nonprod)';
-      return schedulable === false ? 'var(--gantt-cal-nonprod)' : 'var(--gantt-cal-productive)';
-    };
-
-    const pushRange = (stops: string[], color: string, start: number, end: number) => {
-      if (end <= start) return;
-      stops.push(`${color} ${start}%`, `${color} ${end}%`);
-    };
-
-    const diversions = Array.isArray(shift.diversions)
-      ? [...shift.diversions].sort((a: any, b: any) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-      : [];
-
-    if (!diversions.length) {
-      const startPct = (timeToMinutes(shift.startTime || '08:00') / 1440) * 100;
-      const endPct = (timeToMinutes(shift.endTime || '16:00') / 1440) * 100;
-      return `linear-gradient(90deg, ${shiftOffColor} 0%, ${shiftOffColor} ${startPct}%, var(--gantt-cal-productive) ${startPct}%, var(--gantt-cal-productive) ${endPct}%, ${shiftOffColor} ${endPct}%, ${shiftOffColor} 100%)`;
-    }
-
-    const stops: string[] = [];
-    let cursor = 0;
-    for (const diversion of diversions) {
-      const start = Math.max(cursor, timeToMinutes(diversion.startTime));
-      const end = Math.max(start, timeToMinutes(diversion.endTime));
-      pushRange(stops, shiftOffColor, (cursor / 1440) * 100, (start / 1440) * 100);
-      pushRange(stops, getTypeColor(diversion.type, diversion.schedulable), (start / 1440) * 100, (end / 1440) * 100);
-      cursor = end;
-    }
-    pushRange(stops, shiftOffColor, (cursor / 1440) * 100, 100);
-    return `linear-gradient(90deg, ${stops.join(', ')})`;
-  }, []);
 
   /** Productive / overtime / break windows of a day (minutes), for the lane shift strip. */
   const getShiftBlocks = useCallback((calendar: Resource['calendar'] | undefined, day: Date): Array<{ start: number; end: number; kind: 'work' | 'overtime' | 'break' }> => {

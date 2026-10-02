@@ -3,7 +3,7 @@
  * Implements job, operation, and resource scheduling with constraints
  */
 
-import { localDayKey, exceptionForDay, exceptionWindowMinutes } from '../utils/calendarExceptions';
+import { localDayKey } from '../utils/calendarExceptions';
 import { dayWindowMinutes } from '../utils/shiftWindows';
 import type { CrewLookup } from '../utils/crews';
 import { CrewLoad } from './crewLoad';
@@ -23,7 +23,6 @@ import {
   ProductionMode,
   PinnedOperation
 } from '../types';
-import { CalendarModel } from '../models';
 import environment from '../config/environment';
 import ConstraintManager from './ConstraintManager';
 import { logger } from '../utils/logger';
@@ -583,7 +582,7 @@ export class SchedulingEngine {
       // Step 5: Calculate metrics
       const metrics = this.calculateMetrics(jobSchedules, resourceLoads, context);
 
-      const executionTimeMs = Date.now() - startTime;
+      logger.info({ jobs: jobSchedules.length, ms: Date.now() - startTime }, 'Scheduling run finished');
 
       return {
         scheduleId,
@@ -1544,7 +1543,6 @@ export class SchedulingEngine {
 
     // Only setup + run occupy the machine. Queue and move are timing constraints.
     const bookedMinutes = setupMinutes + runMinutes;
-    const capacityMs = bookedMinutes * 60 * 1000;
 
     const resourceSlots = overlapIndex(this.resourceLoads.get(resource.resourceId) || []);
     const workcentreSlots = overlapIndex(this.workcentreLoads.get(operation.workcentreId) || []);

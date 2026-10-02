@@ -7,7 +7,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Worker } from 'worker_threads';
 import * as path from 'path';
 import ConstraintManager from '../../services/ConstraintManager';
-import SysproDatabaseService from '../../services/SysproDatabaseService';
 import { sysproServiceFor } from '../sysproServiceFor';
 import SettingsService from '../../services/SettingsService';
 import APSDatabaseService from '../../services/APSDatabaseService';

@@ -22,7 +22,7 @@ import CommandPalette, { type PaletteCommand } from './components/CommandPalette
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import { useMarkerStore, passesMarkerFilter } from './stores/markerStore';
-import { useUiStore, type MainTab, type WorkflowJobFilter, type JobPaneMode, type ScheduleAroundMode } from './stores/uiStore';
+import { useUiStore, type WorkflowJobFilter, type JobPaneMode, type ScheduleAroundMode } from './stores/uiStore';
 import { useScheduleStore } from './stores/scheduleStore';
 import exportService from './services/exportService';
 import { createShortcutManager } from './services/keyboardShortcuts';
@@ -56,7 +56,7 @@ import './styles/lynq.css';
 const App: React.FC = () => {
   const isDarkMode = useUiStore((s) => s.isDarkMode);
   const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const schedule = useScheduleStore((s) => s.schedule);
   const setSchedule = useScheduleStore((s) => s.setSchedule);
   const [scheduleLoading, setScheduleLoading] = useState(true);
@@ -65,7 +65,6 @@ const App: React.FC = () => {
   const setScheduleSource = useScheduleStore((s) => s.setScheduleSource);
   // loading is provided by useScheduleGeneration (wired below after addVersion)
   const isGeneratingSchedule = useScheduleStore((s) => s.isGeneratingSchedule);
-  const setIsGeneratingSchedule = useScheduleStore((s) => s.setIsGeneratingSchedule);
   const generationProgress = useScheduleStore((s) => s.generationProgress);
   const setGenerationProgress = useScheduleStore((s) => s.setGenerationProgress);
   const generationStatusText = useScheduleStore((s) => s.generationStatusText);
@@ -95,7 +94,6 @@ const App: React.FC = () => {
   const showOverrideModal = useUiStore((s) => s.showOverrideModal);
   const setShowOverrideModal = useUiStore((s) => s.setShowOverrideModal);
   const [selectedViolation, setSelectedViolation] = useState<ConstraintViolation | null>(null);
-  const showShortcutsHelp = useUiStore((s) => s.showShortcutsHelp);
   const setShowShortcutsHelp = useUiStore((s) => s.setShowShortcutsHelp);
   const showSettingsModal = useUiStore((s) => s.showSettingsModal);
   const setShowSettingsModal = useUiStore((s) => s.setShowSettingsModal);
@@ -108,7 +106,6 @@ const App: React.FC = () => {
   const setShowConnectionModal = useUiStore((s) => s.setShowConnectionModal);
   const showSchemaModal = useUiStore((s) => s.showSchemaModal);
   const setShowSchemaModal = useUiStore((s) => s.setShowSchemaModal);
-  const contentTab = useUiStore((s) => s.contentTab);
   const setContentTab = useUiStore((s) => s.setContentTab);
   const ganttPrefs = useUiStore((s) => s.ganttPrefs);
   const setGanttPrefs = useUiStore((s) => s.setGanttPrefs);
@@ -122,9 +119,7 @@ const App: React.FC = () => {
   const centerPanelRef = useRef<HTMLDivElement | null>(null);
 
   // Gen3: What-If scenario
-  const whatIfSchedule = useScheduleStore((s) => s.whatIfSchedule);
   const setWhatIfSchedule = useScheduleStore((s) => s.setWhatIfSchedule);
-  const whatIfLabel = useScheduleStore((s) => s.whatIfLabel);
   const setWhatIfLabel = useScheduleStore((s) => s.setWhatIfLabel);
 
   // Gen3: Job grid search / filter (jobSearch + jobStatusFilter live in uiStore; debouncedJobSearch is derived)
@@ -148,7 +143,6 @@ const App: React.FC = () => {
   const setShowResourceTree = useUiStore((s) => s.setShowResourceTree);
   const setJobPaneMode = useUiStore((s) => s.setJobPaneMode);
   const scheduleAroundMode = useUiStore((s) => s.scheduleAroundMode) as ScheduleAroundMode;
-  const setScheduleAroundMode = useUiStore((s) => s.setScheduleAroundMode);
   // Column visibility, ordering, and profile persistence → useColumnManager (wired below after openJobs is available)
 
   // Gen3: Pagination for job grid tables (reset on filter/search change)
@@ -212,7 +206,6 @@ const App: React.FC = () => {
   // Data loading — jobs, resources, workcentres, materials, alternative groups
   const {
     openJobs,
-    setOpenJobs,
     resources,
     dataLoading,
     dataWarning,
@@ -227,7 +220,6 @@ const App: React.FC = () => {
     newAlternativeGroup,
     setNewAlternativeGroup,
     dbStatus,
-    setDbStatus,
     jobLoadRetryRef,
     loadJobsAndResources,
     loadSystemStatus,
@@ -241,16 +233,11 @@ const App: React.FC = () => {
   /** Drives MachineGanttBoard.focusWorkcentre — set after scheduling or a job click.
    *  A string focuses one lane; an array shows every lane the clicked job uses. */
   const [ganttFocusWorkcentre, setGanttFocusWorkcentre] = useState<string | string[] | null>(null);
-  const [expandedWorkcentres, setExpandedWorkcentres] = useState<Record<string, boolean>>({});
   const [expandedJobs, setExpandedJobs] = useState<Record<string, boolean>>({});
-  const workcentrePanelCollapsed = useUiStore((s) => s.workcentrePanelCollapsed);
-  const setWorkcentrePanelCollapsed = useUiStore((s) => s.setWorkcentrePanelCollapsed);
-  const workcentrePanelWidth = useUiStore((s) => s.workcentrePanelWidth);
   const setWorkcentrePanelWidth = useUiStore((s) => s.setWorkcentrePanelWidth);
   const jobsPanelHeight = useUiStore((s) => s.jobsPanelHeight);
   const setJobsPanelHeight = useUiStore((s) => s.setJobsPanelHeight);
   const [resizeMode, setResizeMode] = useState<null | 'left' | 'top'>(null);
-  const mainTab = useUiStore((s) => s.mainTab) as MainTab;
   const setMainTab = useUiStore((s) => s.setMainTab);
   const manageTab = useUiStore((s) => s.manageTab);
   const setManageTab = useUiStore((s) => s.setManageTab);
@@ -297,17 +284,14 @@ const App: React.FC = () => {
   // Column visibility, ordering, and profile persistence
   const {
     visibleJobColumns,
-    setVisibleJobColumns,
     visibleOperationColumns,
     allJobColumns,
     allOperationColumns,
-    dynamicDbColumns,
     orderedVisibleColumns,
     showColumnPicker,
     setShowColumnPicker,
     showOperationColumnPicker,
     setShowOperationColumnPicker,
-    dragColRef,
     columnProfileName,
     setColumnProfileName,
     profileSaving,
@@ -316,7 +300,6 @@ const App: React.FC = () => {
     toggleOperationColumn,
     handleColDragStart,
     handleColDrop,
-    formatGridColumnValue,
     formatJobColumnValue,
     formatOperationColumnValue,
   } = useColumnManager({ openJobs, userId: user?.id !== undefined ? String(user.id) : undefined });
@@ -923,7 +906,7 @@ const App: React.FC = () => {
       // Optimistic pin
       togglePinnedOp(jobId, opId);
       try {
-        const result = await pinService.pin(pinDto);
+        await pinService.pin(pinDto);
         const fullPin: PinnedOperationDto = { ...pinDto, pinnedAt: new Date().toISOString() };
         setPinnedOpDetails(new Map([...useScheduleStore.getState().pinnedOpDetails, [key, fullPin]]));
         toast.success(`Operation ${opId} pinned — it will stay fixed on regeneration`);
@@ -1272,8 +1255,6 @@ const App: React.FC = () => {
 
   // Manual scheduling (drag/drop, schedule-around, op moves, context menu) — hooks/useManualScheduling.ts
   const {
-    alignToProductiveWindow,
-    calculateProductiveEndMs,
     autoScheduleDroppedJob,
     handleJobRowClick,
     openJobContextMenu,

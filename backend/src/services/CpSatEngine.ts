@@ -396,7 +396,7 @@ export class CpSatSchedulingEngine implements ISchedulingEngine {
 
   private buildResourceLoads(
     scheduledOps: ScheduledOperation[],
-    context: SchedulingContext
+    _context: SchedulingContext
   ): ResourceLoad[] {
     // Group by resource → day
     const loads = new Map<string, Map<string, number>>(); // resourceId → date-str → minutes
@@ -463,7 +463,7 @@ export class CpSatSchedulingEngine implements ISchedulingEngine {
     scheduleId: string,
     context: SchedulingContext,
     message: string,
-    executionTimeMs: number
+    _executionTimeMs: number
   ): Schedule {
     const violation: ConstraintViolation = {
       violationId: uuidv4(),

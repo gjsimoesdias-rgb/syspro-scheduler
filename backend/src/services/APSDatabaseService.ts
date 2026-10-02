@@ -5,7 +5,7 @@
  */
 
 import DatabaseConnection, { DbExecutor } from '../database/connection';
-import { Schedule, JobSchedule, OperationSchedule } from '../types';
+import { Schedule, JobSchedule } from '../types';
 import { logger } from '../utils/logger';
 
 export interface ExportResult {
@@ -339,7 +339,7 @@ export class APSDatabaseService {
     db: DbExecutor,
     jobSchedule: JobSchedule,
     ordNumber: string,
-    schedule: Schedule
+    _schedule: Schedule
   ): Promise<void> {
     try {
       const now = new Date();

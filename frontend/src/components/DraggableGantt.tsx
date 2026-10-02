@@ -36,7 +36,7 @@ const DraggableGantt: React.FC<DraggableGanttProps> = ({ schedule, onJobMoved })
     return newDate;
   };
 
-  const handleMouseDown = (op: OperationSchedule, e: React.MouseEvent) => {
+  const handleMouseDown = (op: OperationSchedule, _e: React.MouseEvent) => {
     setDraggedOp(op);
   };
 

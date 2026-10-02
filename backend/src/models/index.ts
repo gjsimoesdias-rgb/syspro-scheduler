@@ -9,12 +9,6 @@ import {
   Workcentre,
   Resource,
   Material,
-  BOMLine,
-  Schedule,
-  JobSchedule,
-  OperationSchedule,
-  ResourceLoad,
-  ConstraintViolation,
   Calendar,
   Shift,
   Holiday
@@ -111,7 +105,7 @@ export class ResourceModel implements Resource {
     return this.skillTags.includes(requiredSkill);
   }
 
-  isAvailable(date: Date): boolean {
+  isAvailable(_date: Date): boolean {
     return this.status === 'Available' && this.calendar != null;
   }
 }
