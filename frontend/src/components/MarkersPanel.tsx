@@ -58,7 +58,7 @@ const MarkersPanel: React.FC = () => {
     <div className="shifts-table-section crews-panel">
       <div className="shift-rule-note">
         Markers are coloured tags for jobs (e.g. <i>Customer rush</i>, <i>Trial run</i>). Set one with right-click → <b>Marker</b> on a job;
-        it shows in the <b>Marker</b> column and as a flag on the job's Gantt bars.
+        it shows in the <b>Marker</b> column and as a flag on the job&rsquo;s Gantt bars.
       </div>
       <table className="shifts-table">
         <thead><tr><th>Colour</th><th>Name</th><th>Jobs</th><th /></tr></thead>

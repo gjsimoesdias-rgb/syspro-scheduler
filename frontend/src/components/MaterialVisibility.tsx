@@ -92,7 +92,7 @@ export default function MaterialVisibility({ jobSchedules, jobs }: MaterialVisib
           <h3>Projected inventory</h3>
           <div className="mat-sub">
             Stock on hand less sales-order allocations and open jobs outside the plan, then PO receipts on their
-            promise dates, sub-assembly output at job end, and each job's needs at its planned start.
+            promise dates, sub-assembly output at job end, and each job&rsquo;s needs at its planned start.
           </div>
         </div>
         <div className="mat-stats">

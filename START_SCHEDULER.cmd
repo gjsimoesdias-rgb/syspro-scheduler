@@ -31,6 +31,10 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr /R /C:":3000 .*LISTENING"') d
   echo Stopping old server (PID %%p^)...
   taskkill /PID %%p /F >nul 2>nul
 )
+rem Production mode: rate limits on, no stack traces in API errors.
+rem (dotenv never overrides these, whatever backend\.env says.)
+set NODE_ENV=production
+set LOG_FORMAT=pretty
 cd backend
 call npm start
 goto :end

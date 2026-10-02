@@ -13,13 +13,16 @@ import pinoHttp from 'pino-http';
 import { v4 as uuidv4 } from 'uuid';
 import environment from '../config/environment';
 
-const isDev = environment.nodeEnv !== 'production';
+// LOG_FORMAT=pretty|json overrides; otherwise pretty in dev, JSON in production.
+// START_SCHEDULER.cmd runs production with pretty logs (people read that window).
+const pretty = process.env.LOG_FORMAT
+  ? process.env.LOG_FORMAT.toLowerCase() === 'pretty'
+  : environment.nodeEnv !== 'production';
 
 export const logger: PinoLogger = pino({
   level: environment.logLevel || 'info',
   base: { service: 'syspro-scheduler' },
-  // Pretty in dev; plain JSON in production.
-  transport: isDev
+  transport: pretty
     ? {
         target: 'pino-pretty',
         options: {

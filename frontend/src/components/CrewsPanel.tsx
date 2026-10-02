@@ -145,7 +145,7 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
   return (
     <div className="shifts-table-section crews-panel">
       <div className="shift-rule-note">
-        Operators are shared by the lines in a crew. A crew's operators are the SYSPRO employees
+        Operators are shared by the lines in a crew. A crew&rsquo;s operators are the SYSPRO employees
         (BomEmployee) mapped to it below; an employee whose SYSPRO ShiftId matches a CRUX shift
         (Manage → Shifts, by code or name) only counts while that shift is working. When crew limits are on, the scheduler only runs an operation
         while its crew has enough free operators — a crew of 6 runs two lines that need 3 each, and a third

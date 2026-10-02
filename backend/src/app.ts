@@ -68,34 +68,52 @@ app.get('/health/ready', (req: Request, res: Response) => {
   });
 });
 
-// Rate limiting — prevent runaway schedule generation and brute-force auth
+// Rate limiting. Only the expensive or guessable endpoints are limited — the
+// board polls /latest, /pins, /publish-status and autosaves on every edit, so a
+// limit on all of /api/schedule would lock planners out in production.
 const isProd = process.env.NODE_ENV === 'production';
 
-const scheduleRateLimit = rateLimit({
+// Generate / optimize / auto-run / export: CPU- or SYSPRO-heavy runs.
+const scheduleRunRateLimit = rateLimit({
   windowMs: 60_000,
   max: isProd ? 10 : 10_000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many schedule requests, please wait a minute.' },
+  message: { error: 'Too many schedule runs, please wait a minute.' },
 });
 
-const authRateLimit = rateLimit({
-  windowMs: 15 * 60_000, // 15 minutes
+// Password guessing: only failed logins count.
+const loginRateLimit = rateLimit({
+  windowMs: 15 * 60_000,
   max: isProd ? 20 : 10_000,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many authentication attempts, please try again later.' },
+  message: { error: 'Too many failed sign-in attempts, please try again later.' },
+});
+
+// Refresh / logout / me / NTLM handshake: generous, just a flood guard.
+const sessionRateLimit = rateLimit({
+  windowMs: 15 * 60_000,
+  max: isProd ? 600 : 10_000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication requests, please try again later.' },
 });
 
 // API routes
 // Public: auth (login / refresh / logout / NTLM handshake), health, shopfloor
-app.use('/api/auth', authRateLimit, authRoutes);
-app.use('/api/auth/ntlm', authRateLimit, ntlmAuthRoutes);
+app.post('/api/auth/login', loginRateLimit);
+app.use('/api/auth', sessionRateLimit, authRoutes);
+app.use('/api/auth/ntlm', ntlmAuthRoutes); // already rate-limited by the /api/auth mount above
 app.use('/api/shopfloor', shopfloorRoutes);
 
 // Protected: all remaining routes require a valid JWT
 app.use('/api/schedule', eventsRoutes);   // SSE events stream — public, EventSource can't send headers; MUST be before requireAuth
-app.use('/api/schedule', scheduleRateLimit, requireAuth, scheduleRoutes);
+for (const runPath of ['/api/schedule/generate', '/api/schedule/optimize', '/api/schedule/auto/run', '/api/schedule/:scheduleId/export-to-syspro']) {
+  app.post(runPath, scheduleRunRateLimit);
+}
+app.use('/api/schedule', requireAuth, scheduleRoutes);
 app.use('/api/jobs', requireAuth, jobRoutes);
 app.use('/api/resources', requireAuth, resourceRoutes);
 // /databases and /connect can list databases, reconnect the whole server and
