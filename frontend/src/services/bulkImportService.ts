@@ -6,6 +6,7 @@ import Papa from 'papaparse';
 // Shared client: same-origin base URL + the signed-in user's token (the old
 // private axios instance sent no token, so bulk import always got 401).
 import { apiClient } from './api';
+import type { AxiosResponse } from 'axios';
 
 export interface ImportJobData {
   jobId: string;
@@ -115,7 +116,7 @@ export class BulkImportService {
   /**
    * Upload jobs via API
    */
-  static async importJobs(jobs: ImportJobData[]): Promise<any> {
+  static async importJobs(jobs: ImportJobData[]): Promise<AxiosResponse<unknown>> {
     const payload = jobs.map((j) => ({
       jobId: j.jobId,
       description: j.description || '',
@@ -130,7 +131,7 @@ export class BulkImportService {
   /**
    * Upload operations via API
    */
-  static async importOperations(operations: ImportOperationData[]): Promise<any> {
+  static async importOperations(operations: ImportOperationData[]): Promise<AxiosResponse<unknown>> {
     const payload = operations.map((o) => ({
       jobId: o.jobId,
       opSequence: o.opSequence,
@@ -146,7 +147,7 @@ export class BulkImportService {
   /**
    * Helper: Process file upload
    */
-  static async processFile(file: File, importType: 'jobs' | 'operations'): Promise<any> {
+  static async processFile(file: File, importType: 'jobs' | 'operations'): Promise<AxiosResponse<unknown>> {
     const text = await file.text();
     const rows = this.parseCSV(text);
 

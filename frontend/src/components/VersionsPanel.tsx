@@ -33,6 +33,7 @@ const KPIS: Kpi[] = [
 ];
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const pct = (v: unknown): string => { const n = num(v); return n !== null ? `${n.toFixed(1)}%` : '—'; };
 const when = (d: string) => new Date(d).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 const VersionsPanel: React.FC = () => {
@@ -194,9 +195,9 @@ const VersionsPanel: React.FC = () => {
         </td>
         <td>{v.status}</td>
         <td>{when(v.savedAt)}{v.createdBy ? <span className="vp-by"> · {v.createdBy}</span> : null}</td>
-        <td className="vp-num">{num(m.otdRate) !== null ? `${m.otdRate.toFixed(1)}%` : '—'}</td>
+        <td className="vp-num">{pct(m.otdRate)}</td>
         <td className="vp-num">{num(m.jobsTardy) ?? '—'}</td>
-        <td className="vp-num">{num(m.resourceUtilization) !== null ? `${m.resourceUtilization.toFixed(1)}%` : '—'}</td>
+        <td className="vp-num">{pct(m.resourceUtilization)}</td>
         <td className="vp-num">{num(m.violations) ?? '—'}</td>
         <td className="vp-actions">
           {v.kind !== 'History' && !isOpen && <button className="btn btn-sm" disabled={!!busy} onClick={() => openVersion(v)}>Open</button>}

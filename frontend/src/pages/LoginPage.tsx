@@ -70,7 +70,7 @@ const LoginPage: React.FC = () => {
         password: setupForm.password,
       };
       if (setupForm.port.trim()) payload.port = Number(setupForm.port.trim());
-      const res = await statusService.getDatabases(payload as any);
+      const res = await statusService.getDatabases(payload as Parameters<typeof statusService.getDatabases>[0]);
       const dbs: string[] = res.databases || [];
       setAvailableCompanies(dbs);
       if (dbs.length > 0) setSelectedCompany(prev => prev || dbs[0]);
@@ -97,7 +97,7 @@ const LoginPage: React.FC = () => {
         schedulerDatabase: setupForm.schedulerDatabase.trim() || 'SCHEDULER',
       };
       if (setupForm.port.trim()) payload.port = Number(setupForm.port.trim());
-      const result = await statusService.connect(payload as any);
+      const result = await statusService.connect(payload as Parameters<typeof statusService.connect>[0]);
       if (result?.initialAdmin?.username && result?.initialAdmin?.password) {
         setInitialAdmin(result.initialAdmin);
         setUsername(result.initialAdmin.username);

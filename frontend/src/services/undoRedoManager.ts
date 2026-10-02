@@ -1,10 +1,11 @@
+import type { Schedule } from '../types';
 /**
  * Undo/Redo functionality manager
  */
 
 export interface ScheduleState {
   timestamp: Date;
-  scheduleData: any;
+  scheduleData: Schedule;
   description: string;
 }
 
@@ -13,7 +14,7 @@ export class UndoRedoManager {
   private currentIndex = -1;
   private maxHistorySize = 50;
 
-  addState(scheduleData: any, description: string): void {
+  addState(scheduleData: Schedule, description: string): void {
     // Remove any redo states
     this.history = this.history.slice(0, this.currentIndex + 1);
 
@@ -56,11 +57,11 @@ export class UndoRedoManager {
     return this.currentIndex < this.history.length - 1;
   }
 
-  getHistory(): ScheduleState[] {
+  getHistory(): Array<ScheduleState & { isCurrent: boolean }> {
     return this.history.map((state, index) => ({
       ...state,
       isCurrent: index === this.currentIndex
-    })) as any;
+    }));
   }
 
   clear(): void {

@@ -186,6 +186,33 @@ export async function apiJson<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DEL
   }
 }
 
+/** Result of POST /schedule/:id/export-to-syspro. */
+export interface ExportResult {
+  scheduleId: string;
+  status: string;
+  message?: string;
+  details?: {
+    schedulesWritten?: number;
+    operationsWritten?: number;
+    unchanged?: number;
+    skippedNotInSyspro?: string[];
+    errors?: string[];
+    executionTimeMs?: number;
+  };
+}
+
+/** The saved master's row details returned with GET /schedule/latest. */
+export interface LatestMeta {
+  scheduleId: string;
+  status: string;
+  jobCount?: number | null;
+  operationCount?: number | null;
+  generatedAt?: string | null;
+  savedAt?: string | null;
+  /** Master revision; send back as baseRevision when saving. */
+  revision?: number;
+}
+
 /** A shift's time block (Resources > Shifts). Diversions cover the 24 h day. */
 export interface ShiftDiversionDto { id: string; type: string; startTime: string; endTime: string; schedulable: boolean }
 /** A shift template as /api/resources/definitions returns it. */
@@ -221,7 +248,7 @@ export const scheduleService = {
    * its own store by id (it ignores any body), so call save() first. Long timeout: the export refreshes the APS cache and writes
    * every operation inside one transaction.
    */
-  exportToSyspro: async (scheduleId: string): Promise<any> => {
+  exportToSyspro: async (scheduleId: string): Promise<ExportResult> => {
     const response = await apiClient.post(
       `/schedule/${encodeURIComponent(scheduleId)}/export-to-syspro`,
       {},
@@ -244,13 +271,13 @@ export const scheduleService = {
     return run;
   },
 
-  loadLatest: async (): Promise<{ schedule: Schedule | null; meta?: any }> => {
+  loadLatest: async (): Promise<{ schedule: Schedule | null; meta?: LatestMeta }> => {
     const response = await apiClient.get('/schedule/latest');
     return response.data;
   },
 
   /** Load the master AND make it the board's base for saves (use when putting it on the board). */
-  openLatest: async (): Promise<{ schedule: Schedule | null; meta?: any }> => {
+  openLatest: async (): Promise<{ schedule: Schedule | null; meta?: LatestMeta }> => {
     const data = (await apiClient.get('/schedule/latest')).data;
     masterRevision.set(data?.schedule ? (typeof data?.meta?.revision === 'number' ? data.meta.revision : undefined) : null);
     return data;
@@ -276,7 +303,8 @@ export interface VersionSummary {
   savedAt: string;
   createdBy: string | null;
   basedOnId: string | null;
-  metrics: Record<string, any> | null;
+  /** KPI snapshot (numbers keyed by metric name, plus violations). */
+  metrics: Record<string, number | undefined> | null;
 }
 
 export interface AutoPlanConfig { enabled: boolean; intervalMinutes: number; onJobChange: boolean; checkMinutes: number; enabledBy?: string }
@@ -814,7 +842,7 @@ export interface CompanySettingsDto {
     };
     [key: string]: unknown;
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export const settingsService = {

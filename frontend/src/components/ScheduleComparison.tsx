@@ -151,13 +151,12 @@ const ScheduleComparison: React.FC<ScheduleComparisonProps> = ({ currentSchedule
               </thead>
               <tbody>
                 {currentSchedule.jobSchedules
-                  .filter((job) => {
+                  .flatMap((job) => {
                     const prevJob = previousSchedule.jobSchedules.find((j) => j.jobId === job.jobId);
-                    return prevJob && prevJob.plannedStartDate !== job.plannedStartDate;
+                    return prevJob && prevJob.plannedStartDate !== job.plannedStartDate ? [{ job, prevJob }] : [];
                   })
                   .slice(0, 10)
-                  .map((job) => {
-                    const prevJob = previousSchedule.jobSchedules.find((j) => j.jobId === job.jobId)!;
+                  .map(({ job, prevJob }) => {
                     const daysChange =
                       (job.plannedStartDate.getTime() - prevJob.plannedStartDate.getTime()) /
                       (1000 * 60 * 60 * 24);

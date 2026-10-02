@@ -123,15 +123,16 @@ export function newGroup(combinator: 'AND' | 'OR' = 'AND'): FilterGroup {
  * Resolves a comparable value for a field from a job. `ctx` supplies computed
  * statuses that aren't raw job properties.
  */
-export interface FilterContext {
-  scheduleStatus?: (job: any) => string;   // -> 'Scheduled' | 'Partial' | 'Not Scheduled'
-  materialStatus?: (job: any) => string;    // -> 'Materials' | 'Partial' | 'No Materials'
+export interface FilterContext<J = object> {
+  scheduleStatus?: (job: J) => string;   // -> 'Scheduled' | 'Partial' | 'Not Scheduled'
+  materialStatus?: (job: J) => string;    // -> 'Materials' | 'Partial' | 'No Materials'
 }
 
-export function getFieldValue(job: any, key: string, ctx: FilterContext = {}): unknown {
-  if (key === 'scheduleStatus') return ctx.scheduleStatus ? ctx.scheduleStatus(job) : job.scheduleStatus;
-  if (key === 'materialStatus') return ctx.materialStatus ? ctx.materialStatus(job) : job.materialStatus;
-  return job ? job[key] : undefined;
+export function getFieldValue<J extends object>(job: J, key: string, ctx: FilterContext<J> = {}): unknown {
+  const fields = job as Record<string, unknown>;
+  if (key === 'scheduleStatus') return ctx.scheduleStatus ? ctx.scheduleStatus(job) : fields?.scheduleStatus;
+  if (key === 'materialStatus') return ctx.materialStatus ? ctx.materialStatus(job) : fields?.materialStatus;
+  return job ? fields[key] : undefined;
 }
 
 function toNum(v: unknown): number | null {
@@ -149,7 +150,7 @@ function isBlank(v: unknown): boolean {
   return v === null || v === undefined || String(v).trim() === '';
 }
 
-function evalRule(job: any, rule: FilterRule, ctx: FilterContext): boolean {
+function evalRule<J extends object>(job: J, rule: FilterRule, ctx: FilterContext<J>): boolean {
   const def = fieldDef(rule.field);
   if (!def) return true; // incomplete rule -> no effect
   const raw = getFieldValue(job, rule.field, ctx);
@@ -222,7 +223,7 @@ function evalRule(job: any, rule: FilterRule, ctx: FilterContext): boolean {
 }
 
 /** True if the job satisfies the filter group. Empty tree -> true. */
-export function jobMatchesFilter(job: any, group: FilterGroup | null, ctx: FilterContext = {}): boolean {
+export function jobMatchesFilter<J extends object>(job: J, group: FilterGroup | null, ctx: FilterContext<J> = {}): boolean {
   if (!group) return true;
   const active = group.children.filter((c) =>
     c.kind === 'group' ? true : !!fieldDef((c as FilterRule).field)
@@ -260,18 +261,20 @@ function compareValues(a: unknown, b: unknown, type: FieldType): number {
 }
 
 /** Stable multi-level sort. Returns a new array; empty sorts -> original order. */
-export function applyAdvancedSort<T = any>(jobs: T[], sorts: SortSpec[], ctx: FilterContext = {}): T[] {
-  const active = sorts.filter((s) => !!fieldDef(s.field));
+export function applyAdvancedSort<T extends object>(jobs: T[], sorts: SortSpec[], ctx: FilterContext<T> = {}): T[] {
+  const active = sorts.flatMap((s) => {
+    const def = fieldDef(s.field);
+    return def ? [{ ...s, def }] : [];
+  });
   if (active.length === 0) return jobs;
   return jobs
     .map((job, index) => ({ job, index }))
     .sort((p, q) => {
       for (const s of active) {
-        const def = fieldDef(s.field)!;
         const cmp = compareValues(
           getFieldValue(p.job, s.field, ctx),
           getFieldValue(q.job, s.field, ctx),
-          def.type
+          s.def.type
         );
         if (cmp !== 0) return s.direction === 'asc' ? cmp : -cmp;
       }

@@ -12,7 +12,7 @@ if (typeof globalThis.localStorage?.clear !== 'function') {
   const storage: Storage = {
     get length() { return data.size; },
     clear: () => data.clear(),
-    getItem: (k) => (data.has(k) ? data.get(k)! : null),
+    getItem: (k) => data.get(k) ?? null,
     key: (i) => Array.from(data.keys())[i] ?? null,
     removeItem: (k) => { data.delete(k); },
     setItem: (k, v) => { data.set(k, String(v)); },

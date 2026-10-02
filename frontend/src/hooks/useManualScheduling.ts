@@ -961,8 +961,9 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
         if (isSameJobTail) continue;
 
         const wc = String(existing.workcentreId || '');
-        if (!intervalsByWorkcentre.has(wc)) intervalsByWorkcentre.set(wc, []);
-        intervalsByWorkcentre.get(wc)!.push({
+        const intervals = intervalsByWorkcentre.get(wc) ?? [];
+        intervalsByWorkcentre.set(wc, intervals);
+        intervals.push({
           start: new Date(existing.plannedStartDate).getTime(),
           end: new Date(existing.plannedEndDate).getTime()
         });

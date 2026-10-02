@@ -89,7 +89,7 @@ const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
             </button>
           </div>
 
-          {activePanel === 'compare' && diff && (
+          {activePanel === 'compare' && diff && liveSchedule && (
             <div className="whatif-compare-grid">
               <div className="whatif-compare-row header">
                 <span>Metric</span>
@@ -100,49 +100,49 @@ const WhatIfPanel: React.FC<WhatIfPanelProps> = ({
 
               <div className="whatif-compare-row">
                 <span>Jobs Scheduled</span>
-                <span>{liveSchedule!.metrics.totalJobsScheduled}</span>
+                <span>{liveSchedule.metrics.totalJobsScheduled}</span>
                 <span>{scenarioSchedule.metrics.totalJobsScheduled}</span>
                 <span>{fmtDiff(diff.jobs)}</span>
               </div>
 
               <div className="whatif-compare-row">
                 <span>Jobs On-Time</span>
-                <span>{liveSchedule!.metrics.jobsOnTime}</span>
+                <span>{liveSchedule.metrics.jobsOnTime}</span>
                 <span>{scenarioSchedule.metrics.jobsOnTime}</span>
                 <span>{fmtDiff(diff.onTime)}</span>
               </div>
 
               <div className="whatif-compare-row">
                 <span>Avg Tardiness (d)</span>
-                <span>{liveSchedule!.metrics.averageTardiness.toFixed(2)}</span>
+                <span>{liveSchedule.metrics.averageTardiness.toFixed(2)}</span>
                 <span>{scenarioSchedule.metrics.averageTardiness.toFixed(2)}</span>
                 <span>{fmtDiff(diff.tardiness, true)}</span>
               </div>
 
               <div className="whatif-compare-row">
                 <span>Utilization (%)</span>
-                <span>{Math.round(liveSchedule!.metrics.resourceUtilization)}%</span>
+                <span>{Math.round(liveSchedule.metrics.resourceUtilization)}%</span>
                 <span>{Math.round(scenarioSchedule.metrics.resourceUtilization)}%</span>
                 <span>{fmtDiff(diff.utilization)}</span>
               </div>
 
               <div className="whatif-compare-row">
                 <span>Overtime (h)</span>
-                <span>{Math.round(liveSchedule!.metrics.overtimeHours)}h</span>
+                <span>{Math.round(liveSchedule.metrics.overtimeHours)}h</span>
                 <span>{Math.round(scenarioSchedule.metrics.overtimeHours)}h</span>
                 <span>{fmtDiff(diff.overtime, true)}</span>
               </div>
 
               <div className="whatif-compare-row">
                 <span>Violations</span>
-                <span>{liveSchedule!.constraintViolations.length}</span>
+                <span>{liveSchedule.constraintViolations.length}</span>
                 <span>{scenarioSchedule.constraintViolations.length}</span>
                 <span>{fmtDiff(diff.violations, true)}</span>
               </div>
 
               <div className="whatif-compare-row">
                 <span>Schedule Date</span>
-                <span>{format(new Date(liveSchedule!.scheduledDate), 'dd/MM HH:mm')}</span>
+                <span>{format(new Date(liveSchedule.scheduledDate), 'dd/MM HH:mm')}</span>
                 <span>{format(new Date(scenarioSchedule.scheduledDate), 'dd/MM HH:mm')}</span>
                 <span>—</span>
               </div>

@@ -31,17 +31,15 @@ export default function ResourceLeveling(props: ResourceLevelingProps) {
 
     jobSchedules.forEach(job => {
       job.operationSchedules.forEach(op => {
-        if (!stats.has(op.resourceId)) {
-          stats.set(op.resourceId, {
-            resourceId: op.resourceId,
-            utilizationPercent: 0,
-            peakHours: 0,
-            slackHours: 0,
-            costPerDay: 0,
-            operations: []
-          });
-        }
-        const stat = stats.get(op.resourceId)!;
+        const stat: ResourceStats = stats.get(op.resourceId) ?? {
+          resourceId: op.resourceId,
+          utilizationPercent: 0,
+          peakHours: 0,
+          slackHours: 0,
+          costPerDay: 0,
+          operations: []
+        };
+        stats.set(op.resourceId, stat);
         stat.operations.push(op);
       });
     });

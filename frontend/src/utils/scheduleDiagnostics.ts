@@ -66,7 +66,7 @@ export function lateReasons(
     if (!due || Number.isNaN(due.getTime())) continue;
     const end = new Date(js.plannedEndDate);
     const lines = [`Finishes ${fmtSpan((end.getTime() - due.getTime()) / 60000)} after the due date (${fmtDate(due)}).`];
-    const ops = (js.operationSchedules || []) as any[];
+    const ops = js.operationSchedules || [];
     const firstReady = ops[0]?.readyAt ? new Date(ops[0].readyAt) : null;
     if (firstReady && firstReady.getTime() >= due.getTime()) {
       lines.push(`The due date had already passed when the job could start (ready ${fmtDate(firstReady)}).`);

@@ -9,9 +9,19 @@ export interface ProductiveWindow {
   endMs: number;
 }
 
+/** The calendar fields the window logic reads (all optional; defaults apply). */
+export interface CalendarLike {
+  workingDays?: number[];
+  shifts?: Array<{
+    startTime?: string;
+    endTime?: string;
+    diversions?: Array<{ startTime?: string; endTime?: string; schedulable?: boolean }>;
+  }>;
+}
+
 export interface CalendarWindowEnv {
   /** Resolve the shift calendar for a workcentre (or machine) id. */
-  getCalendar: (workcentreId: string) => any;
+  getCalendar: (workcentreId: string) => CalendarLike | null | undefined;
   horizonStartMs: number;
   horizonEndMs: number;
 }
@@ -29,7 +39,7 @@ export const timeToMinutes = (value?: string): number => {
  * Non-working days return []. Missing calendar data falls back to
  * Mon–Fri 08:00–16:00.
  */
-export function getProductiveWindowsForDate(calendar: any, baseDate: Date): ProductiveWindow[] {
+export function getProductiveWindowsForDate(calendar: CalendarLike | null | undefined, baseDate: Date): ProductiveWindow[] {
   const day = new Date(baseDate);
   day.setHours(0, 0, 0, 0);
 

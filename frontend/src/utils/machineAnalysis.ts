@@ -6,6 +6,7 @@
  */
 import type { Resource, Schedule } from '../types';
 import { getProductiveWindowsForDate } from './calendarWindows';
+import type { CalendarLike } from './calendarWindows';
 
 export interface MachineDay { day: string; availMin: number; setupMin: number; runMin: number; idleMin: number; loadPct: number }
 export interface MachineRow {
@@ -29,7 +30,7 @@ export function analyseMachines(schedule: Schedule | null, resources: Resource[]
   const dayStarts = Array.from({ length: days }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
 
   // Machines: the resources, plus any machine id the plan uses that isn't one.
-  const meta = new Map<string, { name: string; lineId: string; calendar: any }>();
+  const meta = new Map<string, { name: string; lineId: string; calendar: CalendarLike | undefined }>();
   for (const r of resources) meta.set(r.resourceId, { name: r.name || r.resourceId, lineId: r.worcentreId, calendar: r.calendar });
   type Seg = { s0: number; s1: number; r0: number; r1: number };
   const segs = new Map<string, Seg[]>();
@@ -44,7 +45,9 @@ export function analyseMachines(schedule: Schedule | null, resources: Resource[]
       }
       const s0 = ms(op.setupStart), s1 = ms(op.setupEnd);
       const r0 = ms(op.runStart) || ms(op.plannedStartDate), r1v = ms(op.runEnd) || ms(op.plannedEndDate);
-      (segs.get(id) || segs.set(id, []).get(id)!).push({
+      const list = segs.get(id) ?? [];
+      segs.set(id, list);
+      list.push({
         s0: Number.isFinite(s0) ? s0 : 0, s1: Number.isFinite(s1) ? s1 : 0,
         r0: Number.isFinite(r0) ? r0 : 0, r1: Number.isFinite(r1v) ? r1v : 0,
       });

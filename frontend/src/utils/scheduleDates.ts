@@ -16,7 +16,7 @@ export const convertScheduleDates = (schedule: Schedule): Schedule => {
       ...job,
       plannedStartDate: new Date(job.plannedStartDate),
       plannedEndDate: new Date(job.plannedEndDate),
-      operationSchedules: job.operationSchedules.map((op: any) => ({
+      operationSchedules: job.operationSchedules.map((op) => ({
         ...op,
         plannedStartDate: new Date(op.plannedStartDate),
         plannedEndDate: new Date(op.plannedEndDate),

@@ -12,14 +12,14 @@ const iso = (v: unknown): string | null => {
 export function planJobsFrom(jobs: Job[], jobSchedules: JobSchedule[]): PlanJob[] {
   const byId = new Map(jobSchedules.map((s) => [s.jobId, s]));
   return jobs.map((j) => {
-    const s = byId.get(j.jobId);
-    const ok = !!s && s.status !== 'Unschedulable';
+    const found = byId.get(j.jobId);
+    const s = found && found.status !== 'Unschedulable' ? found : undefined;
     return {
       jobId: j.jobId,
       itemCode: j.itemCode,
       quantity: Number(j.quantity) || 0,
-      start: ok ? iso(s!.plannedStartDate) : null,
-      end: ok ? iso(s!.plannedEndDate) : null,
+      start: s ? iso(s.plannedStartDate) : null,
+      end: s ? iso(s.plannedEndDate) : null,
       dueDate: iso(j.dueDate) ?? undefined,
     };
   });
