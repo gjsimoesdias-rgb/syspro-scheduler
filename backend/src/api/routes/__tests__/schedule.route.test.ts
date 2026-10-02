@@ -443,3 +443,37 @@ describe('export-to-syspro — master only, one at a time', () => {
     expect(third.status).toBe(200);
   });
 });
+
+describe('POST /api/schedule/save — stale board protection', () => {
+  const token = makeToken('planner');
+  afterEach(() => { app.locals.sysproDb = undefined; });
+  const body = (baseRevision: unknown) => ({ schedule: { scheduleId: 'S1', jobSchedules: [] }, baseRevision });
+
+  it('409 MASTER_CHANGED when the master moved on since the board loaded', async () => {
+    const db = makeFakeDb({
+      query: jest.fn().mockImplementation(async (sql: string) =>
+        /SELECT TOP 1 Revision/.test(sql) ? { recordset: [{ Revision: 9 }] } : { recordset: [{ n: 10 }] }),
+    });
+    app.locals.sysproDb = db as any;
+    const res = await request(app).post('/api/schedule/save').set('Authorization', `Bearer ${token}`).send(body(3));
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'MASTER_CHANGED', currentRevision: 9 });
+    expect(db.queryWithParams.mock.calls.some(([sql]: [string]) => /INSERT INTO aps\.SavedSchedules/.test(sql))).toBe(false);
+  });
+
+  it('saves and returns the new revision when the base matches', async () => {
+    app.locals.sysproDb = makeFakeDb({
+      query: jest.fn().mockImplementation(async (sql: string) =>
+        /SELECT TOP 1 Revision/.test(sql) ? { recordset: [{ Revision: 9 }] } : { recordset: [{ n: 10 }] }),
+    }) as any;
+    const res = await request(app).post('/api/schedule/save').set('Authorization', `Bearer ${token}`).send(body(9));
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ saved: true, revision: 10 });
+  });
+
+  it('400 for a non-numeric baseRevision', async () => {
+    app.locals.sysproDb = makeFakeDb() as any;
+    const res = await request(app).post('/api/schedule/save').set('Authorization', `Bearer ${token}`).send(body('abc'));
+    expect(res.status).toBe(400);
+  });
+});

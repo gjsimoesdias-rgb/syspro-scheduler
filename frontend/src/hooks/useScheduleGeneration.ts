@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { Job, Resource } from '../types';
 import { useUiStore } from '../stores/uiStore';
 import { useScheduleStore } from '../stores/scheduleStore';
-import { apiClient, scheduleService, apiErrorMessage } from '../services/api';
+import { apiClient, scheduleService, apiErrorMessage, masterRevision } from '../services/api';
 import exportService from '../services/exportService';
 import { convertScheduleDates } from '../utils/scheduleDates';
 import { DbStatus } from './useJobsData';
@@ -127,6 +127,10 @@ export function useScheduleGeneration({
       setGenerationProgress(100);
       setGenerationStatusText('Schedule ready');
 
+      // A run that replaced the master returns its new revision: the board now stands on it.
+      if (!activeVersion && typeof response.data.masterRevision === 'number') {
+        masterRevision.set(response.data.masterRevision);
+      }
       const newSchedule = convertScheduleDates(response.data.schedule);
       setSchedule(newSchedule);
       setScheduleSource('session');

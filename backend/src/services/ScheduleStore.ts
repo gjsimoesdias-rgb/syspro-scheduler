@@ -17,7 +17,29 @@ export interface SaveLatestOptions {
   createdBy?: string;
   /** Version this plan was derived from (e.g. the what-if it was committed from). */
   basedOnId?: string | null;
+  /**
+   * Optimistic concurrency: the master revision the caller's board was based
+   * on. undefined = don't check (server-side runs such as Generate); null =
+   * the caller believes there is no master yet. A mismatch throws 409.
+   */
+  baseRevision?: number | null;
 }
+
+/** Next master revision (call inside the write transaction). */
+async function nextRevision(tx: DbExecutor): Promise<number> {
+  const r = await tx.query(`SELECT ISNULL(MAX(Revision), 0) + 1 AS n FROM aps.SavedSchedules WITH (UPDLOCK, HOLDLOCK)`);
+  return Number(r.recordset?.[0]?.n) || 1;
+}
+
+/** Revision of the current master (null when there is none). */
+export async function masterRevision(db: DbExecutor): Promise<number | null> {
+  const r = await db.query(`SELECT TOP 1 Revision FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`);
+  const row = r.recordset?.[0];
+  return row ? Number(row.Revision) || 0 : null;
+}
+
+export const MASTER_CHANGED = 'MASTER_CHANGED';
+
 
 /** Compact KPI snapshot stored per version so the list/compare view never parses ScheduleData. */
 export const metricsSnapshot = (schedule: any): string | null => {
@@ -58,11 +80,24 @@ export async function saveAsLatest(
   db: PlanExecutor,
   schedule: any,
   opts: SaveLatestOptions = {}
-): Promise<{ scheduleId: string; jobCount: number; operationCount: number }> {
+): Promise<{ scheduleId: string; jobCount: number; operationCount: number; revision: number }> {
   const jobCount = schedule?.jobSchedules?.length || 0;
   const operationCount = countOps(schedule);
+  let revision = 0;
 
   await db.withTransaction(async (tx: DbExecutor) => {
+    if (opts.baseRevision !== undefined) {
+      const cur = await tx.query(
+        `SELECT TOP 1 Revision FROM aps.SavedSchedules WITH (UPDLOCK, HOLDLOCK) WHERE IsLatest = 1 ORDER BY SavedAt DESC`);
+      const row = cur.recordset?.[0];
+      const current = row ? Number(row.Revision) || 0 : null;
+      if (current !== opts.baseRevision) {
+        throw Object.assign(new VersionError(
+          'The master plan was changed (by another planner, another tab, Versions or Generate) since this board was loaded. ' +
+          'Your changes were not saved — reopen the master plan to continue.', 409), { code: MASTER_CHANGED, currentRevision: current });
+      }
+    }
+    revision = await nextRevision(tx);
     await tx.query(`UPDATE aps.SavedSchedules SET IsLatest = 0 WHERE IsLatest = 1`);
     await tx.queryWithParams(
       `DELETE FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
@@ -72,18 +107,19 @@ export async function saveAsLatest(
       `INSERT INTO aps.SavedSchedules
          (ScheduleID, ScheduleData, Status, JobCount, OperationCount,
           HorizonStart, HorizonEnd, GeneratedAt, SavedAt, IsLatest,
-          VersionKind, VersionName, BasedOnId, CreatedBy, MetricsJson)
+          VersionKind, VersionName, BasedOnId, CreatedBy, MetricsJson, Revision)
        VALUES
          (@scheduleId, @scheduleData, @status, @jobCount, @opCount,
           @horizonStart, @horizonEnd, @generatedAt, GETDATE(), 1,
-          'Plan', @versionName, @basedOnId, @createdBy, @metricsJson)`,
+          'Plan', @versionName, @basedOnId, @createdBy, @metricsJson, @revision)`,
       {
+        revision,
         versionName: (opts.versionName || schedule?.versionName || defaultName()).slice(0, 120),
         basedOnId: opts.basedOnId ?? null,
         createdBy: opts.createdBy ?? null,
         metricsJson: metricsSnapshot(schedule),
         scheduleId: schedule.scheduleId,
-        scheduleData: JSON.stringify(schedule),
+        scheduleData: JSON.stringify(stripClientFields(schedule)),
         status: opts.status || schedule?.status || 'Draft',
         jobCount,
         opCount: operationCount,
@@ -94,8 +130,15 @@ export async function saveAsLatest(
     );
   });
 
-  return { scheduleId: schedule.scheduleId, jobCount, operationCount };
+  return { scheduleId: schedule.scheduleId, jobCount, operationCount, revision };
 }
+
+/** Fields the API adds to a schedule on the way out that must not be stored inside it. */
+const stripClientFields = (schedule: any) => {
+  if (!schedule || typeof schedule !== 'object' || !('masterRevision' in schedule)) return schedule;
+  const { masterRevision: _r, ...rest } = schedule;
+  return rest;
+};
 
 /** Make an existing saved schedule the latest one, atomically. Returns false if it doesn't exist. */
 export async function promoteToLatest(db: PlanExecutor, scheduleId: string): Promise<boolean> {
@@ -105,10 +148,11 @@ export async function promoteToLatest(db: PlanExecutor, scheduleId: string): Pro
       { scheduleId }
     );
     if (!exists.recordset?.length) return false;
+    const revision = await nextRevision(tx);
     await tx.query(`UPDATE aps.SavedSchedules SET IsLatest = 0 WHERE IsLatest = 1`);
     await tx.queryWithParams(
-      `UPDATE aps.SavedSchedules SET IsLatest = 1 WHERE ScheduleID = @scheduleId`,
-      { scheduleId }
+      `UPDATE aps.SavedSchedules SET IsLatest = 1, Revision = @revision WHERE ScheduleID = @scheduleId`,
+      { scheduleId, revision }
     );
     return true;
   });
@@ -275,10 +319,11 @@ export async function commitWhatIf(db: PlanExecutor, versionId: string): Promise
     const row = r.recordset?.[0];
     if (!row) throw new VersionError('Version not found', 404);
     if (row.VersionKind !== 'WhatIf') throw new VersionError('Only a what-if version can be committed', 409);
+    const revision = await nextRevision(tx);
     await tx.query(`UPDATE aps.SavedSchedules SET IsLatest = 0 WHERE IsLatest = 1`);
     await tx.queryWithParams(
-      `UPDATE aps.SavedSchedules SET IsLatest = 1, VersionKind = 'Plan', Status = 'Draft', SavedAt = GETDATE()
-       WHERE ScheduleID = @versionId`, { versionId });
+      `UPDATE aps.SavedSchedules SET IsLatest = 1, VersionKind = 'Plan', Status = 'Draft', SavedAt = GETDATE(), Revision = @revision
+       WHERE ScheduleID = @versionId`, { versionId, revision });
   });
 }
 
@@ -291,10 +336,11 @@ export async function revertToVersion(db: PlanExecutor, versionId: string): Prom
     if (!row) throw new VersionError('Version not found', 404);
     if (row.VersionKind === 'WhatIf') throw new VersionError('Use commit for a what-if version', 409);
     if (row.IsLatest) return;
+    const revision = await nextRevision(tx);
     await tx.query(`UPDATE aps.SavedSchedules SET IsLatest = 0 WHERE IsLatest = 1`);
     await tx.queryWithParams(
-      `UPDATE aps.SavedSchedules SET IsLatest = 1, Status = 'Draft', SavedAt = GETDATE() WHERE ScheduleID = @versionId`,
-      { versionId });
+      `UPDATE aps.SavedSchedules SET IsLatest = 1, Status = 'Draft', SavedAt = GETDATE(), Revision = @revision WHERE ScheduleID = @versionId`,
+      { versionId, revision });
   });
 }
 

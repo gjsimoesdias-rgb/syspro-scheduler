@@ -979,3 +979,17 @@ textarea:disabled {
   font-weight: 600;
   color: var(--text-primary);
 }
+
+/* Inline action inside a toast (e.g. "Reopen master plan" after a save conflict). */
+.toast-action {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-left: 4px;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.toast-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -24,7 +24,7 @@ import { stripCompletedOperations } from '../../utils/jobFilters';
 import { effectiveJobFlags, pinsForJobs } from '../../utils/jobFlags';
 import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
-import { saveAsLatest, saveIntoWhatIf, getVersion, revertToVersion, VersionError } from '../../services/ScheduleStore';
+import { saveAsLatest, saveIntoWhatIf, getVersion, revertToVersion, VersionError, masterRevision } from '../../services/ScheduleStore';
 import type { DbExecutor } from '../../database/connection';
 import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordError, resetPublish, jobIdFromExportError } from '../../services/publishStatus';
 import { mapEmployeeRow } from '../../utils/crews';
@@ -511,6 +511,7 @@ export async function generateHandler(req: Request, res: Response) {
     // Auto-save to DB so the schedule survives page reloads (atomic — see ScheduleStore).
     // With a versionId the run goes into that what-if and the master is untouched.
     const targetVersionId = typeof req.body?.versionId === 'string' ? req.body.versionId : undefined;
+    let masterRevisionOut: number | undefined;
     if (targetVersionId) {
       try {
         await saveIntoWhatIf(await planDbFor(req.app), targetVersionId, schedule);
@@ -521,10 +522,11 @@ export async function generateHandler(req: Request, res: Response) {
       }
     } else {
       try {
-        const { jobCount } = await saveAsLatest(await planDbFor(req.app), schedule, {
+        const { jobCount, revision } = await saveAsLatest(await planDbFor(req.app), schedule, {
           status: 'Draft', generatedAt: new Date(), createdBy: (req as any).user?.username,
         });
-        req.log.info({ jobCount }, 'Schedule auto-saved to DB');
+        masterRevisionOut = revision;
+        req.log.info({ jobCount, revision }, 'Schedule auto-saved to DB');
       } catch (saveErr) {
         req.log.warn({ err: saveErr }, 'Could not auto-save schedule to DB (non-blocking)');
       }
@@ -532,6 +534,8 @@ export async function generateHandler(req: Request, res: Response) {
 
     res.json({
       schedule,
+      // New master revision when the run replaced the master (not for what-ifs).
+      ...(masterRevisionOut !== undefined ? { masterRevision: masterRevisionOut } : {}),
       executionTimeMs: Date.now() - startedAt,
       warningCount: schedule.constraintViolations.filter((c: any) => c.severity === 'Warning').length,
       errorCount: schedule.constraintViolations.filter((c: any) => c.severity === 'Critical').length
@@ -809,7 +813,7 @@ router.get('/latest', async (req: Request, res: Response) => {
       IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS int) AS x;
       ELSE
       SELECT TOP 1 ScheduleID, ScheduleData, Status, JobCount, OperationCount,
-        HorizonStart, HorizonEnd, GeneratedAt, SavedAt
+        HorizonStart, HorizonEnd, GeneratedAt, SavedAt, Revision
       FROM aps.SavedSchedules
       WHERE IsLatest = 1
       ORDER BY SavedAt DESC
@@ -835,7 +839,9 @@ router.get('/latest', async (req: Request, res: Response) => {
         horizonStart: row.HorizonStart,
         horizonEnd: row.HorizonEnd,
         generatedAt: row.GeneratedAt,
-        savedAt: row.SavedAt
+        savedAt: row.SavedAt,
+        // Send back as baseRevision on /save (optimistic concurrency).
+        revision: Number(row.Revision) || 0
       }
     });
   } catch (error) {
@@ -854,6 +860,13 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
 
   try {
     const { schedule } = req.body as { schedule: any };
+    // The master revision the board was loaded from. Omitted by old clients
+    // (no check); null = "no master when I loaded".
+    const rawBase = (req.body as any).baseRevision;
+    const baseRevision = rawBase === undefined ? undefined : rawBase === null ? null : Number(rawBase);
+    if (baseRevision !== undefined && baseRevision !== null && !Number.isFinite(baseRevision)) {
+      return res.status(400).json({ error: 'baseRevision must be a number or null' });
+    }
 
     const sysproDb = req.app.locals.sysproDb;
     if (!sysproDb) {
@@ -862,11 +875,16 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
 
     // Any saved change is a new Draft: an edit made after approval must be
     // approved again before it can be sent to SYSPRO. Atomic — see ScheduleStore.
-    const { jobCount, operationCount } = await saveAsLatest(await planDbFor(req.app), schedule, { status: 'Draft' });
+    const { jobCount, operationCount, revision } = await saveAsLatest(await planDbFor(req.app), schedule, {
+      status: 'Draft', baseRevision, createdBy: (req as any).user?.username,
+    });
 
-    req.log.info({ scheduleId: schedule.scheduleId, jobCount, operationCount }, 'Schedule saved');
-    res.json({ saved: true, scheduleId: schedule.scheduleId });
+    req.log.info({ scheduleId: schedule.scheduleId, jobCount, operationCount, revision }, 'Schedule saved');
+    res.json({ saved: true, scheduleId: schedule.scheduleId, revision });
   } catch (error) {
+    if (error instanceof VersionError) {
+      return res.status(error.status).json({ error: error.message, code: (error as any).code, currentRevision: (error as any).currentRevision });
+    }
     req.log.error({ err: error }, 'Error saving schedule');
     res.status(500).json({ error: (error as any).message });
   }
@@ -897,7 +915,7 @@ router.post('/load-version/:scheduleId', requirePlanner, async (req: Request, re
 
     req.log.info({ scheduleId, restoredAt }, 'version_restore');
 
-    res.json({ schedule, restoredAt });
+    res.json({ schedule, restoredAt, revision: await masterRevision(plan) });
   } catch (error) {
     if (error instanceof VersionError) return res.status(error.status).json({ error: error.message });
     res.status(500).json({ error: (error as any).message });

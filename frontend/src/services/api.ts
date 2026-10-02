@@ -156,6 +156,30 @@ export const apiErrorMessage = (err: any, fallback: string): string => {
   return fallback;
 };
 
+/**
+ * Optimistic concurrency for the master plan. The server bumps a revision on
+ * every master change; a save must name the revision the board was loaded
+ * from, or it is refused with 409 MASTER_CHANGED instead of silently
+ * overwriting someone else's newer master.
+ *   undefined = not known yet (old server / nothing loaded) → no check
+ *   null      = there was no master when the board loaded
+ */
+let masterRev: number | null | undefined;
+let masterConflict = false;
+/** Saves run one at a time so the second autosave uses the first one's new revision. */
+let saveChain: Promise<unknown> = Promise.resolve();
+
+export const masterRevision = {
+  get: () => masterRev,
+  /** Board now shows the master at this revision (clears any conflict). */
+  set: (rev: number | null | undefined) => { masterRev = rev; masterConflict = false; },
+  /** True after a save was refused because the master changed; autosave stops until the master is reopened. */
+  inConflict: () => masterConflict,
+};
+
+export const isMasterChangedError = (err: any): boolean =>
+  err?.response?.status === 409 && err?.response?.data?.code === 'MASTER_CHANGED';
+
 export const scheduleService = {
   generate: async (startDate: Date, endDate: Date): Promise<Schedule> => {
     const response = await apiClient.post('/schedule/generate', {
@@ -189,8 +213,18 @@ export const scheduleService = {
     return response.data;
   },
 
-  save: async (schedule: Schedule): Promise<void> => {
-    await apiClient.post('/schedule/save', { schedule });
+  save: (schedule: Schedule): Promise<void> => {
+    const run = saveChain.catch(() => undefined).then(async () => {
+      try {
+        const res = await apiClient.post('/schedule/save', { schedule, baseRevision: masterRev });
+        if (typeof res.data?.revision === 'number') masterRev = res.data.revision;
+      } catch (err) {
+        if (isMasterChangedError(err)) masterConflict = true;
+        throw err;
+      }
+    });
+    saveChain = run;
+    return run;
   },
 
   loadLatest: async (): Promise<{ schedule: Schedule | null; meta?: any }> => {
@@ -198,8 +232,16 @@ export const scheduleService = {
     return response.data;
   },
 
+  /** Load the master AND make it the board's base for saves (use when putting it on the board). */
+  openLatest: async (): Promise<{ schedule: Schedule | null; meta?: any }> => {
+    const data = (await apiClient.get('/schedule/latest')).data;
+    masterRevision.set(data?.schedule ? (typeof data?.meta?.revision === 'number' ? data.meta.revision : undefined) : null);
+    return data;
+  },
+
   restoreVersion: async (scheduleId: string): Promise<{ schedule: Schedule; restoredAt: string }> => {
     const response = await apiClient.post(`/schedule/load-version/${encodeURIComponent(scheduleId)}`);
+    if (typeof response.data?.revision === 'number') masterRevision.set(response.data.revision);
     return response.data;
   }
 };

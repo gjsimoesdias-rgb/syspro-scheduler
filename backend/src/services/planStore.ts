@@ -85,6 +85,14 @@ export const PLAN_DDL: Array<{ label: string; sql: string }> = [
           END`,
   },
   {
+    // Master revision: bumped whenever the master's content changes (save,
+    // generate, commit, revert) so a stale board can't overwrite a newer master.
+    label: 'SavedSchedules.Revision',
+    sql: `IF COL_LENGTH('aps.SavedSchedules', 'Revision') IS NULL
+            ALTER TABLE aps.SavedSchedules ADD Revision INT NOT NULL
+              CONSTRAINT DF_aps_SavedSchedules_Revision DEFAULT (0);`,
+  },
+  {
     label: 'JobPublishStatus',
     sql: `IF OBJECT_ID('aps.JobPublishStatus', 'U') IS NULL
             CREATE TABLE aps.JobPublishStatus (

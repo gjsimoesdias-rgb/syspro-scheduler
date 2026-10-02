@@ -83,7 +83,7 @@ const VersionsPanel: React.FC = () => {
   };
 
   const openMaster = async () => {
-    const { schedule } = await scheduleService.loadLatest();
+    const { schedule } = await scheduleService.openLatest();
     setActiveVersion(null);
     if (schedule) {
       setSchedule(convertScheduleDates(schedule));

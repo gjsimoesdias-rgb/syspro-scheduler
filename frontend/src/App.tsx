@@ -28,7 +28,7 @@ import exportService from './services/exportService';
 import { createShortcutManager } from './services/keyboardShortcuts';
 import BulkImportService from './services/bulkImportService';
 import { Schedule, ConstraintViolation, Job, Resource, Operation } from './types';
-import { scheduleService, jobService, versionService, apiClient, pinService, settingsService, inventoryService, type JobFmad, type PinnedOperationDto, apiErrorMessage, jobFlagService, type JobFlags } from './services/api';
+import { scheduleService, jobService, versionService, apiClient, pinService, settingsService, inventoryService, type JobFmad, type PinnedOperationDto, apiErrorMessage, jobFlagService, type JobFlags, masterRevision, isMasterChangedError } from './services/api';
 import { planJobsFrom, planKeyOf } from './utils/planJobs';
 import { getUserGuideHtml } from './userGuideHtml';
 import ScheduleSetupModal, { ScheduleConfig } from './components/ScheduleSetupModal';
@@ -524,10 +524,29 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Put the current master back on the board (after a save conflict). Unsaved board edits are dropped. */
+  const reopenMaster = useCallback(async () => {
+    try {
+      const { schedule: master } = await scheduleService.openLatest();
+      useScheduleStore.getState().setActiveVersion(null);
+      if (master) {
+        setSchedule(convertScheduleDates(master));
+        setScheduleSource('restored');
+      }
+      toast.success('Master plan reopened');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Could not reopen the master plan'));
+    }
+  }, [setSchedule, setScheduleSource]);
+
   useEffect(() => {
     if (scheduleLoading || !schedule || !dbStatus.sysproConnected || scheduleSource !== 'session') {
       return;
     }
+
+    // A save was refused because the master changed elsewhere: stop autosaving
+    // (every retry would be refused too) until the master is reopened.
+    if (!activeVersion && masterRevision.inConflict()) return;
 
     const timeoutId = window.setTimeout(() => {
       // An open what-if saves into itself; only the master goes to /schedule/save.
@@ -535,6 +554,15 @@ const App: React.FC = () => {
         ? versionService.saveInto(activeVersion.versionId, schedule)
         : scheduleService.save(schedule);
       save.catch((error) => {
+        if (isMasterChangedError(error)) {
+          toast.error((t) => (
+            <span>
+              {apiErrorMessage(error, 'The master plan changed since you loaded it.')}{' '}
+              <button className="toast-action" onClick={() => { toast.dismiss(t.id); void reopenMaster(); }}>Reopen master plan</button>
+            </span>
+          ), { id: 'master-changed', duration: Infinity });
+          return;
+        }
         console.warn('Could not persist schedule:', error);
       });
     }, 600);
@@ -554,11 +582,16 @@ const App: React.FC = () => {
     // only a placeholder until it loads, or the fallback when none exists.
     if (openJobs.length > 0 && dbStatus.sysproConnected) {
       scheduleService.loadLatest()
-        .then(({ schedule: master }) => {
+        .then(({ schedule: master, meta }) => {
           const st = useScheduleStore.getState();
-          if (master && (st.scheduleSource === 'none' || st.scheduleSource === 'syspro') && !st.activeVersion) {
-            setSchedule(convertScheduleDates(master));
-            setScheduleSource('restored');
+          if ((st.scheduleSource === 'none' || st.scheduleSource === 'syspro') && !st.activeVersion) {
+            // The board now stands on this master (or on "no master yet"):
+            // later saves are checked against this revision.
+            masterRevision.set(master ? (typeof meta?.revision === 'number' ? meta.revision : undefined) : null);
+            if (master) {
+              setSchedule(convertScheduleDates(master));
+              setScheduleSource('restored');
+            }
           }
         })
         .catch(() => { /* no saved plan yet */ });
