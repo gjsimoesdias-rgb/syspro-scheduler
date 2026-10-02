@@ -140,7 +140,7 @@ export function useScheduleGeneration({
       toast.success(activeVersion
         ? `✓ What-if "${activeVersion.name}" regenerated with ${newSchedule.jobSchedules.length} jobs`
         : `✓ Schedule generated with ${newSchedule.jobSchedules.length} jobs`);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error generating schedule:', error);
       toast.error(apiErrorMessage(error, 'Failed to generate schedule'));
     } finally {
@@ -188,7 +188,7 @@ export function useScheduleGeneration({
           : '✓ Schedule sent to SYSPRO',
         skipped.length ? { duration: 8000 } : undefined
       );
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error exporting schedule:', error);
       toast.error(apiErrorMessage(error, 'Failed to export schedule'));
     } finally {

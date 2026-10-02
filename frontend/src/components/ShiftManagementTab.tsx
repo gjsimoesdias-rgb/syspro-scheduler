@@ -4,6 +4,7 @@ import { resourceService } from '../services/api';
 import CalendarExceptionsPanel from './CalendarExceptionsPanel';
 import './ShiftManagementTab.css';
 import { confirmDialog } from './DialogHost';
+import { errorMessage } from '../utils/errors';
 
 type DiversionType = 'Production' | 'Overtime' | 'Lunch' | 'Break' | 'Non Productive';
 
@@ -77,8 +78,8 @@ const ShiftManagementTab: React.FC<ShiftManagementTabProps> = ({ onShiftsChanged
         diversions: s.diversions || []
       }));
       setShifts(loadedShifts);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to load shifts');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Failed to load shifts'));
     } finally {
       setLoading(false);
     }
@@ -197,8 +198,8 @@ const ShiftManagementTab: React.FC<ShiftManagementTabProps> = ({ onShiftsChanged
         await onShiftsChanged();
       }
       resetForm();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save shift');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Failed to save shift'));
     }
   };
 
@@ -229,8 +230,8 @@ const ShiftManagementTab: React.FC<ShiftManagementTabProps> = ({ onShiftsChanged
         resetForm();
       }
       toast.success(`Shift "${shift.name}" deleted`);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete shift');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Failed to delete shift'));
     }
   };
 

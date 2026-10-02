@@ -22,6 +22,7 @@ import { useScheduleStore } from '../stores/scheduleStore';
 import type { ContentTab, ManageTab, ScheduleAroundMode } from '../stores/uiStore';
 import type { UndoRedoManager } from '../services/undoRedoManager';
 import type { AlternativeGroup } from './useJobsData';
+import { errorMessage } from '../utils/errors';
 
 export interface JobContextMenuState { visible: boolean; x: number; y: number; jobId: string | null }
 
@@ -410,9 +411,9 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
       setContentTab('gantt');
 
       toast.success(`${job.jobId} scheduled — ${anchorOp.workcentreId} starts ${new Date(anchorOp.plannedStartDate).toLocaleString()}`);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Autoschedule error:', error);
-      toast.error(error.message || 'Failed to autoschedule job');
+      toast.error(errorMessage(error, 'Failed to autoschedule job'));
     }
   };
 

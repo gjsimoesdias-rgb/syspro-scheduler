@@ -71,7 +71,7 @@ const OptimizerPanel: React.FC = () => {
         const rec = res.data.results.find((r: RankedResult) => r.recommended);
         toast.success(`Best for “${objective}”: ${rec?.label ?? res.data.recommendedRule}`);
       }
-    } catch (err: any) {
+    } catch (err) {
       toast.error(apiErrorMessage(err, 'Optimization failed'));
     } finally {
       setRunning(false);

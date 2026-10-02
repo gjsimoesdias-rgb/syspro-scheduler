@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { resourceService } from '../services/api';
 import './ResourceDefinitionTab.css';
+import { errorMessage } from '../utils/errors';
 
 type ShiftTemplate = {
   shiftId: string;
@@ -46,8 +47,8 @@ const ResourceDefinitionTab: React.FC<ResourceDefinitionTabProps> = ({ onDefinit
       setDefinitions(response.definitions as ResourceDefinition[]);
       setShifts(response.shifts as ShiftTemplate[]);
       if (response.warning) toast(response.warning);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to load resource definitions');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Failed to load resource definitions'));
     } finally {
       setLoading(false);
     }
@@ -91,8 +92,8 @@ const ResourceDefinitionTab: React.FC<ResourceDefinitionTabProps> = ({ onDefinit
         await onDefinitionsChanged();
       }
       toast.success(`Saved ${definition.resourceId}`);
-    } catch (error: any) {
-      toast.error(error.message || `Failed to save ${definition.resourceId}`);
+    } catch (error) {
+      toast.error(errorMessage(error, `Failed to save ${definition.resourceId}`));
     } finally {
       setSavingId(null);
     }

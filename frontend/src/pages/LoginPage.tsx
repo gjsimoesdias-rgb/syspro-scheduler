@@ -4,6 +4,7 @@ import { statusService, apiErrorMessage } from '../services/api';
 import './LoginPage.css';
 import CruxLogo from '../components/CruxLogo';
 import { KeyRound } from 'lucide-react';
+import { errorMessage } from '../utils/errors';
 
 type SystemState = 'checking' | 'needs-setup' | 'ready';
 
@@ -74,7 +75,7 @@ const LoginPage: React.FC = () => {
       setAvailableCompanies(dbs);
       if (dbs.length > 0) setSelectedCompany(prev => prev || dbs[0]);
       if (dbs.length === 0) setSetupError('Connected but no user databases found.');
-    } catch (err: any) {
+    } catch (err) {
       setSetupError(apiErrorMessage(err, 'Failed to load databases'));
     } finally {
       setSetupLoading(false);
@@ -103,7 +104,7 @@ const LoginPage: React.FC = () => {
         setLoginPassword(result.initialAdmin.password);
       }
       setSystemState('ready');
-    } catch (err: any) {
+    } catch (err) {
       setSetupError(apiErrorMessage(err, 'Failed to connect'));
     } finally {
       setSetupLoading(false);
@@ -116,8 +117,8 @@ const LoginPage: React.FC = () => {
     setError('');
     try {
       await loginWithNtlm();
-    } catch (err: any) {
-      setError(err.message || 'Windows authentication failed');
+    } catch (err) {
+      setError(errorMessage(err, 'Windows authentication failed'));
       setNtlmLoading(false);
     }
   };
@@ -129,8 +130,8 @@ const LoginPage: React.FC = () => {
     setError('');
     try {
       await login(username.trim(), loginPassword);
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err) {
+      setError(errorMessage(err, 'Login failed'));
     } finally {
       setLoading(false);
     }

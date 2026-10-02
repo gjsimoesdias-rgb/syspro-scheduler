@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { resourceService, CalendarException } from '../services/api';
 import { confirmDialog } from './DialogHost';
+import { errorMessage } from '../utils/errors';
 
 type Kind = 'closed' | 'short' | 'extra';
 
@@ -37,8 +38,8 @@ const CalendarExceptionsPanel: React.FC<{ onChanged?: () => void }> = ({ onChang
   const load = useCallback(async () => {
     try {
       setItems(await resourceService.getCalendarExceptions());
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Could not load calendar exceptions');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not load calendar exceptions'));
     }
   }, []);
 
@@ -72,8 +73,8 @@ const CalendarExceptionsPanel: React.FC<{ onChanged?: () => void }> = ({ onChang
       setName('');
       await load();
       onChanged?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Could not add calendar exception');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not add calendar exception'));
     } finally {
       setSaving(false);
     }
@@ -85,8 +86,8 @@ const CalendarExceptionsPanel: React.FC<{ onChanged?: () => void }> = ({ onChang
       await resourceService.deleteCalendarException(e.id);
       await load();
       onChanged?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Could not remove calendar exception');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not remove calendar exception'));
     }
   };
 

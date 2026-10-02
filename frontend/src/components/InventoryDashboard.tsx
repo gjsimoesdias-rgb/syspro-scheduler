@@ -36,7 +36,7 @@ const StockPanel: React.FC<StockPanelProps> = ({ isDarkMode }) => {
         lowStock: lowStockOnly || undefined
       });
       setItems(result.items);
-    } catch (e: any) {
+    } catch (e) {
       setError(apiErrorMessage(e, 'Request failed'));
     } finally {
       setLoading(false);
@@ -192,7 +192,7 @@ const POPanel: React.FC<POPanelProps> = ({ isDarkMode }) => {
         supplier: supplierFilter || undefined
       });
       setItems(result.items);
-    } catch (e: any) {
+    } catch (e) {
       setError(apiErrorMessage(e, 'Request failed'));
     } finally {
       setLoading(false);
@@ -361,7 +361,7 @@ const ShortagesPanel: React.FC<ShortagesPanelProps> = ({ isDarkMode }) => {
     try {
       const result = await inventoryService.getShortages();
       setData(result);
-    } catch (e: any) {
+    } catch (e) {
       setError(apiErrorMessage(e, 'Request failed'));
     } finally {
       setLoading(false);

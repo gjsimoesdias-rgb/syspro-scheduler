@@ -74,7 +74,7 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
         params: currentScheduleId ? { baseScheduleId: currentScheduleId } : undefined,
       });
       setScenarios(data.scenarios ?? []);
-    } catch (e: any) {
+    } catch (e) {
       setError(apiErrorMessage(e, 'Failed to load scenarios'));
     } finally {
       setLoading(false);
@@ -106,7 +106,7 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
       setNewDesc('');
       showToast('Scenario created');
       await loadScenarios();
-    } catch (e: any) {
+    } catch (e) {
       showToast(apiErrorMessage(e, 'Failed to create scenario'), false);
     } finally {
       setCreating(false);
@@ -120,7 +120,7 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
       await apiClient.post(`/scenarios/${encodeURIComponent(scenarioId)}/promote`);
       showToast(`"${name}" promoted to live schedule. Reload to see changes.`);
       await loadScenarios();
-    } catch (e: any) {
+    } catch (e) {
       showToast(apiErrorMessage(e, 'Failed to promote scenario'), false);
     } finally {
       setPromoting(null);
@@ -134,7 +134,7 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
       await apiClient.delete(`/scenarios/${encodeURIComponent(scenarioId)}`);
       showToast(`Scenario "${name}" deleted`);
       await loadScenarios();
-    } catch (e: any) {
+    } catch (e) {
       showToast(apiErrorMessage(e, 'Failed to delete scenario'), false);
     } finally {
       setDeleting(null);

@@ -51,6 +51,7 @@ import './App.css';
 // Token-based overrides: MUST come after App.css to win specificity battles.
 import './styles/aps-overrides.css';
 import './styles/lynq.css';
+import { errorStatus } from './utils/errors';
 
 
 const App: React.FC = () => {
@@ -722,7 +723,7 @@ const App: React.FC = () => {
       toast.success('✓ Constraint override approved');
       setShowOverrideModal(false);
       setSelectedViolation(null);
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Failed to approve override');
     }
   };
@@ -979,8 +980,8 @@ const App: React.FC = () => {
       await loadJobsAndResources();
       await loadMrpPreview();
       toast.success(!mrpIncluded ? 'MRP suggested jobs are now part of the plan — generate a schedule to place them' : 'MRP suggested jobs removed from the plan');
-    } catch (e: any) {
-      toast.error(e?.response?.status === 403 ? 'Only a company admin can change this setting' : 'Could not change the setting');
+    } catch (e) {
+      toast.error(errorStatus(e) === 403 ? 'Only a company admin can change this setting' : 'Could not change the setting');
     } finally { setMrpBusy(false); }
   }, [mrpIncluded, loadJobsAndResources, loadMrpPreview]);
 
@@ -1308,7 +1309,7 @@ const App: React.FC = () => {
       await BulkImportService.processFile(file, importType);
       await loadJobsAndResources();
       toast.success(`Imported ${importType} from ${file.name}`);
-    } catch (error: any) {
+    } catch (error) {
       toast.error(apiErrorMessage(error, `Failed to import ${importType}`));
     } finally {
       setImporting(false);
@@ -1332,10 +1333,10 @@ const App: React.FC = () => {
       );
       undoRedoManager.addState(dbSchedule, `Restored version ${versionId}`);
       toast.success(`Restored schedule from ${new Date(restoredAt).toLocaleString()}`);
-    } catch (error: any) {
+    } catch (error) {
       // The server refused (e.g. a what-if must be committed instead): say why,
       // and never push the version in as the master behind its back.
-      if (error?.response) {
+      if (errorStatus(error) !== undefined) {
         toast.error(apiErrorMessage(error, 'Could not restore this version'));
         return;
       }

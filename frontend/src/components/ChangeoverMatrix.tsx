@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { RefreshCw, Save, RotateCcw, Grid3x3 } from 'lucide-react';
 import { apiClient, apiErrorMessage } from '../services/api';
 import './ChangeoverMatrix.css';
+import { errorStatus } from '../utils/errors';
 
 interface FinishedGood {
   stockCode: string;
@@ -64,9 +65,9 @@ const ChangeoverMatrix: React.FC = () => {
       setLoadError('');
       setSaved(m);
       setEdits(new Map());
-    } catch (err: any) {
+    } catch (err) {
       setWarning('');
-      const status = err?.response?.status;
+      const status = errorStatus(err);
       setLoadError(
         status === 401 || status === 403
           ? 'Your session has expired — sign in again, then reload.'
@@ -160,7 +161,7 @@ const ChangeoverMatrix: React.FC = () => {
       setEdits(new Map());
       const n = res.data?.applied ?? rows.length;
       toast.success(`Saved ${n} changeover${n === 1 ? '' : 's'} — now included in scheduling`);
-    } catch (err: any) {
+    } catch (err) {
       toast.error(apiErrorMessage(err, 'Failed to save changeover matrix'));
     } finally {
       setSaving(false);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiJson } from '../services/api';
 import './LicenseAdmin.css';
+import { errorMessage } from '../utils/errors';
 
 
 interface License {
@@ -62,7 +63,7 @@ const LicenseAdmin: React.FC = () => {
     setLoading(true);
     try {
       setLicenses(await apiJson('GET', '/licenses'));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
     finally { setLoading(false); }
   }, []);
 
@@ -73,7 +74,7 @@ const LicenseAdmin: React.FC = () => {
     setExpandedId(id);
     try {
       setLicUsers(await apiJson('GET', `/licenses/${id}/users`));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
   };
 
   const openNew = () => { setEditLic(null); setForm(emptyForm); setShowForm(true); };
@@ -97,7 +98,7 @@ const LicenseAdmin: React.FC = () => {
       await apiJson(editLic ? 'PUT' : 'POST', editLic ? `/licenses/${editLic.id}` : '/licenses', form);
       setShowForm(false);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
     finally { setSaving(false); }
   };
 
@@ -105,7 +106,7 @@ const LicenseAdmin: React.FC = () => {
     try {
       await apiJson('PUT', `/licenses/${l.id}`, { isActive: !l.isActive });
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
   };
 
   const deleteLic = async (id: number) => {
@@ -113,7 +114,7 @@ const LicenseAdmin: React.FC = () => {
       await apiJson('DELETE', `/licenses/${id}`);
       setConfirm(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
   };
 
   const isExpiring = (l: License) => {

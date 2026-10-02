@@ -5,6 +5,7 @@
 import axios from 'axios';
 import { Schedule, Job, Resource } from '../types';
 import { setTypedClientTokenProvider } from './typed-client';
+import { errorMessage } from '../utils/errors';
 
 export type BomLineStatus = 'Materials' | 'Partial' | 'No Materials';
 
@@ -146,15 +147,8 @@ apiClient.interceptors.response.use(
  * Rendering the object form directly (e.g. in a toast) crashes React with
  * error #31 — always go through this helper.
  */
-export const apiErrorMessage = (err: any, fallback: string): string => {
-  const e = err?.response?.data?.error;
-  if (typeof e === 'string' && e) return e;
-  if (e && typeof e.message === 'string' && e.message) return e.message;
-  const detail = err?.response?.data?.details?.[0]?.message;
-  if (typeof detail === 'string' && detail) return detail;
-  if (typeof err?.message === 'string' && err.message) return err.message;
-  return fallback;
-};
+/** Message for a failed API call (see utils/errors). */
+export const apiErrorMessage = (err: unknown, fallback: string): string => errorMessage(err, fallback);
 
 /**
  * Optimistic concurrency for the master plan. The server bumps a revision on

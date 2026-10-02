@@ -121,7 +121,7 @@ const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
       const res = await apiClient.get('/schedule/ctp/stock-search', { params: { q } });
       setStockResults(res.data?.items || []);
       if (!(res.data?.items || []).length) toast('No stock codes match', { icon: '' });
-    } catch (err: any) {
+    } catch (err) {
       toast.error(apiErrorMessage(err, 'Stock code search failed'));
     } finally {
       setStockSearching(false);
@@ -156,7 +156,7 @@ const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
         `${data.stockCode}: ${data.operations.length} routing ops` +
           ((data.subJobs || []).length ? ` + ${data.subJobs.length} made-in sub-assembl${data.subJobs.length === 1 ? 'y' : 'ies'}` : '')
       );
-    } catch (err: any) {
+    } catch (err) {
       toast.error(apiErrorMessage(err, `No routing found for ${stockCode}`));
     } finally {
       setLoadingRouting(false);
@@ -267,7 +267,7 @@ const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
         ...(desiredDate ? { desiredDueDate: new Date(`${desiredDate}T23:59:59`).toISOString() } : {}),
       });
       setResult(res.data);
-    } catch (err: any) {
+    } catch (err) {
       toast.error(apiErrorMessage(err, 'CTP simulation failed'));
     } finally {
       setRunning(false);

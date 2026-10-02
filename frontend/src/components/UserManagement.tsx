@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiJson } from '../services/api';
 import './UserManagement.css';
+import { errorMessage } from '../utils/errors';
 
 
 interface User {
@@ -47,7 +48,7 @@ const UserManagement: React.FC = () => {
     setLoading(true);
     try {
       setUsers(await apiJson('GET', '/users'));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
     finally { setLoading(false); }
   }, []);
 
@@ -71,7 +72,7 @@ const UserManagement: React.FC = () => {
       await apiJson(editUser ? 'PUT' : 'POST', editUser ? `/users/${editUser.id}` : '/users', body);
       setShowForm(false);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
     finally { setSaving(false); }
   };
 
@@ -79,7 +80,7 @@ const UserManagement: React.FC = () => {
     try {
       await apiJson('PUT', `/users/${u.id}`, { isActive: !u.isActive });
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
   };
 
   const deleteUser = async (id: number) => {
@@ -87,7 +88,7 @@ const UserManagement: React.FC = () => {
       await apiJson('DELETE', `/users/${id}`);
       setConfirm(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
   };
 
   const canAdmin = isRole('super_admin', 'company_admin');

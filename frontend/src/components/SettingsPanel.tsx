@@ -5,6 +5,7 @@ import { GanttSettingsState, GANTT_SETTINGS_DEFAULTS } from './GanttSettings';
 import UserManagement from './UserManagement';
 import LicenseAdmin from './LicenseAdmin';
 import './SettingsPanel.css';
+import { errorMessage } from '../utils/errors';
 
 
 // ─── Settings types ────────────────────────────────────────────────────────
@@ -244,7 +245,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
     try {
       await apiJson('PUT', '/settings/company', companySettings);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
     finally { setSaving(false); }
   };
 
@@ -253,7 +254,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
     try {
       await apiJson('PUT', '/settings/user', updated);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errorMessage(e)); }
     finally { setSaving(false); }
   };
 
@@ -606,7 +607,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
         await apiJson('POST', '/users/me/change-password', { currentPassword: currentPw, newPassword: newPw });
         setPwMsg('Password changed successfully!');
         setCurrentPw(''); setNewPw(''); setConfirmPw('');
-      } catch (e: any) { setPwMsg(e.message); }
+      } catch (e) { setPwMsg(errorMessage(e)); }
     };
 
     return (

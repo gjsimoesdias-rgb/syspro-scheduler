@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { jobService, resourceService, statusService, apiErrorMessage } from '../services/api';
 import { Job, Resource } from '../types';
+import { errorMessage } from '../utils/errors';
 
 export interface DbStatus {
   sysproConnected: boolean;
@@ -134,9 +135,9 @@ export function useJobsData(): JobsDataResult {
       if (jobsResult.status === 'rejected' && resourcesResult.status === 'rejected') {
         toast.error('Failed to load jobs and resources');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to load jobs/resources:', error);
-      toast.error(error.message || 'Failed to load jobs and resources');
+      toast.error(errorMessage(error, 'Failed to load jobs and resources'));
     } finally {
       setDataLoading(false);
     }
@@ -221,7 +222,7 @@ export function useJobsData(): JobsDataResult {
       setNewAlternativeGroup({ workcentreId: '', name: '', machineIds: [], notes: '' });
       await loadAlternativeGroups();
       toast.success('Alternative machine group saved');
-    } catch (error: any) {
+    } catch (error) {
       toast.error(apiErrorMessage(error, 'Failed to save alternative group'));
     }
   };
@@ -231,7 +232,7 @@ export function useJobsData(): JobsDataResult {
       await resourceService.deleteAlternativeGroup(groupId);
       await loadAlternativeGroups();
       toast.success('Alternative group removed');
-    } catch (error: any) {
+    } catch (error) {
       toast.error(apiErrorMessage(error, 'Failed to remove alternative group'));
     }
   };

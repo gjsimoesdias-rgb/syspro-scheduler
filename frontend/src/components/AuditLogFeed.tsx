@@ -55,7 +55,7 @@ const AuditLogFeed: React.FC = () => {
     try {
       const result = await auditService.getHistory({ limit: AUDIT_LIMIT });
       setEntries(result.entries);
-    } catch (err: any) {
+    } catch (err) {
       setError(apiErrorMessage(err, 'Failed to load audit log'));
     } finally {
       setLoading(false);

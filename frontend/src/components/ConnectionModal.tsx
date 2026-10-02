@@ -73,8 +73,8 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
       const dbs: string[] = response.databases || [];
       setCompanies(dbs);
       if (!form.database && dbs[0]) set('database', dbs[0]);
-    } catch (error: any) {
-      const data = error?.response?.data;
+    } catch (error) {
+      const data = (error as { response?: { data?: { error?: string; details?: Array<{ message?: string }> } } } | null)?.response?.data;
       const msg = data?.details?.[0]?.message || data?.error || 'Failed to load company list';
       toast.error(msg);
     } finally {
@@ -96,7 +96,7 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
       toast.success(response.message || 'Connected');
       onClose();
       onConnected();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Company connect failed:', error);
       toast.error(apiErrorMessage(error, 'Failed to connect to company database'));
     } finally {

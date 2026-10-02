@@ -76,7 +76,7 @@ const BomTreeView: React.FC = () => {
         setNotice(`No InvMaster matches for "${q}" — trying a direct structure load…`);
         await load(q.toUpperCase());
       }
-    } catch (err: any) {
+    } catch (err) {
       setNotice(apiErrorMessage(err, 'Stock code search failed'));
     } finally {
       setSearching(false);
@@ -101,7 +101,7 @@ const BomTreeView: React.FC = () => {
         setNotice(null);
         toast.success(`${stockCode}: ${n} component${n === 1 ? '' : 's'} in structure`);
       }
-    } catch (err: any) {
+    } catch (err) {
       setNotice(apiErrorMessage(err, `Could not load structure for ${stockCode}`));
     } finally {
       setLoading(false);

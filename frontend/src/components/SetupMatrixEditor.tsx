@@ -47,7 +47,7 @@ const SetupMatrixEditor: React.FC<Props> = ({ resources }) => {
       setLoading(true);
       const res = await apiClient.get('/schedule/setup-matrix');
       setRows(res.data?.rows || []);
-    } catch (err: any) {
+    } catch (err) {
       toast.error(apiErrorMessage(err, 'Failed to load changeover matrix'));
     } finally {
       setLoading(false);
@@ -81,7 +81,7 @@ const SetupMatrixEditor: React.FC<Props> = ({ resources }) => {
       setNewFrom('');
       setNewTo('');
       await load();
-    } catch (err: any) {
+    } catch (err) {
       toast.error(apiErrorMessage(err, 'Failed to save changeover'));
     } finally {
       setSaving(false);
@@ -93,7 +93,7 @@ const SetupMatrixEditor: React.FC<Props> = ({ resources }) => {
       await apiClient.delete(`/schedule/setup-matrix/${row.setupId}`);
       setRows((prev) => prev.filter((r) => r.setupId !== row.setupId));
       toast.success('Changeover removed');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(apiErrorMessage(err, 'Failed to delete changeover'));
     }
   };
