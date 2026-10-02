@@ -1,4 +1,8 @@
-jest.mock('../planStore', () => ({ planDbFor: jest.fn(async () => ({ schema: 'co_test' })) }));
+// Rows the "find the current Auto plan what-if" query returns.
+const autoRows: { list: Array<{ ScheduleID: string }> } = { list: [] };
+jest.mock('../planStore', () => ({
+  planDbFor: jest.fn(async () => ({ schema: 'co_test', queryWithParams: jest.fn(async () => ({ recordset: autoRows.list })) })),
+}));
 jest.mock('../ScheduleStore', () => ({
   getVersion: jest.fn(async () => null),
   createWhatIf: jest.fn(async () => ({ versionId: 'whatif-auto-plan' })),
@@ -10,8 +14,8 @@ jest.mock('../SysproDatabaseService', () => {
   return { __esModule: true, default: Cls, SysproDatabaseService: Cls };
 });
 
-import { AutoScheduler, decideAutoRun, normaliseAutoConfig, jobsFingerprint, AUTO_PLAN_VERSION_ID } from '../autoScheduler';
-import { createWhatIf } from '../ScheduleStore';
+import { AutoScheduler, decideAutoRun, normaliseAutoConfig, jobsFingerprint, AUTO_PLAN_VERSION_ID, autoPlanVersionId } from '../autoScheduler';
+import { createWhatIf, getVersion } from '../ScheduleStore';
 import SysproDatabaseService from '../SysproDatabaseService';
 
 const now = new Date('2026-10-01T10:00:00Z');
@@ -81,5 +85,30 @@ describe('AutoScheduler.runNow', () => {
     await a.tick(now);
     expect(generate).toHaveBeenCalledTimes(2);
     expect(a.status.lastReason).toBe('SYSPRO jobs changed');
+  });
+});
+
+describe('autoPlanVersionId', () => {
+  const plan = () => ({ queryWithParams: jest.fn(async () => ({ recordset: autoRows.list })) });
+  beforeEach(() => { autoRows.list = []; (createWhatIf as jest.Mock).mockClear(); (getVersion as jest.Mock).mockReset(); });
+
+  it('reuses the open Auto plan what-if', async () => {
+    autoRows.list = [{ ScheduleID: 'whatif-auto-plan' }];
+    expect(await autoPlanVersionId(plan())).toBe('whatif-auto-plan');
+    expect(createWhatIf).not.toHaveBeenCalled();
+  });
+
+  it('creates the what-if under the usual id the first time', async () => {
+    (getVersion as jest.Mock).mockResolvedValue(null);
+    expect(await autoPlanVersionId(plan())).toBe(AUTO_PLAN_VERSION_ID);
+    expect(createWhatIf).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ newId: AUTO_PLAN_VERSION_ID, createdBy: 'auto-schedule' }));
+  });
+
+  it('starts a new what-if once the Auto plan was committed (its id now belongs to a plan)', async () => {
+    (getVersion as jest.Mock).mockResolvedValue({ summary: { kind: 'Master' } });
+    const id = await autoPlanVersionId(plan());
+    expect(id).not.toBe(AUTO_PLAN_VERSION_ID);
+    expect(id.startsWith(`${AUTO_PLAN_VERSION_ID}-`)).toBe(true);
+    expect(createWhatIf).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ newId: id }));
   });
 });

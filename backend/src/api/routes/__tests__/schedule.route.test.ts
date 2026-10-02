@@ -163,7 +163,7 @@ describe('POST /api/schedule/:scheduleId/approve', () => {
     const plannerToken = makeToken('planner');
     (app.locals as any).sysproDb = makeFakeDb({
       queryWithParams: jest.fn()
-        .mockResolvedValueOnce({ recordset: [{ ScheduleID: scheduleId, Status: 'Draft' }] }) // SELECT existing
+        .mockResolvedValueOnce({ recordset: [{ IsLatest: true, VersionKind: 'Plan' }] }) // master check
         .mockResolvedValueOnce({ recordset: [] }),  // UPDATE
     });
 
@@ -178,7 +178,7 @@ describe('POST /api/schedule/:scheduleId/approve', () => {
     const adminToken = makeToken('super_admin');
     (app.locals as any).sysproDb = makeFakeDb({
       queryWithParams: jest.fn()
-        .mockResolvedValueOnce({ recordset: [{ ScheduleID: scheduleId, Status: 'Draft' }] })
+        .mockResolvedValueOnce({ recordset: [{ IsLatest: true, VersionKind: 'Plan' }] })
         .mockResolvedValueOnce({ recordset: [] }),
     });
 
@@ -186,6 +186,20 @@ describe('POST /api/schedule/:scheduleId/approve', () => {
       .post(`/api/schedule/${scheduleId}/approve`)
       .set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
+  });
+
+  it.each([
+    ['a what-if', { IsLatest: false, VersionKind: 'WhatIf' }, /what-if/],
+    ['a history version', { IsLatest: false, VersionKind: 'Plan' }, /not the master/],
+  ])('refuses to approve %s (409)', async (_label, row, msg) => {
+    const qwp = jest.fn().mockResolvedValue({ recordset: [row] });
+    (app.locals as any).sysproDb = makeFakeDb({ queryWithParams: qwp });
+    const res = await request(app)
+      .post(`/api/schedule/${scheduleId}/approve`)
+      .set('Authorization', `Bearer ${makeToken('planner')}`);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(msg);
+    expect(qwp.mock.calls.some(([sql]) => /SET Status = 'Approved'/.test(sql))).toBe(false);
   });
 });
 
@@ -296,7 +310,7 @@ describe('POST /api/schedule/:scheduleId/export-to-syspro', () => {
   it('returns 409 when the saved schedule is not Approved', async () => {
     app.locals.sysproDb = makeFakeDb({
       queryWithParams: jest.fn().mockResolvedValue({
-        recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [] }), Status: 'Draft' }],
+        recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [] }), Status: 'Draft', IsLatest: true, VersionKind: 'Plan' }],
       }),
     }) as any;
     const res = await request(app)
@@ -308,7 +322,8 @@ describe('POST /api/schedule/:scheduleId/export-to-syspro', () => {
 
   it('exports the SAVED schedule (not the request body) and marks it Exported', async () => {
     const qwp = jest.fn().mockImplementation(async (sql: string) =>
-      /SELECT ScheduleData, Status/.test(sql)
+      /SELECT IsLatest, VersionKind/.test(sql) ? { recordset: [{ IsLatest: true, VersionKind: 'Plan' }] }
+      : /SELECT ScheduleData, Status/.test(sql)
         ? { recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [] }), Status: 'Approved' }] }
         : { recordset: [] }
     );
@@ -332,7 +347,8 @@ describe('export-to-syspro — incremental publish', () => {
   it('skips SYSPRO entirely when every job matches the last send', async () => {
     const { jobFingerprint } = await import('../../../services/publishStatus');
     const qwp = jest.fn().mockImplementation(async (sql: string) =>
-      /SELECT ScheduleData, Status/.test(sql)
+      /SELECT IsLatest, VersionKind/.test(sql) ? { recordset: [{ IsLatest: true, VersionKind: 'Plan' }] }
+      : /SELECT ScheduleData, Status/.test(sql)
         ? { recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [jobA] }), Status: 'Approved' }] }
         : { recordset: [] });
     const query = jest.fn().mockImplementation(async (sql: string) =>
@@ -386,5 +402,44 @@ describe('POST /api/schedule/save — approval is never carried over', () => {
     const insert = qwp.mock.calls.find(([sql]) => /INSERT INTO aps\.SavedSchedules/.test(sql));
     expect(insert?.[1].status).toBe('Draft');
     app.locals.sysproDb = undefined;
+  });
+});
+
+describe('export-to-syspro — master only, one at a time', () => {
+  const token = makeToken('planner');
+  afterEach(() => { app.locals.sysproDb = undefined; });
+
+  it('refuses a what-if even when it is Approved', async () => {
+    const qwp = jest.fn().mockImplementation(async (sql: string) =>
+      /SELECT IsLatest, VersionKind/.test(sql) ? { recordset: [{ IsLatest: false, VersionKind: 'WhatIf' }] }
+      : { recordset: [{ ScheduleData: '{"jobSchedules":[]}', Status: 'Approved' }] });
+    app.locals.sysproDb = makeFakeDb({ queryWithParams: qwp }) as any;
+    const res = await request(app).post('/api/schedule/W1/export-to-syspro').set('Authorization', `Bearer ${token}`).send({});
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/what-if/);
+  });
+
+  it('a second send while one is running gets 409, and the lock is released afterwards', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const qwp = jest.fn().mockImplementation(async (sql: string) => {
+      if (/SELECT IsLatest, VersionKind/.test(sql)) return { recordset: [{ IsLatest: true, VersionKind: 'Plan' }] };
+      if (/SELECT ScheduleData, Status/.test(sql)) {
+        await gate;
+        return { recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [] }), Status: 'Approved' }] };
+      }
+      return { recordset: [] };
+    });
+    app.locals.sysproDb = makeFakeDb({ queryWithParams: qwp }) as any;
+    const first = request(app).post('/api/schedule/S1/export-to-syspro').set('Authorization', `Bearer ${token}`).send({}).then((r) => r);
+    // let the first request reach the gate
+    await new Promise((r) => setTimeout(r, 50));
+    const second = await request(app).post('/api/schedule/S1/export-to-syspro').set('Authorization', `Bearer ${token}`).send({});
+    expect(second.status).toBe(409);
+    expect(second.body.error).toMatch(/already running/);
+    release();
+    expect((await first).status).toBe(200);
+    const third = await request(app).post('/api/schedule/S1/export-to-syspro').set('Authorization', `Bearer ${token}`).send({});
+    expect(third.status).toBe(200);
   });
 });

@@ -16,6 +16,26 @@ import { AuditLogService } from './AuditLogService';
 
 export const AUTO_PLAN_VERSION_ID = 'whatif-auto-plan';
 export const AUTO_PLAN_NAME = 'Auto plan';
+const AUTO_PLAN_CREATOR = 'auto-schedule';
+
+/**
+ * The what-if the Auto plan writes into. Committing a what-if keeps its id and
+ * turns it into the master, so after the Auto plan is committed its id belongs
+ * to a plan; the next run then starts a fresh what-if under a new id.
+ */
+export async function autoPlanVersionId(plan: any): Promise<string> {
+  const r = await plan.queryWithParams(
+    `SELECT TOP 1 ScheduleID FROM aps.SavedSchedules
+     WHERE VersionKind = 'WhatIf' AND CreatedBy = @by ORDER BY SavedAt DESC`,
+    { by: AUTO_PLAN_CREATOR });
+  const current = r.recordset?.[0]?.ScheduleID;
+  if (current) return String(current);
+  const newId = (await getVersion(plan, AUTO_PLAN_VERSION_ID))
+    ? `${AUTO_PLAN_VERSION_ID}-${Date.now()}`
+    : AUTO_PLAN_VERSION_ID;
+  await createWhatIf(plan, { name: AUTO_PLAN_NAME, createdBy: AUTO_PLAN_CREATOR, newId });
+  return newId;
+}
 
 export interface AutoScheduleConfig {
   enabled: boolean;
@@ -37,6 +57,8 @@ export interface AutoScheduleStatus {
   lastCheckAt?: string;
   lastFingerprint?: string;
   nextRunAt?: string;
+  /** What-if the last run wrote into. */
+  versionId?: string;
 }
 
 export const DEFAULT_AUTO_CONFIG: AutoScheduleConfig = {
@@ -120,7 +142,7 @@ export class AutoScheduler {
 
   private syntheticUser() {
     const cfg = this.config;
-    return { sub: 0, username: 'auto-schedule', role: 'planner', companyId: cfg.companyId };
+    return { sub: 0, username: AUTO_PLAN_CREATOR, role: 'planner', companyId: cfg.companyId };
   }
 
   async tick(now = new Date()): Promise<void> {
@@ -150,10 +172,8 @@ export class AutoScheduler {
     const started = Date.now();
     try {
       if (!db) throw new Error('SYSPRO database not connected');
-      const plan = await planDbFor(this.app);
-      if (!(await getVersion(plan, AUTO_PLAN_VERSION_ID))) {
-        await createWhatIf(plan, { name: AUTO_PLAN_NAME, createdBy: 'auto-schedule', newId: AUTO_PLAN_VERSION_ID });
-      }
+      const versionId = await autoPlanVersionId(await planDbFor(this.app));
+      this.status.versionId = versionId;
       const opts = { ...(this.app.locals.lastGenerateOptions || {}) };
       const horizonDays = Number(opts.horizonDays) > 0 ? Number(opts.horizonDays) : 14;
       delete opts.horizonDays;
@@ -162,7 +182,7 @@ export class AutoScheduler {
         ...opts,
         planningHorizonStartDate: start.toISOString(),
         planningHorizonEndDate: new Date(start.getTime() + horizonDays * 86400000).toISOString(),
-        versionId: AUTO_PLAN_VERSION_ID,
+        versionId,
       };
       let statusCode = 200;
       let payload: any;
@@ -202,7 +222,7 @@ export class AutoScheduler {
       if (schedulerDb) {
         new AuditLogService(schedulerDb).log({
           actorId: 'auto-schedule', action: 'auto_plan_run', entityType: 'plan_version',
-          entityId: AUTO_PLAN_VERSION_ID, after: { reason, ...this.status.lastResult },
+          entityId: this.status.versionId ?? AUTO_PLAN_VERSION_ID, after: { reason, ...this.status.lastResult },
         }).catch(() => { /* best effort */ });
       }
     }

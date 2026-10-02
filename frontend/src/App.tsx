@@ -1302,8 +1302,14 @@ const App: React.FC = () => {
       );
       undoRedoManager.addState(dbSchedule, `Restored version ${versionId}`);
       toast.success(`Restored schedule from ${new Date(restoredAt).toLocaleString()}`);
-    } catch {
-      // Fall back to in-memory restore when the API is unavailable (e.g. offline dev).
+    } catch (error: any) {
+      // The server refused (e.g. a what-if must be committed instead): say why,
+      // and never push the version in as the master behind its back.
+      if (error?.response) {
+        toast.error(apiErrorMessage(error, 'Could not restore this version'));
+        return;
+      }
+      // Fall back to in-memory restore when the API is unreachable (e.g. offline dev).
       const version = scheduleVersions.find((v) => v.versionId === versionId);
       if (!version) return;
       setSchedule(version.scheduleData);

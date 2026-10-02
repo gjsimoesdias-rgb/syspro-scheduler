@@ -23,7 +23,8 @@ import { completeJobFamilies } from '../../utils/jobFamilies';
 import { stripCompletedOperations } from '../../utils/jobFilters';
 import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
-import { saveAsLatest, promoteToLatest, saveIntoWhatIf } from '../../services/ScheduleStore';
+import { saveAsLatest, saveIntoWhatIf, getVersion, revertToVersion, VersionError } from '../../services/ScheduleStore';
+import type { DbExecutor } from '../../database/connection';
 import { loadPublishRows, planPublish, publishStateFor, recordPublished, recordError, resetPublish, jobIdFromExportError } from '../../services/publishStatus';
 import { mapEmployeeRow } from '../../utils/crews';
 import { AUTO_PLAN_VERSION_ID } from '../../services/autoScheduler';
@@ -724,7 +725,7 @@ const autoOf = (req: Request) => req.app.locals.autoScheduler as import('../../s
 router.get('/auto', (req: Request, res: Response) => {
   const auto = autoOf(req);
   if (!auto) return res.status(503).json({ error: 'Auto plan is not available' });
-  res.json({ config: auto.config, status: auto.status, versionId: AUTO_PLAN_VERSION_ID });
+  res.json({ config: auto.config, status: auto.status, versionId: auto.status.versionId ?? AUTO_PLAN_VERSION_ID });
 });
 router.put('/auto', requireAuth, requirePlanner, (req: AuthRequest, res: Response) => {
   const auto = autoOf(req);
@@ -745,6 +746,36 @@ router.post('/auto/run', requireAuth, requirePlanner, async (req: AuthRequest, r
   const status = await auto.runNow(`run now by ${req.user?.username || 'planner'}`);
   res.status(status.lastResult?.ok ? 200 : 500).json({ status });
 });
+
+/** Sends to SYSPRO in progress, by company plan schema. */
+const exportsRunning = new Set<string>();
+
+/**
+ * Approve and export apply to the master plan only (IsLatest, not a what-if).
+ * Returns an error to send, or null when `scheduleId` is the master.
+ */
+async function masterCheck(plan: DbExecutor, scheduleId: string): Promise<{ status: number; error: string } | null> {
+  const r = await plan.queryWithParams(
+    `SELECT IsLatest, VersionKind FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`, { scheduleId });
+  const row = r.recordset?.[0];
+  if (!row) return { status: 404, error: 'Schedule not found — save it before approving or sending to SYSPRO' };
+  if (row.VersionKind === 'WhatIf') return { status: 409, error: 'This is a what-if. Commit it to the master plan (Versions) first.' };
+  if (!row.IsLatest) return { status: 409, error: 'This is not the master plan. Revert to it (Versions) first.' };
+  return null;
+}
+
+async function auditPlan(req: Request, action: string, scheduleId: string): Promise<void> {
+  const schedulerDb = req.app.locals.schedulerDb;
+  if (!schedulerDb) return;
+  try {
+    await new AuditLogService(schedulerDb).log({
+      actorId: (req as any).user?.username ?? String((req as any).user?.sub ?? 'unknown'),
+      action, entityType: 'plan_version', entityId: scheduleId, traceId: (req as any).id,
+    });
+  } catch (err) {
+    req.log.warn({ err }, `Audit log write failed for ${action}`);
+  }
+}
 
 router.get('/latest', async (req: Request, res: Response) => {
   try {
@@ -833,25 +864,21 @@ router.post('/load-version/:scheduleId', requirePlanner, async (req: Request, re
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const result = await (await planDbFor(req.app)).queryWithParams(
-      `SELECT ScheduleData, GeneratedAt FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
-      { scheduleId }
-    );
-
-    if (!result.recordset || result.recordset.length === 0) {
-      return res.status(404).json({ error: 'Schedule version not found' });
-    }
-
-    const schedule = JSON.parse(result.recordset[0].ScheduleData);
+    // Same rules as Versions → Revert: what-ifs must be committed instead, and
+    // the restored plan comes back as Draft (it must be approved again before
+    // it can be sent to SYSPRO — an old Approved/Exported row is not reusable).
+    const plan = await planDbFor(req.app);
+    await revertToVersion(plan, scheduleId);
+    const restored = await getVersion(plan, scheduleId);
+    if (!restored) return res.status(404).json({ error: 'Schedule version not found' });
+    const schedule = { ...restored.schedule, status: restored.summary.status };
     const restoredAt = new Date().toISOString();
-
-    // Promote this version as the new latest (demote all others) — atomically.
-    await promoteToLatest(await planDbFor(req.app), scheduleId);
 
     req.log.info({ scheduleId, restoredAt }, 'version_restore');
 
     res.json({ schedule, restoredAt });
   } catch (error) {
+    if (error instanceof VersionError) return res.status(error.status).json({ error: error.message });
     res.status(500).json({ error: (error as any).message });
   }
 });
@@ -1010,21 +1037,17 @@ router.post('/:scheduleId/approve', requireAuth, requirePlanner, async (req: Req
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    // Verify the schedule exists
-    const existing = await (await planDbFor(req.app)).queryWithParams(
-      `SELECT ScheduleID, Status FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
-      { scheduleId }
-    );
+    // Only the master plan can be approved (what-ifs are committed first;
+    // history is reverted first).
+    const plan = await planDbFor(req.app);
+    const problem = await masterCheck(plan, scheduleId);
+    if (problem) return res.status(problem.status).json({ error: problem.error });
 
-    if (!existing.recordset || existing.recordset.length === 0) {
-      return res.status(404).json({ error: 'Schedule not found' });
-    }
-
-    // Persist the Approved status
-    await (await planDbFor(req.app)).queryWithParams(
+    await plan.queryWithParams(
       `UPDATE aps.SavedSchedules SET Status = 'Approved', SavedAt = GETDATE() WHERE ScheduleID = @scheduleId`,
       { scheduleId }
     );
+    await auditPlan(req, 'approve', scheduleId);
 
     req.log.info({ scheduleId }, 'Schedule approved');
     res.json({ scheduleId, status: 'Approved' });
@@ -1044,6 +1067,7 @@ router.post('/:scheduleId/approve', requireAuth, requirePlanner, async (req: Req
  * Requires a planning role (see requirePlanner).
  */
 router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async (req: Request, res: Response) => {
+  let lockedSchema: string | null = null;
   try {
     const { scheduleId } = req.params;
 
@@ -1054,14 +1078,25 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
       });
     }
 
-    const saved = await (await planDbFor(req.app)).queryWithParams(
+    const plan = await planDbFor(req.app);
+    const problem = await masterCheck(plan, scheduleId);
+    if (problem) return res.status(problem.status).json({ error: problem.error });
+
+    // One export per company at a time: a double click or a second planner
+    // would otherwise write the same jobs (and LYNQ BPL orders) twice.
+    const lockKey = String((plan as any).schema ?? 'default');
+    if (exportsRunning.has(lockKey)) {
+      return res.status(409).json({ error: 'A send to SYSPRO is already running for this company — wait for it to finish.' });
+    }
+    exportsRunning.add(lockKey);
+    lockedSchema = lockKey;
+
+    const saved = await plan.queryWithParams(
       `SELECT ScheduleData, Status FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`,
       { scheduleId }
     );
     const row = saved.recordset?.[0];
-    if (!row) {
-      return res.status(404).json({ error: 'Schedule not found — save it before sending to SYSPRO' });
-    }
+    if (!row) return res.status(404).json({ error: 'Schedule not found' });
     if (row.Status !== 'Approved') {
       return res.status(409).json({
         error: `Schedule is '${row.Status}'. Only an Approved schedule can be sent to SYSPRO.`
@@ -1156,6 +1191,8 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
   } catch (error) {
     req.log.error({ err: error }, 'Fatal error during schedule export');
     res.status(500).json({ error: (error as any).message || 'Failed to export schedule' });
+  } finally {
+    if (lockedSchema !== null) exportsRunning.delete(lockedSchema);
   }
 });
 
