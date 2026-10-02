@@ -456,7 +456,7 @@ const App: React.FC = () => {
       action: 'Export Schedule',
       keys: 'Ctrl+Shift+E',
       description: 'Export current schedule',
-      handler: () => scheduleRef.current && exportService.downloadScheduleReport(scheduleRef.current)
+      handler: () => { if (scheduleRef.current) void exportService.downloadScheduleReport(scheduleRef.current); }
     });
     shortcutManager.register({
       action: 'Undo',

@@ -204,7 +204,7 @@ export function useScheduleGeneration({
     try {
       if (format === 'csv') exportService.exportToCSV(schedule);
       else if (format === 'json') exportService.exportToJSON(schedule);
-      else if (format === 'pdf') exportService.downloadScheduleReport(schedule);
+      else if (format === 'pdf') await exportService.downloadScheduleReport(schedule);
       toast.success(`✓ Schedule exported as ${format.toUpperCase()}`);
     } catch (error) {
       console.error('Export error:', error);

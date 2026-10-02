@@ -3,8 +3,6 @@
  */
 
 import { Schedule } from '../types';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import Papa from 'papaparse';
 
 /**
@@ -21,8 +19,8 @@ function triggerDownload(blob: Blob, fileName: string): void {
   setTimeout(() => window.URL.revokeObjectURL(url), 100);
 }
 
-export const exportToPDF = (schedule: Schedule, fileName = 'schedule.pdf'): void => {
-  downloadScheduleReport(schedule);
+export const exportToPDF = async (schedule: Schedule, fileName = 'schedule.pdf'): Promise<void> => {
+  await downloadScheduleReport(schedule);
   // fileName param kept for API compatibility
   void fileName;
 };
@@ -58,7 +56,15 @@ export const exportToJSON = (schedule: Schedule, fileName = 'schedule.json'): vo
   triggerDownload(blob, fileName);
 };
 
-export const downloadScheduleReport = (schedule: Schedule): void => {
+/**
+ * PDF report. jsPDF (+ html2canvas, ~550 kB) is loaded only when a report is
+ * actually made, so it isn't part of the app's start-up download.
+ */
+export const downloadScheduleReport = async (schedule: Schedule): Promise<void> => {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const dateStr = new Date().toLocaleDateString();
   const fileName = `schedule-report-${new Date().toISOString().split('T')[0]}.pdf`;
