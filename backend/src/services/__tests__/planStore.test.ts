@@ -71,4 +71,24 @@ describe('ensurePlanStore', () => {
     expect(a.schema).toBe('co_X');
     expect(sch.calls.filter((c) => c.includes('CREATE SCHEMA')).length).toBe(1);
   });
+
+  it('after a SCHEDULER reconnect, every company gets a store on the new connection (never the closed one)', async () => {
+    __resetPlanStoreCache();
+    const syspro = (db: string) => ({ config: { database: db }, query: jest.fn(async () => ({ recordset: [] })) });
+    const oldConn = fakeScheduler();
+    const app: any = { locals: { schedulerDb: oldConn.db, sysproDb: syspro('A') } };
+    const aOld = await planDbFor(app);
+    app.locals.sysproDb = syspro('B');
+    await planDbFor(app);
+
+    const newConn = fakeScheduler();
+    app.locals.schedulerDb = newConn.db;
+    app.locals.sysproDb = syspro('B');
+    await planDbFor(app);
+    app.locals.sysproDb = syspro('A');               // back to a company cached on the old connection
+    const aNew = await planDbFor(app);
+    expect(aNew).not.toBe(aOld);
+    await aNew.query('SELECT 1 FROM aps.SavedSchedules');
+    expect(newConn.calls.some((c) => c.includes('[co_A].SavedSchedules'))).toBe(true);
+  });
 });

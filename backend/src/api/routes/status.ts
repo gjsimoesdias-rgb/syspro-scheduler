@@ -348,6 +348,10 @@ router.post('/databases', validateBody(listDatabasesSchema), async (req: Request
 router.post('/connect', validateBody(connectSchema), async (req: Request, res: Response) => {
   let nextSysproDb: DatabaseConnection | null = null;
   let nextSchedulerDb: DatabaseConnection | null = null;
+  // Once a new pool is live in app.locals it must never be closed by the
+  // error path below (the old pool is already gone by then).
+  let sysproLive = false;
+  let schedulerLive = false;
 
   try {
     const payload = req.body;
@@ -369,6 +373,7 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
       await req.app.locals.sysproDb.disconnect().catch(() => undefined);
     }
     req.app.locals.sysproDb = nextSysproDb;
+    sysproLive = true;
 
     // Provision the scheduler-owned aps objects (aps.SavedSchedules,
     // aps.Scenarios) in the newly-connected company's SYSPRO DB. Runtime
@@ -386,6 +391,7 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
         await req.app.locals.schedulerDb.disconnect().catch(() => undefined);
       }
       req.app.locals.schedulerDb = nextSchedulerDb;
+      schedulerLive = true;
 
       // Run migrations and seed default admin whenever a new scheduler DB is
       // connected at runtime (covers fresh-install flow where no .env existed
@@ -430,23 +436,33 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
       port: payload.port ? Number(payload.port) : null
     };
 
-    persistConnectionProfile(payload, database, schedulerDatabase || null);
+    // Saving to .env is for the next launch; failing to write it must not
+    // undo a connection that is already live.
+    let profileSaved = true;
+    try {
+      persistConnectionProfile(payload, database, schedulerDatabase || null);
+    } catch (envErr: any) {
+      profileSaved = false;
+      req.log.warn({ err: envErr }, 'Connected, but backend/.env could not be updated');
+    }
 
     res.json({
       connected: true,
       sysproConnected: true,
       schedulerConnected: !!req.app.locals.schedulerDb,
       profile: req.app.locals.connectionProfile,
-      message: `Connected to ${database}. Settings saved for the next launch.`,
+      message: profileSaved
+        ? `Connected to ${database}. Settings saved for the next launch.`
+        : `Connected to ${database}, but the settings could not be saved to backend/.env — the next launch will use the old connection.`,
       // Only present when this request created the very first admin user on a
       // brand-new scheduler DB (first-run, localhost-only — see app.ts).
       ...(initialAdmin ? { initialAdmin } : {})
     });
   } catch (error) {
-    if (nextSysproDb) {
+    if (nextSysproDb && !sysproLive) {
       await nextSysproDb.disconnect().catch(() => undefined);
     }
-    if (nextSchedulerDb) {
+    if (nextSchedulerDb && !schedulerLive) {
       await nextSchedulerDb.disconnect().catch(() => undefined);
     }
     res.status(500).json({ error: (error as any).message || 'Failed to connect to database' });

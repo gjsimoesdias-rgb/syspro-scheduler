@@ -162,7 +162,13 @@ export async function ensurePlanStore(plan: PlanDb, sysproDb: any): Promise<{ co
   return { copied };
 }
 
-const ready = new Map<string, Promise<PlanDb>>();
+/**
+ * Provisioned plan stores, per SCHEDULER connection and company schema. Keyed
+ * by the connection object so a reconnect never reuses a PlanDb bound to a
+ * closed pool (a single shared "owner" used to be checked for the first key
+ * only, so switching back to a company cached earlier could hit a dead pool).
+ */
+let ready = new WeakMap<object, Map<string, Promise<PlanDb>>>();
 
 /**
  * The plan store for the connected company, provisioned on first use.
@@ -174,17 +180,18 @@ export async function planDbFor(app: { locals: Record<string, any> }): Promise<P
   if (!schedulerDb) throw Object.assign(new Error('Scheduler database not connected'), { status: 503 });
   const companyDb = companyDbOf(sysproDb);
   const schema = planSchemaFor(companyDb);
-  const key = `${schema}`;
-  let p = ready.get(key);
-  if (!p || (app.locals.__planDbOwner && app.locals.__planDbOwner !== schedulerDb)) {
-    app.locals.__planDbOwner = schedulerDb;
+  let bySchema = ready.get(schedulerDb);
+  if (!bySchema) ready.set(schedulerDb, (bySchema = new Map()));
+  let p = bySchema.get(schema);
+  if (!p) {
     const plan = new PlanDb(schedulerDb, schema, companyDb);
+    const cache = bySchema;
     p = ensurePlanStore(plan, sysproDb).then(() => plan);
-    p.catch(() => ready.delete(key));
-    ready.set(key, p);
+    p.catch(() => cache.delete(schema));
+    cache.set(schema, p);
   }
   return p;
 }
 
 /** Test hook. */
-export const __resetPlanStoreCache = () => ready.clear();
+export const __resetPlanStoreCache = () => { ready = new WeakMap(); };
