@@ -17,6 +17,7 @@
 
 import { Router, Request, Response } from 'express';
 import { logger } from '../../utils/logger';
+import type { DbExecutor } from '../../database/connection';
 
 const router = Router();
 
@@ -39,7 +40,7 @@ export const WIP_SNAPSHOT_SQL = `
        WHERE ISNULL(wm.Complete, 'N') <> 'Y') AS opChk`;
 
 /** Returns a fingerprint string, or null when the query failed (null never counts as a change). */
-export async function getWipSnapshot(sysproDb: any): Promise<string | null> {
+export async function getWipSnapshot(sysproDb: DbExecutor): Promise<string | null> {
   try {
     const result = await sysproDb.query(WIP_SNAPSHOT_SQL);
     const row = result.recordset?.[0];
@@ -56,7 +57,7 @@ let pollTimer: NodeJS.Timeout | null = null;
 let pingTimer: NodeJS.Timeout | null = null;
 let lastHash: string | null = null;
 let polling = false;
-let getDb: () => any = () => null;
+let getDb: () => DbExecutor | null | undefined = () => null;
 
 const send = (client: Client, event: string, data: unknown) => {
   try {

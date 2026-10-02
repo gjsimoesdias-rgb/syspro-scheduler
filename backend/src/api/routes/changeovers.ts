@@ -3,6 +3,7 @@
  * Mounted inside the schedule router (before /:scheduleId), so URLs are unchanged.
  */
 import { Router, Request, Response } from 'express';
+import type { DbExecutor } from '../../database/connection';
 import { validate, setupMatrixRowSchema, setupMatrixBulkSchema, setupClassBulkSchema } from '../validators/scheduleValidators';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
 import { errorMessage } from '../../utils/errors';
@@ -93,15 +94,15 @@ router.delete('/setup-matrix/:setupId', requireAuth, requirePlanner, async (req:
  * (item-keyed) scheduler charge class-level changeovers with no engine change.
  */
 export async function buildClassChangeoverSequences(
-  schedulerDb: any,
-  sysproDb: any,
+  schedulerDb: DbExecutor | null | undefined,
+  sysproDb: DbExecutor,
   jobs: Array<{ itemCode?: string }>,
-  log: any
+  log?: { info(obj: object, msg: string): void }
 ): Promise<Array<{ fromItemCode: string; toItemCode: string; setupTimeMinutes: number }>> {
   if (!schedulerDb) return [];
   let classRows: Array<{ fromClass: string; toClass: string; setupMinutes: number }> = [];
   try {
-    const r = await schedulerDb.query(
+    const r = await schedulerDb.query<{ fromClass: string; toClass: string; setupMinutes: number }>(
       `IF OBJECT_ID('dbo.sch_ClassChangeover', 'U') IS NULL
          SELECT TOP 0 CAST('' AS nvarchar(50)) AS fromClass, CAST('' AS nvarchar(50)) AS toClass, CAST(0 AS int) AS setupMinutes;
        ELSE

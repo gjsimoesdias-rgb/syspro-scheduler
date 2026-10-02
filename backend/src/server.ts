@@ -77,7 +77,7 @@ async function startServer() {
     // Connect to databases in the background (non-blocking)
     (async () => {
       try {
-        sysproDb = new DatabaseConnection(sysproConfig as any);
+        sysproDb = new DatabaseConnection(sysproConfig);
         await sysproDb.connect();
         console.log('✓ Syspro database connected');
         app.locals.sysproDb = sysproDb;
@@ -99,7 +99,7 @@ async function startServer() {
       }
 
       try {
-        schedulerDb = new DatabaseConnection(schedulerConfig as any);
+        schedulerDb = new DatabaseConnection(schedulerConfig);
         await schedulerDb.connect();
         console.log('✓ Scheduler database connected');
         app.locals.schedulerDb = schedulerDb;

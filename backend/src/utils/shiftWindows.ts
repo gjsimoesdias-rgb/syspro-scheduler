@@ -14,7 +14,7 @@
  *    doesn't exist. (Simple shifts given as start/end with end < start are
  *    split the same way.)
  */
-import { exceptionForDay, exceptionWindowMinutes } from './calendarExceptions';
+import { exceptionForDay, exceptionWindowMinutes, type CalendarLike } from './calendarExceptions';
 
 export interface MinuteWindow { start: number; end: number; overtime?: boolean }
 
@@ -29,7 +29,7 @@ function hhmm(value: unknown, fallback: number): number {
 }
 
 /** The calendar's daily pattern, before working-day rules. */
-export function patternWindows(calendar: any): MinuteWindow[] {
+export function patternWindows(calendar: CalendarLike | null | undefined): MinuteWindow[] {
   const shifts = Array.isArray(calendar?.shifts) && calendar.shifts.length
     ? calendar.shifts
     : [{ startTime: '08:00', endTime: '16:00', diversions: [] }];
@@ -55,7 +55,7 @@ export function patternWindows(calendar: any): MinuteWindow[] {
 }
 
 /** Day status: forced exception windows, or whether the weekly pattern applies. */
-function dayStatus(calendar: any, day: Date): { forced: MinuteWindow[] | null; working: boolean } {
+function dayStatus(calendar: CalendarLike | null | undefined, day: Date): { forced: MinuteWindow[] | null; working: boolean } {
   const exception = exceptionForDay(calendar, day);
   if (exception) {
     const forced = exceptionWindowMinutes(exception);
@@ -69,7 +69,7 @@ function dayStatus(calendar: any, day: Date): { forced: MinuteWindow[] | null; w
 }
 
 /** Productive windows for the local day containing `date`, in minutes from its midnight. */
-export function dayWindowMinutes(calendar: any, date: Date): MinuteWindow[] {
+export function dayWindowMinutes(calendar: CalendarLike | null | undefined, date: Date): MinuteWindow[] {
   const day = new Date(date);
   day.setHours(0, 0, 0, 0);
   const today = dayStatus(calendar, day);

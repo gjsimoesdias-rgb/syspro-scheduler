@@ -8,11 +8,11 @@ describe('SSE WIP snapshot', () => {
 
   it('returns a stable fingerprint from the query row', async () => {
     const db = { query: jest.fn().mockResolvedValue({ recordset: [{ jobCount: 5, jobChk: 11, opChk: -7 }] }) };
-    expect(await getWipSnapshot(db)).toBe('5|11|-7');
+    expect(await getWipSnapshot(db as any)).toBe('5|11|-7');
   });
 
   it('returns null (not a fake "change") when the query fails', async () => {
     const db = { query: jest.fn().mockRejectedValue(new Error('boom')) };
-    expect(await getWipSnapshot(db)).toBeNull();
+    expect(await getWipSnapshot(db as any)).toBeNull();
   });
 });

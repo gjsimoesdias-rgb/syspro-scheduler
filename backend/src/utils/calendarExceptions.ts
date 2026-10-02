@@ -14,6 +14,8 @@
  * A work-centre exception beats a plant-wide one on the same day.
  */
 
+import { asObj } from './loose';
+
 export interface CalendarException {
   id: string;
   date: string;          // YYYY-MM-DD, local plant day
@@ -22,6 +24,29 @@ export interface CalendarException {
   isWorking: boolean;
   startTime?: string;    // HH:MM
   endTime?: string;      // HH:MM (24:00 allowed)
+}
+
+/** A calendar day exception as stored in calendar.holidays (dates may be Date or string). */
+export interface HolidayLike {
+  date?: unknown;
+  name?: string;
+  isWorking?: boolean;
+  startTime?: string;
+  endTime?: string;
+}
+
+/**
+ * The calendar fields the day logic reads. Loose on purpose: calendars come
+ * from SYSPRO, shift templates and the API, and most fields are optional.
+ */
+export interface CalendarLike {
+  workingDays?: number[];
+  shifts?: Array<{
+    startTime?: string;
+    endTime?: string;
+    diversions?: Array<{ startTime?: string; endTime?: string; schedulable?: boolean; type?: string }>;
+  }>;
+  holidays?: HolidayLike[];
 }
 
 /** Local calendar day key (YYYY-MM-DD). */
@@ -45,11 +70,11 @@ const toMinutes = (v: string): number => {
 };
 
 /** The exception that applies to `date` (last match wins), or undefined. */
-export function exceptionForDay(calendar: any, date: Date | string): any | undefined {
+export function exceptionForDay(calendar: CalendarLike | null | undefined, date: Date | string): HolidayLike | undefined {
   const list = Array.isArray(calendar?.holidays) ? calendar.holidays : [];
   if (!list.length) return undefined;
   const key = typeof date === 'string' ? date : localDayKey(date);
-  let found: any;
+  let found: HolidayLike | undefined;
   for (const h of list) if (holidayKey(h?.date) === key) found = h;
   return found;
 }
@@ -58,7 +83,7 @@ export function exceptionForDay(calendar: any, date: Date | string): any | undef
  * Workable minutes-from-midnight windows forced by an exception, or null when
  * the exception keeps the normal shift pattern (isWorking with no times).
  */
-export function exceptionWindowMinutes(h: any): Array<{ start: number; end: number }> | null {
+export function exceptionWindowMinutes(h: HolidayLike | null | undefined): Array<{ start: number; end: number }> | null {
   if (h?.startTime && h?.endTime && HHMM.test(h.startTime) && HHMM.test(h.endTime)) {
     const start = toMinutes(h.startTime);
     const end = toMinutes(h.endTime);
@@ -68,25 +93,26 @@ export function exceptionWindowMinutes(h: any): Array<{ start: number; end: numb
 }
 
 /** Validate/normalise one exception from the API. Returns an error string or the clean value. */
-export function normaliseException(input: any): CalendarException | string {
-  const date = String(input?.date || '').slice(0, 10);
+export function normaliseException(raw: unknown): CalendarException | string {
+  const input = asObj(raw);
+  const date = String(input.date || '').slice(0, 10);
   if (!DATE_ONLY.test(date) || Number.isNaN(new Date(`${date}T00:00:00`).getTime())) return 'date must be YYYY-MM-DD';
-  const name = String(input?.name || '').trim();
+  const name = String(input.name || '').trim();
   if (!name) return 'name is required';
-  const scope = String(input?.scope || 'plant').trim() || 'plant';
-  const startTime = input?.startTime ? String(input.startTime) : undefined;
-  const endTime = input?.endTime ? String(input.endTime) : undefined;
+  const scope = String(input.scope || 'plant').trim() || 'plant';
+  const startTime = input.startTime ? String(input.startTime) : undefined;
+  const endTime = input.endTime ? String(input.endTime) : undefined;
   if (!!startTime !== !!endTime) return 'set both startTime and endTime, or neither';
   if (startTime && endTime) {
     if (!HHMM.test(startTime) || !HHMM.test(endTime)) return 'times must be HH:MM';
     if (toMinutes(endTime) <= toMinutes(startTime)) return 'endTime must be after startTime';
   }
   return {
-    id: String(input?.id || `exc-${date}-${Math.random().toString(36).slice(2, 8)}`),
+    id: String(input.id || `exc-${date}-${Math.random().toString(36).slice(2, 8)}`),
     date,
     name: name.slice(0, 100),
     scope,
-    isWorking: startTime ? true : Boolean(input?.isWorking),
+    isWorking: startTime ? true : Boolean(input.isWorking),
     ...(startTime ? { startTime, endTime } : {}),
   };
 }
@@ -95,7 +121,7 @@ export function normaliseException(input: any): CalendarException | string {
  * Merge the exceptions that apply to each resource into calendar.holidays.
  * Plant-wide first, work-centre second, so the work-centre one wins.
  */
-export function applyCalendarExceptions<T extends { worcentreId?: string; calendar?: any }>(
+export function applyCalendarExceptions<T extends { worcentreId?: string; calendar?: CalendarLike | null }>(
   resources: T[],
   exceptions: CalendarException[] | undefined,
 ): T[] {

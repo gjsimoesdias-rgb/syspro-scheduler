@@ -48,7 +48,7 @@ describe('calendar exceptions', () => {
       { id: 'c', date: '2026-12-24', name: 'Other line', scope: 'WC2', isWorking: false },
     ]);
     expect(r.calendar.holidays).toHaveLength(2);
-    expect(exceptionForDay(r.calendar, day(2026, 12, 24)).name).toBe('WC1 works');
+    expect(exceptionForDay(r.calendar, day(2026, 12, 24))!.name).toBe('WC1 works');
   });
 
   it('the engine and CTP both honour holidays, short days and extra days', () => {

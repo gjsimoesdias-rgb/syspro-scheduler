@@ -50,11 +50,11 @@ export class AuthService {
         companyId: user.companyId,
       },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN } as any
+      { expiresIn: JWT_EXPIRES_IN }
     );
   }
 
-  verifyToken(token: string): any {
+  verifyToken(token: string): string | jwt.JwtPayload {
     return jwt.verify(token, JWT_SECRET);
   }
 

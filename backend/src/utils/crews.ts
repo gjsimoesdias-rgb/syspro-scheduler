@@ -12,6 +12,9 @@
  * the scheduler never runs more operations at once in a pool than its
  * headcount can staff.
  */
+import type { DbRow } from '../database/connection';
+import { asObj, asArr } from './loose';
+
 export interface CrewPool {
   id: string;
   name: string;
@@ -28,7 +31,7 @@ export const effectiveHeadcount = (p: CrewPool): number =>
 /** A SYSPRO employee as CRUX shows it (from BomEmployee). */
 export interface SysproEmployee { code: string; name: string; workCentre?: string; shiftId?: string; active: boolean }
 
-const pick = (row: Record<string, any>, keys: string[]): string => {
+const pick = (row: DbRow, keys: string[]): string => {
   for (const k of keys) {
     const v = row[k];
     if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
@@ -40,7 +43,7 @@ const pick = (row: Record<string, any>, keys: string[]): string => {
  * Map a BomEmployee row (SYSPRO: Employee, Name, WorkCentre, ShiftId, …),
  * tolerating column-name differences between SYSPRO versions.
  */
-export function mapEmployeeRow(row: Record<string, any>): SysproEmployee | null {
+export function mapEmployeeRow(row: DbRow): SysproEmployee | null {
   const code = pick(row, ['Employee', 'EmployeeCode', 'EmpNumber', 'Code']);
   if (!code) return null;
   const name = pick(row, ['Name', 'EmployeeName', 'Description'])
@@ -145,23 +148,25 @@ export const EMPTY_CREW_SETUP: CrewSetup = { enabled: false, pools: [], lines: {
 const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'pool';
 
 /** Validate and clean a crew setup from the client. Returns an error message on bad input. */
-export function normaliseCrewSetup(input: any): CrewSetup | string {
-  if (!input || typeof input !== 'object') return 'Body must be a crew setup';
+export function normaliseCrewSetup(body: unknown): CrewSetup | string {
+  if (!body || typeof body !== 'object') return 'Body must be a crew setup';
+  const input = asObj(body);
   const pools: CrewPool[] = [];
   const seen = new Set<string>();
   const employeeCrew = new Map<string, string>();
-  for (const raw of Array.isArray(input.pools) ? input.pools : []) {
-    const name = String(raw?.name ?? '').trim();
+  for (const item of asArr(input.pools)) {
+    const raw = asObj(item);
+    const name = String(raw.name ?? '').trim();
     if (!name) return 'Every crew needs a name';
-    const headcount = Number(raw?.headcount);
+    const headcount = Number(raw.headcount);
     if (!Number.isFinite(headcount) || headcount < 0 || headcount > 10000 || Math.floor(headcount) !== headcount) {
       return `Crew "${name}": headcount must be a whole number of operators`;
     }
-    let id = String(raw?.id ?? '').trim() || slug(name);
+    let id = String(raw.id ?? '').trim() || slug(name);
     while (seen.has(id)) id = `${id}-2`;
     seen.add(id);
-    const employees = Array.from(new Set((Array.isArray(raw?.employees) ? raw.employees : [])
-      .map((e: unknown) => String(e ?? '').trim()).filter(Boolean))) as string[];
+    const employees = Array.from(new Set(asArr(raw.employees)
+      .map((e) => String(e ?? '').trim()).filter(Boolean)));
     for (const e of employees) {
       if (employeeCrew.has(e)) return `Employee ${e} is in two crews (${employeeCrew.get(e)} and ${name})`;
       employeeCrew.set(e, name);
@@ -169,12 +174,12 @@ export function normaliseCrewSetup(input: any): CrewSetup | string {
     pools.push({ id, name: name.slice(0, 80), headcount, employees });
   }
   const lines: Record<string, CrewLine> = {};
-  const lineInput = input.lines && typeof input.lines === 'object' ? input.lines : {};
-  for (const [wc, raw] of Object.entries<any>(lineInput)) {
-    const poolId = String(raw?.poolId ?? '').trim();
+  for (const [wc, value] of Object.entries(asObj(input.lines))) {
+    const raw = asObj(value);
+    const poolId = String(raw.poolId ?? '').trim();
     if (!poolId) continue; // line not crew-constrained
     if (!seen.has(poolId)) return `Line ${wc} uses an unknown crew`;
-    const operators = Number(raw?.operators);
+    const operators = Number(raw.operators);
     if (!Number.isFinite(operators) || operators <= 0 || operators > 1000) {
       return `Line ${wc}: operators must be a positive number`;
     }

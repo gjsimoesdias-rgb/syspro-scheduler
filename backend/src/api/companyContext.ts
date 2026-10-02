@@ -14,6 +14,7 @@
  */
 import type { Request } from 'express';
 import { companyDbOf } from '../services/planStore';
+import type { DbExecutor } from '../database/connection';
 
 const CACHE_MS = 60_000;
 const cache = new Map<string, { at: number; id: number | null }>();
@@ -30,14 +31,14 @@ export function pickCompany(
 }
 
 /** Company of the connected SYSPRO database (cached for a minute). */
-export async function connectedCompanyId(app: { locals: Record<string, any> }): Promise<number | null> {
+export async function connectedCompanyId(app: { locals: Record<string, unknown> & { schedulerDb?: DbExecutor | null; sysproDb?: unknown } }): Promise<number | null> {
   const schedulerDb = app.locals.schedulerDb;
   if (!schedulerDb) return null;
   const companyDb = companyDbOf(app.locals.sysproDb);
   const hit = cache.get(companyDb);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.id;
   try {
-    const r = await schedulerDb.query(`SELECT id, syspro_company_id FROM dbo.lic_companies`);
+    const r = await schedulerDb.query<{ id: number; syspro_company_id: string | null }>(`SELECT id, syspro_company_id FROM dbo.lic_companies`);
     const id = pickCompany(r.recordset || [], companyDb);
     cache.set(companyDb, { at: Date.now(), id });
     return id;

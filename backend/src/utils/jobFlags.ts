@@ -7,6 +7,7 @@
  * the background Auto plan, not only to the browser that set them.
  */
 import type { PinnedOperation } from '../types';
+import { asObj } from './loose';
 
 export interface JobFlags {
   excluded: string[];
@@ -20,8 +21,9 @@ const ids = (v: unknown): string[] =>
     ? Array.from(new Set(v.map((x) => String(x ?? '').trim()).filter(Boolean))).slice(0, 20000)
     : [];
 
-export function normaliseJobFlags(raw: any): JobFlags {
-  return { excluded: ids(raw?.excluded), pinned: ids(raw?.pinned) };
+export function normaliseJobFlags(raw: unknown): JobFlags {
+  const r = asObj(raw);
+  return { excluded: ids(r.excluded), pinned: ids(r.pinned) };
 }
 
 /** Set or clear one flag on one job. Returns a new object. */
@@ -49,7 +51,10 @@ export function effectiveJobFlags(stored: unknown, body: { excludedJobIds?: unkn
  * returned in `notInPlan` so the run can say why they still moved.
  */
 export function pinsForJobs(
-  master: any,
+  master: { jobSchedules?: Array<{ jobId: string; operationSchedules?: Array<{
+    opId: string; workcentreId: string; resourceId?: string; opStatus?: string;
+    plannedStartDate: unknown; plannedEndDate: unknown;
+  }> }> } | null | undefined,
   pinnedJobIds: Set<string>,
   pinnedBy = 'job-pin'
 ): { pins: Map<string, PinnedOperation>; notInPlan: string[] } {
@@ -60,8 +65,8 @@ export function pinsForJobs(
     const jobId = String(js?.jobId ?? '').trim();
     if (!pinnedJobIds.has(jobId)) continue;
     for (const os of js.operationSchedules || []) {
-      const start = new Date(os.plannedStartDate);
-      const end = new Date(os.plannedEndDate);
+      const start = new Date(os.plannedStartDate as string);
+      const end = new Date(os.plannedEndDate as string);
       if (!os.resourceId || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) continue;
       if (os.opStatus === 'Complete') continue;
       found.add(jobId);

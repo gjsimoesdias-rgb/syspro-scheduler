@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import { SysproDatabaseService } from '../services/SysproDatabaseService';
 import { SettingsService } from '../services/SettingsService';
+import type { DbExecutor } from '../database/connection';
 import { companyFor } from './companyContext';
 
 /**
@@ -13,13 +14,13 @@ export async function includeSuggestedJobsFor(req: Request): Promise<boolean> {
     const companyId = await companyFor(req);
     if (!schedulerDb || !companyId) return false;
     const cs = await new SettingsService(schedulerDb).getCompanySettings(companyId);
-    return (cs as any)?.fcs?.schedulingRules?.includeMrpSuggestedJobs === true;
+    return cs.fcs?.schedulingRules?.includeMrpSuggestedJobs === true;
   } catch {
     return false;
   }
 }
 
 /** SYSPRO service configured with the company's suggested-jobs setting. */
-export async function sysproServiceFor(req: Request, db: any = req.app.locals.sysproDb): Promise<SysproDatabaseService> {
+export async function sysproServiceFor(req: Request, db: DbExecutor = req.app.locals.sysproDb): Promise<SysproDatabaseService> {
   return new SysproDatabaseService(db, { includeSuggestedJobs: await includeSuggestedJobsFor(req) });
 }

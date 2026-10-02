@@ -8,7 +8,7 @@ import { Worker } from 'worker_threads';
 import * as path from 'path';
 import ConstraintManager from '../../services/ConstraintManager';
 import { sysproServiceFor } from '../sysproServiceFor';
-import SettingsService from '../../services/SettingsService';
+import SettingsService, { type SchedulingRulesSettings } from '../../services/SettingsService';
 import APSDatabaseService from '../../services/APSDatabaseService';
 import environment from '../../config/environment';
 import { Job, ScheduleRequest, PinnedOperation } from '../../types';
@@ -57,9 +57,9 @@ async function loadCrewEmployees(sysproDb: any, setup: any): Promise<Array<{ cod
   }
 }
 
-function overlapFractionFrom(rules: any): number | undefined {
+function overlapFractionFrom(rules: SchedulingRulesSettings | undefined): number | undefined {
   if (rules?.useTransfer !== true) return undefined;
-  const pct = Number(rules?.overlapPercent);
+  const pct = Number(rules.overlapPercent);
   return Number.isFinite(pct) && pct > 0 && pct < 100 ? pct / 100 : undefined;
 }
 
@@ -245,8 +245,8 @@ export async function generateHandler(req: Request, res: Response) {
       const companyId = await companyFor(req);
       if (schedulerDb && companyId) {
         const cs = await new SettingsService(schedulerDb).getCompanySettings(companyId);
-        includeCompletedOps = !!(cs as any)?.jobManagement?.includeCompletedOps;
-        const rules = (cs as any)?.fcs?.schedulingRules;
+        includeCompletedOps = !!cs.jobManagement?.includeCompletedOps;
+        const rules = cs.fcs?.schedulingRules;
         if (rules) {
           ruleToggles = {
             useQueueTime: rules.useQueueTime !== false,
@@ -613,8 +613,8 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
       const companyId = await companyFor(req);
       if (schedulerDb && companyId) {
         const cs = await new SettingsService(schedulerDb).getCompanySettings(companyId);
-        includeCompletedOps = !!(cs as any)?.jobManagement?.includeCompletedOps;
-        const rulesCfg = (cs as any)?.fcs?.schedulingRules;
+        includeCompletedOps = !!cs.jobManagement?.includeCompletedOps;
+        const rulesCfg = cs.fcs?.schedulingRules;
         if (rulesCfg) {
           ruleToggles = {
             useQueueTime: rulesCfg.useQueueTime !== false,

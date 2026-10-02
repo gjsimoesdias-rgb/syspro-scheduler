@@ -109,7 +109,7 @@ router.get('/', async (req: Request, res: Response) => {
       authMethod: 'ntlm',
     },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN } as any
+    { expiresIn: JWT_EXPIRES_IN }
   );
 
   logger.info({ username, domain, role }, 'NTLM auth successful');

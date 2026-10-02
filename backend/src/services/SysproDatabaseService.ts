@@ -3,7 +3,7 @@
  * Can optionally read from APS schema views for scheduler-owned data
  */
 
-import DatabaseConnection from '../database/connection';
+import type { DbExecutor, DbRow } from '../database/connection';
 import { SYSPRO_QUERIES } from '../database/queries/sysproDashboard';
 import { logger } from '../utils/logger';
 import { resolveMasterLinks } from '../utils/jobIdNormalization';
@@ -130,7 +130,7 @@ export class SysproDatabaseService {
    *   to open jobs and material needs — company setting
    *   fcs.schedulingRules.includeMrpSuggestedJobs (see api/sysproServiceFor.ts).
    */
-  constructor(private sysproDb: DatabaseConnection, private options: { includeSuggestedJobs?: boolean } = {}) {}
+  constructor(private sysproDb: DbExecutor, private options: { includeSuggestedJobs?: boolean } = {}) {}
 
   /** MRP suggested jobs as planned jobs (empty when off or the tables are missing). */
   async getSuggestedJobs(): Promise<Job[]> {
@@ -540,7 +540,7 @@ export class SysproDatabaseService {
           row.name,
           row.description || '',
           (row.capabilities || '').split(',').filter((c: string) => c),
-          { name: 'Standard', shifts: [] },
+          { name: 'Standard', shifts: [], weeksPerCycle: 1 },
           calendar,
           row.costPerHour || 0,
           row.maxOvertimePerDay || 3.0,
@@ -571,7 +571,7 @@ export class SysproDatabaseService {
         row.name,
         row.description || '',
         [],
-        { name: 'Standard', shifts: [] },
+        { name: 'Standard', shifts: [], weeksPerCycle: 1 },
         calendar,
         row.costPerHour || 0,
         row.maxOvertimePerDay || 3.0,

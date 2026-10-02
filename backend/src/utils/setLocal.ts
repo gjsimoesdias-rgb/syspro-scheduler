@@ -13,7 +13,7 @@
 import type { AppStateKey } from '../services/AppStateStore';
 
 export function setLocal<T>(
-  appLocals: Record<string, any>,
+  appLocals: Record<string, unknown> & { appState?: { set(key: AppStateKey, value: unknown): unknown } | null },
   key: AppStateKey,
   value: T
 ): void {

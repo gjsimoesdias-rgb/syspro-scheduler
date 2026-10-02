@@ -1,4 +1,5 @@
-import { DatabaseConnection } from '../database/connection';
+import { DatabaseConnection, type DbExecutor } from '../database/connection';
+import { asObj, type Loose } from '../utils/loose';
 
 /** Default company-wide settings */
 export const DEFAULT_COMPANY_SETTINGS = {
@@ -96,6 +97,14 @@ export const DEFAULT_COMPANY_SETTINGS = {
   },
 };
 
+/** Literal types widened (true → boolean, 'Blue' → string), recursively. */
+type Widen<T> = T extends boolean ? boolean : T extends number ? number : T extends string ? string
+  : { [K in keyof T]: Widen<T[K]> };
+
+/** Company settings: the defaults' shape (stored JSON is merged over the defaults). */
+export type CompanySettings = Widen<typeof DEFAULT_COMPANY_SETTINGS>;
+export type SchedulingRulesSettings = CompanySettings['fcs']['schedulingRules'];
+
 /** Default user-level settings */
 export const DEFAULT_USER_SETTINGS = {
   gantt: {
@@ -123,12 +132,14 @@ export const DEFAULT_USER_SETTINGS = {
   },
 };
 
+export type UserSettings = Widen<typeof DEFAULT_USER_SETTINGS>;
+
 /** True for a lic_users id (local sign-in); false for Windows sign-ins like 'ntlm:DOMAIN\user'. */
 export const isLocalUserId = (sub: unknown): boolean =>
   (typeof sub === 'number' || (typeof sub === 'string' && /^\d+$/.test(sub))) && Number(sub) > 0;
 
 /** Upsert one column of a sch_NamedUserSettings row. */
-export async function saveNamed(db: any, key: string, column: 'SettingsJson' | 'ColumnProfile', json: string): Promise<void> {
+export async function saveNamed(db: DbExecutor, key: string, column: 'SettingsJson' | 'ColumnProfile', json: string): Promise<void> {
   await db.queryWithParams(
     `MERGE dbo.sch_NamedUserSettings WITH (HOLDLOCK) AS t
      USING (SELECT @key AS UserKey) AS s ON t.UserKey = s.UserKey
@@ -141,7 +152,7 @@ export class SettingsService {
   private db: DatabaseConnection;
   constructor(db: DatabaseConnection) { this.db = db; }
 
-  async getCompanySettings(companyId: number): Promise<any> {
+  async getCompanySettings(companyId: number): Promise<CompanySettings> {
     const res = await this.db.queryWithParams(
       `SELECT settings_json FROM dbo.lic_company_settings WHERE company_id = @cid`,
       { cid: companyId }
@@ -154,7 +165,7 @@ export class SettingsService {
     } catch { return { ...DEFAULT_COMPANY_SETTINGS }; }
   }
 
-  async saveCompanySettings(companyId: number, settings: any, updatedBy?: number): Promise<void> {
+  async saveCompanySettings(companyId: number, settings: unknown, updatedBy?: number): Promise<void> {
     const json = JSON.stringify(settings);
     const exists = await this.db.queryWithParams(
       `SELECT id FROM dbo.lic_company_settings WHERE company_id = @cid`, { cid: companyId }
@@ -172,7 +183,7 @@ export class SettingsService {
     }
   }
 
-  async getUserSettings(userId: number): Promise<any> {
+  async getUserSettings(userId: number): Promise<UserSettings> {
     const res = await this.db.queryWithParams(
       `SELECT settings_json FROM dbo.lic_user_settings WHERE user_id = @uid`,
       { uid: userId }
@@ -185,7 +196,7 @@ export class SettingsService {
     } catch { return { ...DEFAULT_USER_SETTINGS }; }
   }
 
-  async saveUserSettings(userId: number, settings: any): Promise<void> {
+  async saveUserSettings(userId: number, settings: unknown): Promise<void> {
     const json = JSON.stringify(settings);
     const exists = await this.db.queryWithParams(
       `SELECT id FROM dbo.lic_user_settings WHERE user_id = @uid`, { uid: userId }
@@ -208,7 +219,7 @@ export class SettingsService {
    * lic_user_settings; Windows sign-ins ('ntlm:DOMAIN\user') have no
    * lic_users row and use sch_NamedUserSettings (migration 010).
    */
-  async getUserSettingsFor(sub: number | string): Promise<any> {
+  async getUserSettingsFor(sub: number | string): Promise<UserSettings> {
     if (isLocalUserId(sub)) return this.getUserSettings(Number(sub));
     const res = await this.db.queryWithParams(
       `SELECT SettingsJson FROM dbo.sch_NamedUserSettings WHERE UserKey = @key`, { key: String(sub) });
@@ -217,22 +228,21 @@ export class SettingsService {
     try { return this.deepMerge({ ...DEFAULT_USER_SETTINGS }, JSON.parse(raw)); } catch { return { ...DEFAULT_USER_SETTINGS }; }
   }
 
-  async saveUserSettingsFor(sub: number | string, settings: any): Promise<void> {
+  async saveUserSettingsFor(sub: number | string, settings: unknown): Promise<void> {
     if (isLocalUserId(sub)) return this.saveUserSettings(Number(sub), settings);
     await saveNamed(this.db, String(sub), 'SettingsJson', JSON.stringify(settings));
   }
 
-  private deepMerge(target: any, source: any): any {
-    const out = { ...target };
-    for (const key of Object.keys(source)) {
-      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) &&
-          target[key] && typeof target[key] === 'object') {
-        out[key] = this.deepMerge(target[key], source[key]);
-      } else {
-        out[key] = source[key];
-      }
+  /** `source` (stored JSON) merged over `target` (defaults), object by object. */
+  private deepMerge<T>(target: T, source: unknown): T {
+    const out: Loose = { ...(target as Loose) };
+    for (const [key, value] of Object.entries(asObj(source))) {
+      const base = out[key];
+      out[key] = value && typeof value === 'object' && !Array.isArray(value) && base && typeof base === 'object'
+        ? this.deepMerge(base, value)
+        : value;
     }
-    return out;
+    return out as T;
   }
 }
 

@@ -30,8 +30,8 @@ const USER_FACING_AUTH_ERRORS = new Set([
  * server log only. Previously raw SQL errors such as "Login failed for user
  * 'sa'" were shown on the sign-in screen.
  */
-const sendAuthError = (req: Request, res: Response, err: any) => {
-  const msg = String(err?.message || '');
+const sendAuthError = (req: Request, res: Response, err: unknown) => {
+  const msg = errorMessage(err, '');
   if (USER_FACING_AUTH_ERRORS.has(msg)) {
     res.status(401).json({ error: msg });
     return;

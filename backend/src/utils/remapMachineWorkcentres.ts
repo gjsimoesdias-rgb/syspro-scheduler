@@ -6,7 +6,10 @@
  * the machine — otherwise it can never be placed on the board.
  */
 export function remapMachineWorkcentres(
-  jobs: Array<{ operations?: any[] }>,
+  jobs: Array<{ operations?: Array<{
+    workcentreId?: string; routedWorkcentreId?: string; qualifiedResourceIds?: string[];
+    assignedResourceId?: string; IMachine?: string;
+  }> }>,
   workcentreIds: Iterable<string>,
   resources: Array<{ resourceId: string; worcentreId?: string; workcentreId?: string }>,
 ): number {

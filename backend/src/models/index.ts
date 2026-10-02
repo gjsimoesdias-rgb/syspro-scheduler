@@ -10,6 +10,8 @@ import {
   Resource,
   Material,
   Calendar,
+  ShiftProfile,
+  SetupSequence,
   Shift,
   Holiday
 } from '../types';
@@ -81,11 +83,11 @@ export class WorkcentreModel implements Workcentre {
     public name: string,
     public description: string,
     public capabilities: string[] = [],
-    public shiftProfile: any = {},
+    public shiftProfile: ShiftProfile = { name: '', shifts: [], weeksPerCycle: 1 },
     public calendar: Calendar,
     public costPerHour: number = 0,
     public maxOvertimePerDay: number = 3.0,
-    public setupSequenceDependencies: any[] = []
+    public setupSequenceDependencies: SetupSequence[] = []
   ) {}
 }
 

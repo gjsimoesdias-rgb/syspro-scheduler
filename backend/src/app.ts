@@ -25,6 +25,7 @@ import shopfloorRoutes from './api/routes/shopfloor';
 import rateLimit from 'express-rate-limit';
 import environment from './config/environment';
 import { httpLogger, logger } from './utils/logger';
+import { errorMessage, errorStatus, errorCode } from './utils/errors';
 import { requireAuth, requireCompanyAdmin, requireShopfloorAccess } from './api/middleware/requireAuth';
 
 const app: Express = express();
@@ -241,10 +242,10 @@ app.use((req: Request, res: Response) => {
  * the error overlay is useful.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-  const status = Number(err.status || err.statusCode) || 500;
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  const status = errorStatus(err) || 500;
   const code =
-    err.code ||
+    errorCode(err) ||
     (status === 400
       ? 'BAD_REQUEST'
       : status === 401
@@ -268,22 +269,27 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       path: req.path,
       method: req.method,
     },
-    err.message || 'Unhandled request error'
+    errorMessage(err, 'Unhandled request error')
   );
 
-  const body: Record<string, any> = {
+  const body: {
+    error: { code: string; message: string; details?: { stack?: string; cause?: string } };
+    traceId: unknown;
+    timestamp: string;
+  } = {
     error: {
       code,
-      message: err.message || 'Internal Server Error',
+      message: errorMessage(err, 'Internal Server Error'),
     },
     traceId: req.id ?? null,
     timestamp: new Date().toISOString(),
   };
 
   if (environment.nodeEnv !== 'production') {
+    const e = err as { stack?: string; cause?: unknown; originalError?: unknown } | null;
     body.error.details = {
-      stack: err.stack,
-      cause: err.cause?.message || err.originalError?.message,
+      stack: e?.stack,
+      cause: e?.cause ? errorMessage(e.cause) : e?.originalError ? errorMessage(e.originalError) : undefined,
     };
   }
 

@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import type { DbConnectionConfig } from '../database/connection';
 
 dotenv.config();
 
@@ -53,7 +54,7 @@ const schedulerDbName = requireEnv('SCHEDULER_DB_NAME');
 // ── Syspro DB ────────────────────────────────────────────────────────────────
 const sysproServerFull = sysproInstance ? `${sysproServer}\\${sysproInstance}` : sysproServer;
 
-const sysproConfig: any = sysproAuthMode === 'windows'
+const sysproConfig: DbConnectionConfig = sysproAuthMode === 'windows'
   ? {
       // mssql/msnodesqlv8: supply full connection string for Windows auth via ODBC Driver 17
       connectionString: `Driver={ODBC Driver 17 for SQL Server};Server=${sysproServerFull};Database=${sysproDbName};Trusted_Connection=yes;TrustServerCertificate=yes;`,
@@ -82,7 +83,7 @@ if (sysproAuthMode !== 'windows' && sysproPort) sysproConfig.port = sysproPort;
 // ── Scheduler DB ─────────────────────────────────────────────────────────────
 const schedulerServerFull = schedulerInstance ? `${schedulerServer}\\${schedulerInstance}` : schedulerServer;
 
-const schedulerConfig: any = schedulerAuthMode === 'windows'
+const schedulerConfig: DbConnectionConfig = schedulerAuthMode === 'windows'
   ? {
       connectionString: `Driver={ODBC Driver 17 for SQL Server};Server=${schedulerServerFull};Database=${schedulerDbName};Trusted_Connection=yes;TrustServerCertificate=yes;`,
       driver: 'msnodesqlv8'

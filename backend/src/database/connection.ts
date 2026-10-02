@@ -38,6 +38,12 @@ export interface DbExecutor {
   execute<T = DbRow>(procedure: string, params?: DbParams): Promise<DbResult<T>>;
 }
 
+/**
+ * Connection settings: mssql's config, plus the Windows-auth form used with
+ * the native msnodesqlv8 driver (a full ODBC connectionString, no server).
+ */
+export type DbConnectionConfig = Omit<SQLConfig, 'server'> & { server?: string; connectionString?: string };
+
 /** Bind parameters onto an mssql request. */
 const bind = (request: sql.Request, params: DbParams): sql.Request => {
   for (const [key, value] of Object.entries(params)) request.input(key, value);
@@ -46,9 +52,9 @@ const bind = (request: sql.Request, params: DbParams): sql.Request => {
 
 export class DatabaseConnection implements DbExecutor {
   private pool: ConnectionPool | null = null;
-  private config: SQLConfig;
+  readonly config: DbConnectionConfig;
 
-  constructor(connectionConfig: SQLConfig) {
+  constructor(connectionConfig: DbConnectionConfig) {
     this.config = connectionConfig;
   }
 
@@ -66,7 +72,8 @@ export class DatabaseConnection implements DbExecutor {
   async connect(): Promise<void> {
     try {
       const sqlModule = this.getSqlModule();
-      const pool = new sqlModule.ConnectionPool(this.config);
+      // msnodesqlv8 accepts connectionString in place of server/auth.
+      const pool = new sqlModule.ConnectionPool(this.config as SQLConfig);
       this.pool = pool;
       await pool.connect();
       logger.info('Database connected');
