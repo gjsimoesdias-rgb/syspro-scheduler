@@ -311,7 +311,7 @@ export async function saveIntoWhatIf(db: DbExecutor, versionId: string, schedule
   );
 }
 
-/** Make a what-if the master. The old master becomes history. Needs re-approval before export. */
+/** Make a what-if the master. The old master becomes history. */
 export async function commitWhatIf(db: PlanExecutor, versionId: string): Promise<void> {
   await db.withTransaction(async (tx: DbExecutor) => {
     const r = await tx.queryWithParams(
@@ -327,7 +327,7 @@ export async function commitWhatIf(db: PlanExecutor, versionId: string): Promise
   });
 }
 
-/** Make an earlier master the master again. Needs re-approval before export. */
+/** Make an earlier master the master again. */
 export async function revertToVersion(db: PlanExecutor, versionId: string): Promise<void> {
   await db.withTransaction(async (tx: DbExecutor) => {
     const r = await tx.queryWithParams(

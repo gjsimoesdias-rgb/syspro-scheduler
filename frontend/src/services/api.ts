@@ -194,14 +194,9 @@ export const scheduleService = {
     return response.data;
   },
 
-  approve: async (scheduleId: string): Promise<void> => {
-    await apiClient.post(`/schedule/${encodeURIComponent(scheduleId)}/approve`);
-  },
-
   /**
-   * Write an APPROVED, already-saved schedule to SYSPRO. The server reads the
-   * schedule from its own store by id (it ignores any body), so call save() and
-   * approve() first. Long timeout: the export refreshes the APS cache and writes
+   * Write the saved master plan to SYSPRO. The server reads the schedule from
+   * its own store by id (it ignores any body), so call save() first. Long timeout: the export refreshes the APS cache and writes
    * every operation inside one transaction.
    */
   exportToSyspro: async (scheduleId: string): Promise<any> => {

@@ -163,16 +163,15 @@ export function useScheduleGeneration({
     const opCount = schedule.jobSchedules.reduce((n, j) => n + (j.operationSchedules?.length || 0), 0);
     if (!window.confirm(
       `Send this schedule to SYSPRO?\n\n${jobCount} jobs / ${opCount} operations will get new scheduled ` +
-      'dates and machines in SYSPRO. Due dates are not changed.\n\nThe schedule will be saved and approved first.'
+      'dates and machines in SYSPRO. Due dates are not changed.\n\nThe schedule on screen is saved as the master plan first.'
     )) {
       return;
     }
     try {
       setLoading(true);
-      // Export reads the schedule from the server, so persist exactly what is on
-      // screen, approve it, then export that approved version.
+      // Export reads the schedule from the server, so persist exactly what is
+      // on screen as the master, then send that version.
       await scheduleService.save(schedule);
-      await scheduleService.approve(schedule.scheduleId);
       const result = await scheduleService.exportToSyspro(schedule.scheduleId);
       setScheduleSource('none');
       await loadJobsAndResources();

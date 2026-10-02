@@ -116,90 +116,12 @@ describe('POST /api/schedule/generate', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/schedule/:scheduleId/approve', () => {
-  const scheduleId = 'sched-abc-123';
+  afterEach(() => { delete (app.locals as any).sysproDb; });
 
-  afterEach(() => {
-    delete (app.locals as any).sysproDb;
-  });
-
-  it('returns 401 without auth token', async () => {
-    const res = await request(app).post(`/api/schedule/${scheduleId}/approve`);
-    expect(res.status).toBe(401);
-  });
-
-  it('returns 403 when caller lacks planner/admin role', async () => {
-    // 'Viewer' is not in the allowed roles for approve: planner, company_admin, super_admin
-    const viewerToken = makeToken('Viewer');
-    const res = await request(app)
-      .post(`/api/schedule/${scheduleId}/approve`)
-      .set('Authorization', `Bearer ${viewerToken}`);
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/permissions/i);
-  });
-
-  it('returns 503 when DB not connected (planner role)', async () => {
-    // Route allows: planner, company_admin, super_admin
-    const plannerToken = makeToken('planner');
-    const res = await request(app)
-      .post(`/api/schedule/${scheduleId}/approve`)
-      .set('Authorization', `Bearer ${plannerToken}`);
-    expect(res.status).toBe(503);
-  });
-
-  it('returns 404 when schedule does not exist in DB', async () => {
-    const plannerToken = makeToken('planner');
-    (app.locals as any).sysproDb = makeFakeDb({
-      queryWithParams: jest.fn().mockResolvedValue({ recordset: [] }),  // empty → not found
-    });
-
-    const res = await request(app)
-      .post(`/api/schedule/${scheduleId}/approve`)
-      .set('Authorization', `Bearer ${plannerToken}`);
+  it('is gone — there is no separate approval step any more (404)', async () => {
+    (app.locals as any).sysproDb = makeFakeDb();
+    const res = await request(app).post('/api/schedule/S1/approve').set('Authorization', `Bearer ${makeToken('planner')}`);
     expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/not found/i);
-  });
-
-  it('returns 200 with Approved status for planner role', async () => {
-    const plannerToken = makeToken('planner');
-    (app.locals as any).sysproDb = makeFakeDb({
-      queryWithParams: jest.fn()
-        .mockResolvedValueOnce({ recordset: [{ IsLatest: true, VersionKind: 'Plan' }] }) // master check
-        .mockResolvedValueOnce({ recordset: [] }),  // UPDATE
-    });
-
-    const res = await request(app)
-      .post(`/api/schedule/${scheduleId}/approve`)
-      .set('Authorization', `Bearer ${plannerToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ scheduleId, status: 'Approved' });
-  });
-
-  it('returns 200 with super_admin role', async () => {
-    const adminToken = makeToken('super_admin');
-    (app.locals as any).sysproDb = makeFakeDb({
-      queryWithParams: jest.fn()
-        .mockResolvedValueOnce({ recordset: [{ IsLatest: true, VersionKind: 'Plan' }] })
-        .mockResolvedValueOnce({ recordset: [] }),
-    });
-
-    const res = await request(app)
-      .post(`/api/schedule/${scheduleId}/approve`)
-      .set('Authorization', `Bearer ${adminToken}`);
-    expect(res.status).toBe(200);
-  });
-
-  it.each([
-    ['a what-if', { IsLatest: false, VersionKind: 'WhatIf' }, /what-if/],
-    ['a history version', { IsLatest: false, VersionKind: 'Plan' }, /not the master/],
-  ])('refuses to approve %s (409)', async (_label, row, msg) => {
-    const qwp = jest.fn().mockResolvedValue({ recordset: [row] });
-    (app.locals as any).sysproDb = makeFakeDb({ queryWithParams: qwp });
-    const res = await request(app)
-      .post(`/api/schedule/${scheduleId}/approve`)
-      .set('Authorization', `Bearer ${makeToken('planner')}`);
-    expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(msg);
-    expect(qwp.mock.calls.some(([sql]) => /SET Status = 'Approved'/.test(sql))).toBe(false);
   });
 });
 
@@ -307,17 +229,17 @@ describe('POST /api/schedule/:scheduleId/export-to-syspro', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 409 when the saved schedule is not Approved', async () => {
-    app.locals.sysproDb = makeFakeDb({
-      queryWithParams: jest.fn().mockResolvedValue({
-        recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [] }), Status: 'Draft', IsLatest: true, VersionKind: 'Plan' }],
-      }),
-    }) as any;
+  it('sends a Draft master — no approval needed', async () => {
+    const qwp = jest.fn().mockImplementation(async (sql: string) =>
+      /SELECT IsLatest, VersionKind/.test(sql) ? { recordset: [{ IsLatest: true, VersionKind: 'Plan' }] }
+      : /SELECT ScheduleData, Status/.test(sql) ? { recordset: [{ ScheduleData: JSON.stringify({ scheduleId: 'S1', jobSchedules: [] }), Status: 'Draft' }] }
+      : { recordset: [] });
+    app.locals.sysproDb = makeFakeDb({ queryWithParams: qwp }) as any;
     const res = await request(app)
       .post('/api/schedule/S1/export-to-syspro')
       .set('Authorization', `Bearer ${token}`)
       .send({});
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
   });
 
   it('exports the SAVED schedule (not the request body) and marks it Exported', async () => {

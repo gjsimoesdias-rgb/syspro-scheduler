@@ -12,8 +12,7 @@
  *   DELETE /api/versions/:id             delete a what-if or history version
  *   POST   /api/versions/purge           { olderThanDays, keepAtLeast } history retention (company admin)
  *
- * Commit and revert leave the new master as Draft: it must be approved again
- * before it can be sent to SYSPRO.
+ * Commit and revert leave the new master as Draft (not yet sent to SYSPRO).
  */
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';

@@ -789,14 +789,14 @@ async function jobsMissingFromSyspro(sysproDb: any, jobIds: string[]): Promise<S
 const exportsRunning = new Set<string>();
 
 /**
- * Approve and export apply to the master plan only (IsLatest, not a what-if).
+ * Export applies to the master plan only (IsLatest, not a what-if).
  * Returns an error to send, or null when `scheduleId` is the master.
  */
 async function masterCheck(plan: DbExecutor, scheduleId: string): Promise<{ status: number; error: string } | null> {
   const r = await plan.queryWithParams(
     `SELECT IsLatest, VersionKind FROM aps.SavedSchedules WHERE ScheduleID = @scheduleId`, { scheduleId });
   const row = r.recordset?.[0];
-  if (!row) return { status: 404, error: 'Schedule not found — save it before approving or sending to SYSPRO' };
+  if (!row) return { status: 404, error: 'Schedule not found — save it before sending to SYSPRO' };
   if (row.VersionKind === 'WhatIf') return { status: 409, error: 'This is a what-if. Commit it to the master plan (Versions) first.' };
   if (!row.IsLatest) return { status: 409, error: 'This is not the master plan. Revert to it (Versions) first.' };
   return null;
@@ -838,7 +838,7 @@ router.get('/latest', async (req: Request, res: Response) => {
 
     const row = result.recordset[0];
     const schedule = JSON.parse(row.ScheduleData);
-    // The row's Status is authoritative (approve/export update the row, not
+    // The row's Status is authoritative (export updates the row, not
     // the JSON), so the board doesn't show an exported plan as "Draft".
     if (row.Status) schedule.status = row.Status;
 
@@ -886,8 +886,7 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    // Any saved change is a new Draft: an edit made after approval must be
-    // approved again before it can be sent to SYSPRO. Atomic — see ScheduleStore.
+    // Any saved change is a new Draft (until it is sent to SYSPRO). Atomic — see ScheduleStore.
     const { jobCount, operationCount, revision } = await saveAsLatest(await planDbFor(req.app), schedule, {
       status: 'Draft', baseRevision, createdBy: (req as any).user?.username,
     });
@@ -917,8 +916,7 @@ router.post('/load-version/:scheduleId', requirePlanner, async (req: Request, re
     }
 
     // Same rules as Versions → Revert: what-ifs must be committed instead, and
-    // the restored plan comes back as Draft (it must be approved again before
-    // it can be sent to SYSPRO — an old Approved/Exported row is not reusable).
+    // the restored plan comes back as Draft.
     const plan = await planDbFor(req.app);
     await revertToVersion(plan, scheduleId);
     const restored = await getVersion(plan, scheduleId);
@@ -1076,46 +1074,13 @@ router.get('/:scheduleId', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/schedule/:scheduleId/approve
- * Approve and release schedule — updates the DB record status to 'Approved'.
- * Requires planner, company_admin, or super_admin role.
- */
-router.post('/:scheduleId/approve', requireAuth, requirePlanner, async (req: Request, res: Response) => {
-  try {
-    const { scheduleId } = req.params;
-
-    const sysproDb = req.app.locals.sysproDb;
-    if (!sysproDb) {
-      return res.status(503).json({ error: 'Database not connected' });
-    }
-
-    // Only the master plan can be approved (what-ifs are committed first;
-    // history is reverted first).
-    const plan = await planDbFor(req.app);
-    const problem = await masterCheck(plan, scheduleId);
-    if (problem) return res.status(problem.status).json({ error: problem.error });
-
-    await plan.queryWithParams(
-      `UPDATE aps.SavedSchedules SET Status = 'Approved', SavedAt = GETDATE() WHERE ScheduleID = @scheduleId`,
-      { scheduleId }
-    );
-    await auditPlan(req, 'approve', scheduleId);
-
-    req.log.info({ scheduleId }, 'Schedule approved');
-    res.json({ scheduleId, status: 'Approved' });
-  } catch (error) {
-    req.log.error({ err: error }, 'Error approving schedule');
-    res.status(500).json({ error: (error as any).message });
-  }
-});
-
-/**
  * POST /api/schedule/:scheduleId/export-to-syspro
  * Export schedule to Syspro via APS compatibility layer.
  *
  * The schedule is read from aps.SavedSchedules — never from the request body —
- * and must be in status 'Approved', so only a persisted, approved plan can be
- * written to SYSPRO. On success the row is marked 'Exported'.
+ * and must be the master plan (what-ifs are committed first). There is no
+ * separate approval step: the planner's confirm in the UI is the sign-off,
+ * and the send is audit-logged. On success the row is marked 'Exported'.
  * Requires a planning role (see requirePlanner).
  */
 router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async (req: Request, res: Response) => {
@@ -1149,11 +1114,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
     );
     const row = saved.recordset?.[0];
     if (!row) return res.status(404).json({ error: 'Schedule not found' });
-    if (row.Status !== 'Approved') {
-      return res.status(409).json({
-        error: `Schedule is '${row.Status}'. Only an Approved schedule can be sent to SYSPRO.`
-      });
-    }
+    await auditPlan(req, 'export_to_syspro', scheduleId);
     const schedule = JSON.parse(row.ScheduleData);
 
     // Incremental publish: only jobs whose machine or dates changed since the

@@ -116,7 +116,7 @@ const VersionsPanel: React.FC = () => {
   };
 
   const commit = (v: VersionSummary) => {
-    if (!window.confirm(`Make "${v.name}" the master plan?\n\nThe current master is kept in History. The new master is a Draft and must be approved again before it can be sent to SYSPRO.`)) return;
+    if (!window.confirm(`Make "${v.name}" the master plan?\n\nThe current master is kept in History. Nothing is sent to SYSPRO until you use Send to SYSPRO.`)) return;
     run(v.versionId, async () => {
       await versionService.commit(v.versionId);
       await openMaster();
@@ -126,7 +126,7 @@ const VersionsPanel: React.FC = () => {
   };
 
   const revert = (v: VersionSummary) => {
-    if (!window.confirm(`Revert the master plan to "${v.name}" (${when(v.savedAt)})?\n\nThe current master is kept in History. The reverted plan must be approved again before it can be sent to SYSPRO.`)) return;
+    if (!window.confirm(`Revert the master plan to "${v.name}" (${when(v.savedAt)})?\n\nThe current master is kept in History. Nothing is sent to SYSPRO until you use Send to SYSPRO.`)) return;
     run(v.versionId, async () => {
       await versionService.revert(v.versionId);
       await openMaster();
