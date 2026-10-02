@@ -55,3 +55,29 @@ SYSPRO-integrated APS scheduler. React + Vite + TypeScript frontend, Node backen
 - Backend jest suites do not run in the Linux sandbox (Windows-installed node_modules
   → jest-environment version clash). Run `npm test` on Windows; typecheck with
   `npx tsc --noEmit` in the sandbox instead.
+
+## Plan lifecycle, companies and security (October 2026)
+- **No approval step** (owner's decision, 2026-10-02): Send to SYSPRO = save the board as
+  master + export. Export only accepts the master (`IsLatest=1`, not a what-if), one per
+  company at a time, audit-logged. Don't reintroduce `/approve`.
+- **Master revision**: `SavedSchedules.Revision`; `/schedule/save` takes `baseRevision` and
+  returns 409 `MASTER_CHANGED` on a stale board. Frontend tracks it in `services/api.ts`
+  (`masterRevision`, saves serialised). Server-side runs (Generate) don't send a base.
+- **Per-company state**: plan tables live in SCHEDULER DB schema `co_<CompanyDb>`
+  (`planStore.ts`); `sch_AppState` keys are `co:<CompanyDb>|<key>` and reload on every
+  `/connect` (`services/companyState.ts`). New per-company keys go in `APP_STATE_KEYS`.
+- **Company settings** for users without a company (super_admin, NTLM, Auto plan) come from
+  `api/companyContext.ts` (`lic_companies.syspro_company_id` = connected DB, or the only
+  company). Use `companyFor(req)`, never `req.user.companyId` directly.
+- **Job flags** (Exclude / Pin job) are server-side (`/api/jobs/flags`, `utils/jobFlags.ts`).
+- **Machine qualification**: the engine treats `{ScheduledMachine, IMachine}` as an op's
+  allowed machines. Keep it: on HFARM routings have blank IMachine and ScheduledMachine is
+  what keeps ops on the right machine. Export writes ScheduledMachine only (never IMachine).
+- **Calendars**: day windows come from `utils/shiftWindows.ts` (night-shift tails belong to
+  the previous day). Engine and CTP both call it — don't fork the logic again.
+- **Shop floor** needs `X-Shopfloor-Key` (`SHOPFLOOR_KEY` in backend/.env) or a login; CORS is
+  off unless `CORS_ORIGINS` is set. `START_SCHEDULER.cmd` runs `NODE_ENV=production`.
+- **UI**: use `confirmDialog` / `promptDialog` / `alertDialog` (`components/DialogHost.tsx`),
+  never `window.confirm/prompt/alert`. Use `apiJson` / `apiClient`, not raw `fetch`.
+- **Line endings are mixed** (some files CRLF, most LF). Keep each file's style: edit with
+  tools that preserve it (Python on Windows writes CRLF in text mode — use `newline=''`).
