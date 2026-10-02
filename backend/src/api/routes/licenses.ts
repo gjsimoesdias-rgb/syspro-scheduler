@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import LicenseService from '../../services/LicenseService';
 import UserService from '../../services/UserService';
 import { requireAuth, requireSuperAdmin, AuthRequest } from '../middleware/requireAuth';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -21,8 +22,8 @@ const getUsers = (req: AuthRequest): UserService => {
 router.get('/', requireAuth, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     res.json(await getLicenses(req).listLicenses());
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -32,8 +33,8 @@ router.get('/:id', requireAuth, requireSuperAdmin, async (req: AuthRequest, res:
     const lic = await getLicenses(req).getLicenseById(Number(req.params.id));
     if (!lic) { res.status(404).json({ error: 'License not found' }); return; }
     res.json(lic);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -44,8 +45,8 @@ router.post('/', requireAuth, requireSuperAdmin, async (req: AuthRequest, res: R
     if (!companyName) { res.status(400).json({ error: 'companyName is required' }); return; }
     const lic = await getLicenses(req).createLicense({ companyName, contactEmail, maxUsers, expiryDate, plan, notes, sysproCompanyDb });
     res.status(201).json(lic);
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
+  } catch (err) {
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -57,8 +58,8 @@ router.put('/:id', requireAuth, requireSuperAdmin, async (req: AuthRequest, res:
       companyName, contactEmail, maxUsers, isActive, expiryDate, plan, notes, sysproCompanyDb
     });
     res.json(lic);
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
+  } catch (err) {
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -67,8 +68,8 @@ router.delete('/:id', requireAuth, requireSuperAdmin, async (req: AuthRequest, r
   try {
     await getLicenses(req).deleteLicense(Number(req.params.id));
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -79,8 +80,8 @@ router.get('/:id/users', requireAuth, requireSuperAdmin, async (req: AuthRequest
     if (!company) { res.status(404).json({ error: 'Company not found' }); return; }
     const users = await getUsers(req).listUsers(company.id, 'super_admin');
     res.json(users.filter(u => u.companyId === company.id));
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 

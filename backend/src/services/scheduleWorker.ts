@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { createSchedulingEngine } from './ISchedulingEngine';
 import ConstraintManager from './ConstraintManager';
 import { crewLookupFrom } from '../utils/crews';
+import { errorMessage } from '../utils/errors';
 
 // Reconstruct non-serialisable types (Maps, Dates) from the plain-object payload
 const ctx = workerData as any;
@@ -95,7 +96,7 @@ const context = {
     }
 
     parentPort?.postMessage({ success: true, schedule });
-  } catch (err: any) {
-    parentPort?.postMessage({ success: false, error: err.message || String(err) });
+  } catch (err) {
+    parentPort?.postMessage({ success: false, error: errorMessage(err) || String(err) });
   }
 })();

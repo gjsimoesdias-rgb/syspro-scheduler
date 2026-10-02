@@ -13,7 +13,7 @@
  * created and any rows still in the SYSPRO aps tables are copied across once
  * (the SYSPRO copies are left in place, untouched, as a fallback).
  */
-import type { DbExecutor } from '../database/connection';
+import type { DbExecutor, DbParams, DbRow } from '../database/connection';
 import { logger } from '../utils/logger';
 
 const PLAN_TABLES = ['SavedSchedules', 'JobPublishStatus', 'Scenarios'] as const;
@@ -40,19 +40,22 @@ export function rewritePlanSql(sql: string, schema: string): string {
 }
 
 const wrap = (inner: DbExecutor, schema: string): DbExecutor => ({
-  query: (sql: string) => inner.query(rewritePlanSql(sql, schema)),
-  queryWithParams: (sql: string, params: Record<string, any>) => inner.queryWithParams(rewritePlanSql(sql, schema), params),
-  execute: (proc: string, params?: Record<string, any>) => inner.execute(proc, params),
+  query: <T = DbRow>(sql: string) => inner.query<T>(rewritePlanSql(sql, schema)),
+  queryWithParams: <T = DbRow>(sql: string, params: DbParams) => inner.queryWithParams<T>(rewritePlanSql(sql, schema), params),
+  execute: <T = DbRow>(proc: string, params?: DbParams) => inner.execute<T>(proc, params),
 });
+
+/** The SCHEDULER connection: a DbExecutor that can also run transactions. */
+type TxCapableDb = PlanExecutor;
 
 export class PlanDb implements PlanExecutor {
   private readonly x: DbExecutor;
-  constructor(private schedulerDb: any, readonly schema: string, readonly companyDb: string) {
+  constructor(private schedulerDb: TxCapableDb, readonly schema: string, readonly companyDb: string) {
     this.x = wrap(schedulerDb, schema);
   }
-  query(sql: string) { return this.x.query(sql); }
-  queryWithParams(sql: string, params: Record<string, any>) { return this.x.queryWithParams(sql, params); }
-  execute(proc: string, params?: Record<string, any>) { return this.x.execute(proc, params); }
+  query<T = DbRow>(sql: string) { return this.x.query<T>(sql); }
+  queryWithParams<T = DbRow>(sql: string, params: DbParams) { return this.x.queryWithParams<T>(sql, params); }
+  execute<T = DbRow>(proc: string, params?: DbParams) { return this.x.execute<T>(proc, params); }
   withTransaction<T>(callback: (tx: DbExecutor) => Promise<T>): Promise<T> {
     return this.schedulerDb.withTransaction((tx: DbExecutor) => callback(wrap(tx, this.schema)));
   }

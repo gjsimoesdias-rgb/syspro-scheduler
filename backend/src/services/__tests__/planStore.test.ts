@@ -49,7 +49,7 @@ describe('ensurePlanStore', () => {
         return { recordset: [] };
       }),
     };
-    const plan = new PlanDb(sch.db, 'co_X', 'X');
+    const plan = new PlanDb(sch.db as any, 'co_X', 'X');
     const r1 = await ensurePlanStore(plan, syspro);
     expect(sch.calls[0]).toContain("CREATE SCHEMA [co_X]");
     expect(sch.calls.some((c) => c.includes('CREATE TABLE [co_X].SavedSchedules'))).toBe(true);

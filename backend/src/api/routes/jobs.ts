@@ -12,6 +12,7 @@ import { validateBody } from '../middleware/validateBody';
 import { bulkImportJobsSchema, bulkImportOperationsSchema } from '../validators/jobValidators';
 import { requirePlanner } from '../middleware/requireAuth';
 import { normaliseMarkers, EMPTY_MARKERS } from '../../utils/jobMarkers';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -172,7 +173,7 @@ router.get('/', async (req: Request, res: Response) => {
       jobs: mergedJobs
     });
   } catch (error) {
-    const message = (error as any).message || 'Failed to load jobs';
+    const message = errorMessage(error, 'Failed to load jobs');
     if (message.includes('Invalid object name')) {
       return res.json({
         count: 0,
@@ -200,8 +201,8 @@ router.put('/markers', requirePlanner, (req: Request, res: Response) => {
     const markers = normaliseMarkers(req.body);
     setLocal(req.app.locals, 'jobMarkers', markers);
     res.json(markers);
-  } catch (err: any) {
-    res.status(400).json({ error: err?.message || 'Invalid markers' });
+  } catch (err) {
+    res.status(400).json({ error: errorMessage(err, 'Invalid markers') });
   }
 });
 
@@ -269,7 +270,7 @@ router.post('/bulk-import', requirePlanner, validateBody(bulkImportJobsSchema), 
       totalImportedJobs: req.app.locals.importedJobs.length
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to import jobs' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to import jobs') });
   }
 });
 
@@ -302,7 +303,7 @@ router.post('/operations/bulk-import', requirePlanner, validateBody(bulkImportOp
       totalImportedJobs: mergedJobs.length
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to import operations' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to import operations') });
   }
 });
 
@@ -398,7 +399,7 @@ router.post('/material-plan', async (req: Request, res: Response) => {
 
     res.json({ count: materials.length, materials, jobStatuses });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to build material plan' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to build material plan') });
   }
 });
 
@@ -606,7 +607,7 @@ router.get('/:jobId/bom-detail', async (req: Request, res: Response) => {
       lines,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to load BOM detail' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to load BOM detail') });
   }
 });
 
@@ -631,7 +632,7 @@ router.get('/:jobId', async (req: Request, res: Response) => {
 
     res.json(job);
   } catch (error) {
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -656,7 +657,7 @@ router.get('/:jobId/operations', async (req: Request, res: Response) => {
       operations
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 

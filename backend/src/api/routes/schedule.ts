@@ -30,6 +30,7 @@ import { mapEmployeeRow } from '../../utils/crews';
 import { AUTO_PLAN_VERSION_ID } from '../../services/autoScheduler';
 import { planDbFor } from '../../services/planStore';
 import { companyFor } from '../companyContext';
+import { errorMessage, errorStatus } from '../../utils/errors';
 
 /**
  * Operation overlap from Settings → Transfer/Overlap: "Use transfer" on and
@@ -517,8 +518,8 @@ export async function generateHandler(req: Request, res: Response) {
         await saveIntoWhatIf(await planDbFor(req.app), targetVersionId, schedule);
         schedule.scheduleId = targetVersionId;
         req.log.info({ versionId: targetVersionId }, 'Schedule saved into what-if version');
-      } catch (saveErr: any) {
-        return res.status(saveErr?.status || 500).json({ error: saveErr?.message || 'Could not save into the what-if version' });
+      } catch (saveErr) {
+        return res.status(errorStatus(saveErr) || 500).json({ error: errorMessage(saveErr, 'Could not save into the what-if version') });
       }
     } else {
       try {
@@ -542,7 +543,7 @@ export async function generateHandler(req: Request, res: Response) {
     });
   } catch (error) {
     req.log.error({ err: error }, 'Error generating schedule');
-    res.status(500).json({ error: (error as any).message || 'Failed to generate schedule' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to generate schedule') });
   }
 }
 router.post('/generate', requirePlanner, generateHandler);
@@ -716,7 +717,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
             totalJobsScheduled: 0, jobsOnTime: 0, jobsTardy: 0, averageTardiness: 0,
             resourceUtilization: 0, overtimeHours: 0, criticalPathLength: 0, totalSetupTime: 0,
           },
-          error: (err as any).message || 'Run failed',
+          error: errorMessage(err, 'Run failed'),
         });
       }
     }
@@ -732,7 +733,7 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
     });
   } catch (error) {
     req.log.error({ err: error }, 'Error running sequencing optimization');
-    res.status(500).json({ error: (error as any).message || 'Failed to optimize' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to optimize') });
   }
 });
 
@@ -859,7 +860,7 @@ router.get('/latest', async (req: Request, res: Response) => {
     });
   } catch (error) {
     req.log.error({ err: error }, 'Error loading latest schedule');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -898,7 +899,7 @@ router.post('/save', requirePlanner, async (req: Request, res: Response) => {
       return res.status(error.status).json({ error: error.message, code: (error as any).code, currentRevision: (error as any).currentRevision });
     }
     req.log.error({ err: error }, 'Error saving schedule');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -929,7 +930,7 @@ router.post('/load-version/:scheduleId', requirePlanner, async (req: Request, re
     res.json({ schedule, restoredAt, revision: await masterRevision(plan) });
   } catch (error) {
     if (error instanceof VersionError) return res.status(error.status).json({ error: error.message });
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -984,7 +985,7 @@ router.post('/pins/time-fence', requireAuth, requirePlanner, async (req: AuthReq
     return res.json({ ok: true, added, total: Object.keys(pins).length });
   } catch (error) {
     req.log.error({ err: error }, 'Time-fence lock failed');
-    return res.status(500).json({ error: (error as any).message });
+    return res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -1030,7 +1031,7 @@ router.get('/publish-status', async (req: Request, res: Response) => {
     res.json({ jobs, counts });
   } catch (error) {
     req.log.error({ err: error }, 'Error reading publish status');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -1046,7 +1047,7 @@ router.post('/publish-status/reset', requirePlanner, async (req: Request, res: R
     if (!sysproDb) return res.status(503).json({ error: 'Database not connected' });
     res.json({ reset: await resetPublish(await planDbFor(req.app), jobIds) });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -1069,7 +1070,7 @@ router.get('/:scheduleId', async (req: Request, res: Response) => {
 
     res.json({ schedule: JSON.parse(result.recordset[0].ScheduleData) });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -1217,7 +1218,7 @@ router.post('/:scheduleId/export-to-syspro', requireAuth, requirePlanner, async 
     }
   } catch (error) {
     req.log.error({ err: error }, 'Fatal error during schedule export');
-    res.status(500).json({ error: (error as any).message || 'Failed to export schedule' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to export schedule') });
   } finally {
     if (lockedSchema !== null) exportsRunning.delete(lockedSchema);
   }
@@ -1259,8 +1260,8 @@ router.post('/:scheduleId/approve-override', requirePlanner, async (req: Request
           after: { scheduleId, violationId, reason },
           traceId,
         });
-      } catch (auditErr: any) {
-        req.log.warn({ err: auditErr.message }, 'Failed to write audit log for approve-override');
+      } catch (auditErr) {
+        req.log.warn({ err: errorMessage(auditErr) }, 'Failed to write audit log for approve-override');
       }
     }
 
@@ -1270,7 +1271,7 @@ router.post('/:scheduleId/approve-override', requirePlanner, async (req: Request
       violationId
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to approve override' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to approve override') });
   }
 });
 
@@ -1309,7 +1310,7 @@ router.get('/constraints/violations', async (req: Request, res: Response) => {
     res.json({ scheduleId: row.ScheduleID, violations });
   } catch (error) {
     req.log.error({ err: error }, 'Error loading constraint violations');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 

@@ -3,6 +3,7 @@ import AuthService from '../../services/AuthService';
 import { requireAuth, AuthRequest } from '../middleware/requireAuth';
 import { validateBody } from '../middleware/validateBody';
 import { loginSchema, refreshSchema, logoutSchema } from '../validators/authValidators';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -46,7 +47,7 @@ router.post('/login', validateBody(loginSchema), async (req: Request, res: Respo
     const { username, password } = req.body;
     const result = await getAuth(req).login(String(username), String(password));
     res.json(result);
-  } catch (err: any) {
+  } catch (err) {
     sendAuthError(req, res, err);
   }
 });
@@ -57,7 +58,7 @@ router.post('/refresh', validateBody(refreshSchema), async (req: Request, res: R
     const { refreshToken } = req.body;
     const result = await getAuth(req).refresh(String(refreshToken));
     res.json(result);
-  } catch (err: any) {
+  } catch (err) {
     sendAuthError(req, res, err);
   }
 });
@@ -79,8 +80,8 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
     const user = await getAuth(req).getUserById(Number(req.user!.sub));
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
     res.json(user);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 

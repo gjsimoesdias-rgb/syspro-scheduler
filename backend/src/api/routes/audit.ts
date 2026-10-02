@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth } from '../middleware/requireAuth';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -26,8 +27,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
     req.log.info({ count: rows.length, entityType, entityId }, 'Audit log fetched');
     return res.json({ entries: rows, total: rows.length });
-  } catch (err: any) {
-    req.log.error({ err: err.message }, 'Failed to fetch audit log');
+  } catch (err) {
+    req.log.error({ err: errorMessage(err) }, 'Failed to fetch audit log');
     return res.status(500).json({ error: 'Failed to retrieve audit log' });
   }
 });

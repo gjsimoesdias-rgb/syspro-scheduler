@@ -7,6 +7,7 @@
 import DatabaseConnection, { DbExecutor } from '../database/connection';
 import { Schedule, JobSchedule } from '../types';
 import { logger } from '../utils/logger';
+import { errorMessage } from '../utils/errors';
 
 export interface ExportResult {
   success: boolean;
@@ -217,7 +218,7 @@ export class APSDatabaseService {
       }
     } catch (error) {
       result.success = false;
-      result.errorMessages.push((error as any).message || 'Unknown export error');
+      result.errorMessages.push(errorMessage(error, 'Unknown export error'));
       logger.error({ err: error }, 'Fatal error during schedule export — transaction rolled back');
     }
 
@@ -326,7 +327,7 @@ export class APSDatabaseService {
         schedulesWritten: 0,
         operationsWritten: 0,
         logsCreated: 0,
-        error: (error as any).message
+        error: errorMessage(error)
       };
     }
   }

@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import DatabaseConnection from '../../database/connection';
 import { sysproServiceFor } from '../sysproServiceFor';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -82,9 +83,9 @@ router.get('/stock', async (req: Request, res: Response) => {
       items: result.recordset,
       count: result.recordset.length
     });
-  } catch (err: any) {
+  } catch (err) {
     req.log.error({ err }, 'Stock on hand query failed');
-    return res.status(500).json({ error: err.message, items: [] });
+    return res.status(500).json({ error: errorMessage(err), items: [] });
   }
 });
 
@@ -152,9 +153,9 @@ router.get('/stock/:stockCode', async (req: Request, res: Response) => {
       totalFreeOnHand: totalFree,
       warehouses: result.recordset
     });
-  } catch (err: any) {
+  } catch (err) {
     req.log.error({ err }, 'Stock detail query failed');
-    return res.status(500).json({ error: err.message, item: null });
+    return res.status(500).json({ error: errorMessage(err), item: null });
   }
 });
 
@@ -234,9 +235,9 @@ router.get('/purchase-orders', async (req: Request, res: Response) => {
       items: result.recordset,
       count: result.recordset.length
     });
-  } catch (err: any) {
+  } catch (err) {
     req.log.error({ err }, 'Open PO query failed');
-    return res.status(500).json({ error: err.message, items: [] });
+    return res.status(500).json({ error: errorMessage(err), items: [] });
   }
 });
 
@@ -294,9 +295,9 @@ router.get('/purchase-orders/:stockCode', async (req: Request, res: Response) =>
       count: result.recordset.length,
       totalOutstanding: result.recordset.reduce((s: number, r: any) => s + (Number(r.OutstandingQty) || 0), 0)
     });
-  } catch (err: any) {
+  } catch (err) {
     req.log.error({ err }, 'PO by stock code query failed');
-    return res.status(500).json({ error: err.message, items: [] });
+    return res.status(500).json({ error: errorMessage(err), items: [] });
   }
 });
 
@@ -387,9 +388,9 @@ router.get('/shortages', async (req: Request, res: Response) => {
       count: shortages.length,
       affectedJobs: [...new Set(shortages.map((s: any) => s.job))].length
     });
-  } catch (err: any) {
+  } catch (err) {
     req.log.error({ err }, 'PO by stock code query failed');
-    return res.status(500).json({ error: err.message, items: [] });
+    return res.status(500).json({ error: errorMessage(err), items: [] });
   }
 });
 
@@ -428,9 +429,9 @@ router.post('/projection', async (req: Request, res: Response) => {
       shortCount: components.filter((c) => c.status === 'short').length,
       components,
     });
-  } catch (err: any) {
+  } catch (err) {
     req.log.error({ err }, 'Inventory projection failed');
-    return res.status(500).json({ error: err.message, components: [] });
+    return res.status(500).json({ error: errorMessage(err), components: [] });
   }
 });
 
@@ -447,9 +448,9 @@ router.post('/fmad', async (req: Request, res: Response) => {
   try {
     const result = await (await sysproServiceFor(req, db)).getFirstMaterialAvailability(jobs);
     return res.json({ generatedAt: new Date().toISOString(), jobs: result });
-  } catch (err: any) {
+  } catch (err) {
     req.log.error({ err }, 'FMAD failed');
-    return res.status(500).json({ error: err.message, jobs: {} });
+    return res.status(500).json({ error: errorMessage(err), jobs: {} });
   }
 });
 
@@ -471,9 +472,9 @@ router.post('/pegging', async (req: Request, res: Response) => {
       counts: { lines: result.lines.length, onTime: count('on-time'), late: count('late'), pastDue: count('past-due'), short: count('short'), unscheduled: count('unscheduled') },
       ...result,
     });
-  } catch (err: any) {
+  } catch (err) {
     req.log.error({ err }, 'Sales-order pegging failed');
-    return res.status(500).json({ error: err.message, lines: [], byJob: {} });
+    return res.status(500).json({ error: errorMessage(err), lines: [], byJob: {} });
   }
 });
 
@@ -491,15 +492,15 @@ router.get('/warehouses', async (req: Request, res: Response) => {
       `SELECT DISTINCT Warehouse, Description FROM InvSite ORDER BY Warehouse`
     );
     return res.json({ items: result.recordset });
-  } catch (err: any) {
+  } catch (err) {
     // InvSite may not exist in all Syspro editions
     try {
       const result2 = await db.query(
         `SELECT DISTINCT Warehouse FROM InvWarehouse ORDER BY Warehouse`
       );
       return res.json({ items: result2.recordset.map((r: any) => ({ Warehouse: r.Warehouse, Description: r.Warehouse })) });
-    } catch (err2: any) {
-      return res.status(500).json({ error: err2.message, items: [] });
+    } catch (err2) {
+      return res.status(500).json({ error: errorMessage(err2), items: [] });
     }
   }
 });

@@ -35,7 +35,7 @@ export async function ensureSysproObjects(db: DatabaseConnection): Promise<void>
   for (const { label, sql } of STATEMENTS) {
     try {
       await db.query(sql);
-    } catch (err: any) {
+    } catch (err) {
       logger.error({ err, object: label }, `ensureSysproObjects: failed to ensure ${label}`);
       throw err;
     }

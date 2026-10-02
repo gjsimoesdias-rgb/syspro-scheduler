@@ -5,6 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { validate, setupMatrixRowSchema, setupMatrixBulkSchema, setupClassBulkSchema } from '../validators/scheduleValidators';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get('/setup-matrix', async (req: Request, res: Response) => {
     res.json({ rows: result.recordset || [] });
   } catch (error) {
     req.log.error({ err: error }, 'Error loading setup matrix');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -64,7 +65,7 @@ router.post('/setup-matrix', requireAuth, requirePlanner, async (req: AuthReques
     res.json({ ok: true });
   } catch (error) {
     req.log.error({ err: error }, 'Error upserting setup matrix row');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -82,7 +83,7 @@ router.delete('/setup-matrix/:setupId', requireAuth, requirePlanner, async (req:
     res.json({ ok: true });
   } catch (error) {
     req.log.error({ err: error }, 'Error deleting setup matrix row');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -200,7 +201,7 @@ router.post('/setup-matrix/bulk', requireAuth, requirePlanner, async (req: AuthR
     res.json({ ok: true, applied: rows.length });
   } catch (error) {
     req.log.error({ err: error }, 'Error bulk-saving setup matrix');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -241,7 +242,7 @@ router.get('/finished-goods', async (req: Request, res: Response) => {
     res.json({ items: result.recordset || [] });
   } catch (error) {
     req.log.error({ err: error }, 'Error loading finished goods');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -296,7 +297,7 @@ router.get('/product-classes', async (req: Request, res: Response) => {
     res.json(body);
   } catch (error) {
     req.log.error({ err: error }, 'Error loading product classes');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -317,7 +318,7 @@ router.get('/class-changeover', async (req: Request, res: Response) => {
     res.json({ rows: result.recordset || [] });
   } catch (error) {
     req.log.error({ err: error }, 'Error loading class changeover matrix');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -362,7 +363,7 @@ router.post('/class-changeover/bulk', requireAuth, requirePlanner, async (req: A
     res.json({ ok: true, applied: rows.length });
   } catch (error) {
     req.log.error({ err: error }, 'Error bulk-saving class changeover');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 

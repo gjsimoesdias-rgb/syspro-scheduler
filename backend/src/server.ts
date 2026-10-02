@@ -21,6 +21,7 @@ import MigrationRunner from './database/MigrationRunner';
 import ensureSysproObjects from './database/ensureSysproObjects';
 import { planDbFor } from './services/planStore';
 import path from 'path';
+import { errorMessage } from './utils/errors';
 
 let sysproDb: DatabaseConnection;
 let schedulerDb: DatabaseConnection;
@@ -88,11 +89,11 @@ async function startServer() {
         try {
           await ensureSysproObjects(sysproDb);
           console.log('✓ Syspro scheduler objects ensured');
-        } catch (ensureErr: any) {
-          console.error('✗ Could not ensure Syspro scheduler objects:', ensureErr.message);
+        } catch (ensureErr) {
+          console.error('✗ Could not ensure Syspro scheduler objects:', errorMessage(ensureErr));
         }
-      } catch (dbError: any) {
-        console.error('✗ Syspro database connection failed:', dbError.message);
+      } catch (dbError) {
+        console.error('✗ Syspro database connection failed:', errorMessage(dbError));
         console.log('   Continuing without database (read-only mode)...');
         app.locals.sysproDb = null;
       }
@@ -117,8 +118,8 @@ async function startServer() {
           const runner = new MigrationRunner(schedulerDb);
           await runner.run(migrationsDir);
           console.log('✓ Migrations checked');
-        } catch (migErr: any) {
-          console.warn('  Migration warning:', migErr.message);
+        } catch (migErr) {
+          console.warn('  Migration warning:', errorMessage(migErr));
         }
 
         // Plan versions + publish status live in the SCHEDULER DB per SYSPRO
@@ -127,8 +128,8 @@ async function startServer() {
           try {
             const plan = await planDbFor(app);
             console.log(`✓ Plan store ready (SCHEDULER schema ${plan.schema})`);
-          } catch (planErr: any) {
-            console.warn('  Plan store warning:', planErr.message);
+          } catch (planErr) {
+            console.warn('  Plan store warning:', errorMessage(planErr));
           }
         }
 
@@ -136,11 +137,11 @@ async function startServer() {
         try {
           const authSvc = new AuthService(schedulerDb);
           await authSvc.seedDefaultAdmin();
-        } catch (seedErr: any) {
-          console.warn('  Seeding warning:', seedErr.message);
+        } catch (seedErr) {
+          console.warn('  Seeding warning:', errorMessage(seedErr));
         }
-      } catch (dbError: any) {
-        console.error('✗ Scheduler database connection failed:', dbError.message);
+      } catch (dbError) {
+        console.error('✗ Scheduler database connection failed:', errorMessage(dbError));
         console.log('   Continuing without database (read-only mode)...');
         app.locals.schedulerDb = null;
         app.locals.appState = null;

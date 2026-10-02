@@ -3,6 +3,7 @@ import UserService, { UserRecord } from '../../services/UserService';
 import { requireAuth, requireCompanyAdmin, AuthRequest } from '../middleware/requireAuth';
 import { validateBody } from '../middleware/validateBody';
 import { createUserSchema, updateUserSchema, changePasswordSchema } from '../validators/userValidators';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -50,8 +51,8 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const users = await getUsers(req).listUsers(req.user!.companyId, req.user!.role);
     res.json(users);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -61,8 +62,8 @@ router.get('/:id', requireAuth, requireCompanyAdmin, async (req: AuthRequest, re
     const user = await loadManageable(req);
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
     res.json(user);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -87,8 +88,8 @@ router.post('/', requireAuth, requireCompanyAdmin, validateBody(createUserSchema
       fullName: fullName ? String(fullName) : undefined,
     });
     res.status(201).json(user);
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
+  } catch (err) {
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -105,8 +106,8 @@ router.put('/:id', requireAuth, requireCompanyAdmin, validateBody(updateUserSche
       username, email, password, role, fullName, isActive
     });
     res.json(user);
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
+  } catch (err) {
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -120,8 +121,8 @@ router.delete('/:id', requireAuth, requireCompanyAdmin, async (req: AuthRequest,
     if (!target) { res.status(404).json({ error: 'User not found' }); return; }
     await getUsers(req).deleteUser(target.id);
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -131,8 +132,8 @@ router.post('/me/change-password', requireAuth, validateBody(changePasswordSchem
     const { currentPassword, newPassword } = req.body;
     await getUsers(req).changePassword(Number(req.user!.sub), String(currentPassword), String(newPassword));
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
+  } catch (err) {
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -141,8 +142,8 @@ router.get('/me/column-profile', requireAuth, async (req: AuthRequest, res: Resp
   try {
     const profile = await getUsers(req).getColumnProfileFor(req.user!.sub);
     res.json(profile || { visibleJobColumns: [], profileName: '' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -158,8 +159,8 @@ router.put('/me/column-profile', requireAuth, async (req: AuthRequest, res: Resp
       profileName: profileName ? String(profileName).slice(0, 80) : undefined,
     });
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 

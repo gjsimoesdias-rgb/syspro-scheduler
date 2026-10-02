@@ -9,6 +9,7 @@ import { computeCtp } from '../../services/CtpService';
 import { buildBomTree } from '../../services/BomTreeService';
 import { applyAssignedShiftCalendars } from './scheduleShared';
 import { planDbFor } from '../../services/planStore';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -81,7 +82,7 @@ router.post('/ctp', async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     req.log.error({ err: error }, 'Error running CTP simulation');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -128,7 +129,7 @@ router.get('/ctp/stock-search', async (req: Request, res: Response) => {
     res.json({ items: result.recordset || [] });
   } catch (error) {
     req.log.error({ err: error }, 'Error searching stock codes');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -312,7 +313,7 @@ router.get('/ctp/stock-routing/:stockCode', async (req: Request, res: Response) 
       }
     } catch (structErr) {
       warnings.push(
-        `BomStructure read failed — made-in components were not expanded into sub-legs (${(structErr as any)?.message || 'unknown error'}).`
+        `BomStructure read failed — made-in components were not expanded into sub-legs (${errorMessage(structErr, 'unknown error')}).`
       );
     }
 
@@ -329,7 +330,7 @@ router.get('/ctp/stock-routing/:stockCode', async (req: Request, res: Response) 
     res.json({ stockCode, description, quantity, operations, subJobs, warnings });
   } catch (error) {
     req.log.error({ err: error }, 'Error building routing from stock code');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -349,7 +350,7 @@ router.get('/bom-tree/:stockCode', async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     req.log.error({ err: error }, 'Error building BOM tree');
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 

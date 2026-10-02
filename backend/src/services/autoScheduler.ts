@@ -13,6 +13,7 @@ import { getVersion, createWhatIf } from './ScheduleStore';
 import { planDbFor } from './planStore';
 import SysproDatabaseService from './SysproDatabaseService';
 import { AuditLogService } from './AuditLogService';
+import { errorMessage } from '../utils/errors';
 
 export const AUTO_PLAN_VERSION_ID = 'whatif-auto-plan';
 export const AUTO_PLAN_NAME = 'Auto plan';
@@ -218,8 +219,8 @@ export class AutoScheduler {
       // Remember the job state this plan was built from.
       try { this.status.lastFingerprint = jobsFingerprint(await new SysproDatabaseService(db).getOpenJobs()); } catch { /* next check sets it */ }
       logger.info({ reason, ...this.status.lastResult }, 'Auto plan updated');
-    } catch (err: any) {
-      this.status.lastResult = { ok: false, error: err?.message || String(err), ms: Date.now() - started };
+    } catch (err) {
+      this.status.lastResult = { ok: false, error: errorMessage(err, String(err)), ms: Date.now() - started };
       logger.warn({ err, reason }, 'Auto plan run failed');
     } finally {
       this.status.running = false;

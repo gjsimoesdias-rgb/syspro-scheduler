@@ -15,6 +15,7 @@ import { validateBody } from '../middleware/validateBody';
 import { requireCompanyAdmin } from '../middleware/requireAuth';
 import { SHOPFLOOR_KEY } from '../../config/secrets';
 import { listDatabasesSchema, connectSchema } from '../validators/statusValidators';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 const ENV_PATH = path.resolve(process.cwd(), '.env');
@@ -267,7 +268,7 @@ router.get('/schema', async (req: Request, res: Response) => {
     res.json({ databases, generatedAt: new Date().toISOString() });
   } catch (error) {
     (req as any).log?.error?.({ err: error }, 'Schema introspection failed');
-    res.status(500).json({ error: (error as any).message || 'Failed to introspect database schema' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to introspect database schema') });
   }
 });
 
@@ -347,7 +348,7 @@ router.post('/databases', validateBody(listDatabasesSchema), async (req: Request
     `);
     res.json({ databases: result.recordset.map((row: any) => row.name) });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to load company databases' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to load company databases') });
   } finally {
     if (tempDb) {
       await tempDb.disconnect().catch(() => undefined);
@@ -391,7 +392,7 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
     // on every /connect. Idempotent; non-fatal if the login lacks DDL rights.
     try {
       await ensureSysproObjects(nextSysproDb);
-    } catch (ensureErr: any) {
+    } catch (ensureErr) {
       req.log.warn({ err: ensureErr }, 'Could not ensure Syspro scheduler objects during connect');
     }
 
@@ -410,13 +411,13 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
         const migrationsDir = path.resolve(__dirname, '../../database/migrations');
         const runner = new MigrationRunner(nextSchedulerDb);
         await runner.run(migrationsDir);
-      } catch (migErr: any) {
+      } catch (migErr) {
         req.log.warn({ err: migErr }, 'Migration warning during connect');
       }
       try {
         const authSvc = new AuthService(nextSchedulerDb);
         initialAdmin = await authSvc.seedDefaultAdmin();
-      } catch (seedErr: any) {
+      } catch (seedErr) {
         req.log.warn({ err: seedErr }, 'Seed warning during connect');
       }
     }
@@ -425,14 +426,14 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
     // — also when only the SYSPRO company changed, so nothing carries across.
     try {
       await loadCompanyState(req.app);
-    } catch (stateErr: any) {
+    } catch (stateErr) {
       req.log.warn({ err: stateErr }, 'AppState warning during connect');
     }
 
     // Plan store for the newly connected company (SCHEDULER DB schema co_<db>).
     try {
       await planDbFor(req.app);
-    } catch (planErr: any) {
+    } catch (planErr) {
       req.log.warn({ err: planErr }, 'Plan store warning during connect');
     }
 
@@ -451,7 +452,7 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
     let profileSaved = true;
     try {
       persistConnectionProfile(payload, database, schedulerDatabase || null);
-    } catch (envErr: any) {
+    } catch (envErr) {
       profileSaved = false;
       req.log.warn({ err: envErr }, 'Connected, but backend/.env could not be updated');
     }
@@ -475,7 +476,7 @@ router.post('/connect', validateBody(connectSchema), async (req: Request, res: R
     if (nextSchedulerDb && !schedulerLive) {
       await nextSchedulerDb.disconnect().catch(() => undefined);
     }
-    res.status(500).json({ error: (error as any).message || 'Failed to connect to database' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to connect to database') });
   }
 });
 

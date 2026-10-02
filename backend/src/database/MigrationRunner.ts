@@ -36,7 +36,7 @@ class MssqlStorage implements UmzugStorage<unknown> {
   }
 
   async executed(_meta: Pick<MigrationParams<unknown>, 'context'>): Promise<string[]> {
-    const result = await this.db.query(
+    const result = await this.db.query<{ filename: string }>(
       `SELECT filename FROM sch_Migrations ORDER BY filename`,
     );
     const rows: Array<{ filename: string }> = result.recordset ?? [];
@@ -69,7 +69,7 @@ export class MigrationRunner {
   async run(migrationsDir: string): Promise<void> {
     try {
       await this.ensureTable();
-    } catch (err: any) {
+    } catch (err) {
       logger.warn({ err }, 'MigrationRunner: could not ensure sch_Migrations table — skipping migrations');
       return;
     }
@@ -115,7 +115,7 @@ export class MigrationRunner {
     try {
       const executed = await umzug.up();
       logger.info({ applied: executed.map((m) => m.name) }, 'MigrationRunner: all migrations applied');
-    } catch (err: any) {
+    } catch (err) {
       logger.error({ err }, 'MigrationRunner: migration failed — server will continue in degraded mode');
     }
   }

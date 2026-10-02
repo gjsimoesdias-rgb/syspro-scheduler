@@ -83,7 +83,7 @@ export class AppStateStore {
         END
       `);
       logger.info('sch_AppState table verified');
-    } catch (err: any) {
+    } catch (err) {
       logger.warn({ err }, 'Could not ensure sch_AppState table — persistence disabled for this run');
     }
   }
@@ -102,7 +102,7 @@ export class AppStateStore {
       const row = result.recordset?.[0];
       if (!row?.payload) return undefined;
       return JSON.parse(row.payload) as T;
-    } catch (err: any) {
+    } catch (err) {
       logger.warn({ err, key }, 'AppStateStore.get failed');
       return undefined;
     }
@@ -127,7 +127,7 @@ export class AppStateStore {
         `,
         { key: this.rowKey(key), payload, updatedBy }
       );
-    } catch (err: any) {
+    } catch (err) {
       logger.warn({ err, key }, 'AppStateStore.set failed (state retained in memory only)');
     }
   }
@@ -136,7 +136,7 @@ export class AppStateStore {
   async clear(key: AppStateKey): Promise<void> {
     try {
       await this.db.queryWithParams(`DELETE FROM sch_AppState WHERE stateKey = @key`, { key: this.rowKey(key) });
-    } catch (err: any) {
+    } catch (err) {
       logger.warn({ err, key }, 'AppStateStore.clear failed');
     }
   }
@@ -176,7 +176,7 @@ export class AppStateStore {
   private async dropLegacy(key: AppStateKey): Promise<void> {
     try {
       await this.db.queryWithParams(`DELETE FROM sch_AppState WHERE stateKey = @key`, { key });
-    } catch (err: any) {
+    } catch (err) {
       logger.warn({ err, key }, 'AppStateStore: could not remove adopted pre-scoping row');
     }
   }

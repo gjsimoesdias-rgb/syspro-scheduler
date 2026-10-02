@@ -131,7 +131,7 @@ export class LicenseService {
 
   /** Get the company_id linked to this license */
   async getCompanyByLicenseId(licenseId: number): Promise<{ id: number; name: string } | null> {
-    const res = await this.db.queryWithParams(
+    const res = await this.db.queryWithParams<{ id: number; name: string }>(
       `SELECT id, name FROM dbo.lic_companies WHERE license_id = @lid`,
       { lid: licenseId }
     );

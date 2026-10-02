@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { saveAsLatest } from '../../services/ScheduleStore';
 import { requireAuth, requirePlanner } from '../middleware/requireAuth';
 import { planDbFor } from '../../services/planStore';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     res.json({ scenarios: result.recordset || [] });
   } catch (err) {
     req.log.error({ err }, 'Error listing scenarios');
-    res.status(500).json({ error: (err as any).message });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -90,7 +91,7 @@ router.post('/', requireAuth, requirePlanner, async (req: Request, res: Response
     res.status(201).json({ scenarioId, baseScheduleId, name, status: 'Draft' });
   } catch (err) {
     req.log.error({ err }, 'Error creating scenario');
-    res.status(500).json({ error: (err as any).message });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -113,7 +114,7 @@ router.get('/:scenarioId', requireAuth, async (req: Request, res: Response) => {
     res.json({ ...row, schedule: JSON.parse(row.ScheduleData) });
   } catch (err) {
     req.log.error({ err }, 'Error fetching scenario');
-    res.status(500).json({ error: (err as any).message });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -157,7 +158,7 @@ router.post('/:scenarioId/promote', requireAuth, requirePlanner, async (req: Req
     res.json({ scenarioId, newScheduleId, status: 'Promoted' });
   } catch (err) {
     req.log.error({ err }, 'Error promoting scenario');
-    res.status(500).json({ error: (err as any).message });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -177,7 +178,7 @@ router.delete('/:scenarioId', requireAuth, requirePlanner, async (req: Request, 
     );
     res.json({ scenarioId, status: 'Archived' });
   } catch (err) {
-    res.status(500).json({ error: (err as any).message });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 

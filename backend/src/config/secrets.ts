@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { errorMessage } from '../utils/errors';
 
 dotenv.config();
 
@@ -49,9 +50,9 @@ function resolveSecret(name: string, isWeak: (v: string | undefined) => boolean,
     fs.writeFileSync(envPath, next, 'utf8');
     // eslint-disable-next-line no-console
     console.warn(`[security] ${name} was missing or weak — generated a new one and saved it to ${envPath}.`);
-  } catch (err: any) {
+  } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn(`[security] ${name} was missing or weak and ${envPath} could not be updated (${err?.message}). ` +
+    console.warn(`[security] ${name} was missing or weak and ${envPath} could not be updated (${errorMessage(err)}). ` +
       `Using a random value for this run only — ${purpose}.`);
   }
   process.env[name] = generated;

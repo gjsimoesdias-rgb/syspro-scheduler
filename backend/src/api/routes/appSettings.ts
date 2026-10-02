@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import SettingsService from '../../services/SettingsService';
 import { requireAuth, requireCompanyAdmin, AuthRequest } from '../middleware/requireAuth';
 import { companyFor } from '../companyContext';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -16,8 +17,8 @@ router.get('/user', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const settings = await getSvc(req).getUserSettingsFor(req.user!.sub);
     res.json(settings);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -26,8 +27,8 @@ router.put('/user', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     await getSvc(req).saveUserSettingsFor(req.user!.sub, req.body);
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -44,8 +45,8 @@ router.get('/company', requireAuth, async (req: AuthRequest, res: Response) => {
     }
     const settings = await getSvc(req).getCompanySettings(companyId);
     res.json(settings);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -60,8 +61,8 @@ router.put('/company', requireAuth, requireCompanyAdmin, async (req: AuthRequest
     const uid = Number(req.user!.sub);
     await getSvc(req).saveCompanySettings(companyId, req.body, Number.isFinite(uid) && uid > 0 ? uid : undefined);
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 

@@ -7,15 +7,42 @@ import util from 'util';
 import { logger } from '../utils/logger';
 
 /**
+ * One row of a SQL result. Column sets differ between SYSPRO versions and
+ * installs (many queries probe columns at run time), so values are untyped
+ * here — the one deliberate `any` of the data layer. Convert at the edge
+ * (String(row.Job).trim(), Number(row.Qty) || 0) when mapping to app types,
+ * or pass a row type: db.query<{ n: number }>(...).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DbRow = Record<string, any>;
+
+/** SQL parameter values (bound with mssql's type inference). */
+export type DbParams = Record<string, unknown>;
+
+/** What every query returns (a subset of mssql's IResult). */
+export interface DbResult<T = DbRow> {
+  recordset: T[];
+  recordsets?: T[][];
+  rowsAffected?: number[];
+  output?: Record<string, unknown>;
+}
+
+/**
  * A minimal executor interface that both DatabaseConnection and a
  * transaction-bound context implement. Use this when a function needs to
  * work either inside a transaction or stand-alone.
  */
 export interface DbExecutor {
-  query(sql: string): Promise<any>;
-  queryWithParams(sql: string, params: Record<string, any>): Promise<any>;
-  execute(procedure: string, params?: Record<string, any>): Promise<any>;
+  query<T = DbRow>(sql: string): Promise<DbResult<T>>;
+  queryWithParams<T = DbRow>(sql: string, params: DbParams): Promise<DbResult<T>>;
+  execute<T = DbRow>(procedure: string, params?: DbParams): Promise<DbResult<T>>;
 }
+
+/** Bind parameters onto an mssql request. */
+const bind = (request: sql.Request, params: DbParams): sql.Request => {
+  for (const [key, value] of Object.entries(params)) request.input(key, value);
+  return request;
+};
 
 export class DatabaseConnection implements DbExecutor {
   private pool: ConnectionPool | null = null;
@@ -25,13 +52,13 @@ export class DatabaseConnection implements DbExecutor {
     this.config = connectionConfig;
   }
 
-  private getSqlModule(): any {
-    if ((this.config as any).driver === 'msnodesqlv8') {
+  private getSqlModule(): typeof sql {
+    if (this.config.driver === 'msnodesqlv8') {
       // Lazy require: importing mssql/msnodesqlv8 mutates the shared global
       // driver registry, overwriting the tedious Request class for all pools.
       // Only load it when the connection actually needs the native driver.
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      return require('mssql/msnodesqlv8');
+      return require('mssql/msnodesqlv8') as typeof sql;
     }
     return sql;
   }
@@ -39,12 +66,13 @@ export class DatabaseConnection implements DbExecutor {
   async connect(): Promise<void> {
     try {
       const sqlModule = this.getSqlModule();
-      this.pool = new sqlModule.ConnectionPool(this.config);
-      await this.pool.connect();
+      const pool = new sqlModule.ConnectionPool(this.config);
+      this.pool = pool;
+      await pool.connect();
       logger.info('Database connected');
-    } catch (error: any) {
+    } catch (error) {
       logger.error({ err: error, details: util.inspect(error, { depth: 5, colors: false }) }, 'Database connection failed');
-      if (error.code === 'ESOCKET') {
+      if ((error as { code?: string })?.code === 'ESOCKET') {
         logger.error('Hint: Verify SQL TCP/IP is enabled for the given instance or port.');
         logger.error('Hint: Verify SQL Browser is running for named instance resolution.');
       }
@@ -67,34 +95,16 @@ export class DatabaseConnection implements DbExecutor {
     return this.pool;
   }
 
-  async query(sqlQueries: string): Promise<any> {
-    if (!this.pool) {
-      throw new Error('Database not connected');
-    }
-    const request = this.pool.request();
-    return request.query(sqlQueries);
+  async query<T = DbRow>(sqlQueries: string): Promise<DbResult<T>> {
+    return this.getPool().request().query<T>(sqlQueries);
   }
 
-  async queryWithParams(sql: string, params: Record<string, any>): Promise<any> {
-    if (!this.pool) {
-      throw new Error('Database not connected');
-    }
-    const request = this.pool.request();
-    for (const [key, value] of Object.entries(params)) {
-      request.input(key, value);
-    }
-    return request.query(sql);
+  async queryWithParams<T = DbRow>(sqlText: string, params: DbParams): Promise<DbResult<T>> {
+    return bind(this.getPool().request(), params).query<T>(sqlText);
   }
 
-  async execute(procedure: string, params: Record<string, any> = {}): Promise<any> {
-    if (!this.pool) {
-      throw new Error('Database not connected');
-    }
-    const request = this.pool.request();
-    for (const [key, value] of Object.entries(params)) {
-      request.input(key, value);
-    }
-    return request.execute(procedure);
+  async execute<T = DbRow>(procedure: string, params: DbParams = {}): Promise<DbResult<T>> {
+    return bind(this.getPool().request(), params).execute<T>(procedure);
   }
 
   /**
@@ -111,21 +121,11 @@ export class DatabaseConnection implements DbExecutor {
     await transaction.begin();
 
     const txExecutor: DbExecutor = {
-      query: (sqlText: string) => transaction.request().query(sqlText),
-      queryWithParams: (sqlText: string, params: Record<string, any>) => {
-        const request = transaction.request();
-        for (const [key, value] of Object.entries(params)) {
-          request.input(key, value);
-        }
-        return request.query(sqlText);
-      },
-      execute: (procedure: string, params: Record<string, any> = {}) => {
-        const request = transaction.request();
-        for (const [key, value] of Object.entries(params)) {
-          request.input(key, value);
-        }
-        return request.execute(procedure);
-      }
+      query: <R = DbRow>(sqlText: string) => transaction.request().query<R>(sqlText),
+      queryWithParams: <R = DbRow>(sqlText: string, params: DbParams) =>
+        bind(transaction.request(), params).query<R>(sqlText),
+      execute: <R = DbRow>(procedure: string, params: DbParams = {}) =>
+        bind(transaction.request(), params).execute<R>(procedure),
     };
 
     try {

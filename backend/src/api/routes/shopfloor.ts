@@ -11,6 +11,7 @@
 
 import { Router, Request, Response } from 'express';
 import { planDbFor } from '../../services/planStore';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -76,7 +77,7 @@ router.get('/today', async (req: Request, res: Response) => {
     res.json({ date: localDate(todayStart), workcentres });
   } catch (err) {
     req.log.error({ err }, 'Error fetching shop-floor schedule');
-    res.status(500).json({ error: (err as any).message });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -124,7 +125,7 @@ router.get('/workcentre/:wcId', async (req: Request, res: Response) => {
     res.json({ workcentreId: wcId, operations: ops });
   } catch (err) {
     req.log.error({ err }, 'Error fetching workcentre schedule');
-    res.status(500).json({ error: (err as any).message });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 

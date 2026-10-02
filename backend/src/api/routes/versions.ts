@@ -23,6 +23,7 @@ import {
 } from '../../services/ScheduleStore';
 import { AuditLogService } from '../../services/AuditLogService';
 import { planDbFor } from '../../services/planStore';
+import { errorMessage, errorStatus } from '../../utils/errors';
 
 const router = Router();
 
@@ -30,8 +31,8 @@ const router = Router();
 const dbOf = async (req: AuthRequest, res: Response) => {
   try {
     return await planDbFor(req.app);
-  } catch (err: any) {
-    res.status(err?.status || 503).json({ error: err?.message || 'Database not connected' });
+  } catch (err) {
+    res.status(errorStatus(err) || 503).json({ error: errorMessage(err, 'Database not connected') });
     return null;
   }
 };
@@ -39,7 +40,7 @@ const dbOf = async (req: AuthRequest, res: Response) => {
 const fail = (req: AuthRequest, res: Response, err: unknown) => {
   if (err instanceof VersionError) return res.status(err.status).json({ error: err.message });
   (req as any).log?.error?.({ err }, 'versions route failed');
-  return res.status(500).json({ error: (err as any)?.message || 'Version operation failed' });
+  return res.status(500).json({ error: errorMessage(err, 'Version operation failed') });
 };
 
 const audit = (req: AuthRequest, action: string, details: Record<string, unknown>) => {

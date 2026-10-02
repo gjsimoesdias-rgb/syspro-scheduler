@@ -55,7 +55,7 @@ export class AuditLogService {
     let where = '';
     if (entityType) { params.entityType = entityType; where += ' AND entityType = @entityType'; }
     if (entityId) { params.entityId = entityId; where += ' AND entityId = @entityId'; }
-    const result = await this.db.queryWithParams(
+    const result = await this.db.queryWithParams<AuditRow>(
       `SELECT TOP (@limit)
          CAST(auditId AS NVARCHAR(36)) AS auditId,
          actorId, action, entityType, entityId,

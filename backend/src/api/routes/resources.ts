@@ -8,6 +8,7 @@ import { setLocal } from '../../utils/setLocal';
 import { requirePlanner } from '../middleware/requireAuth';
 import { CalendarException, normaliseException } from '../../utils/calendarExceptions';
 import { normaliseCrewSetup, EMPTY_CREW_SETUP, mapEmployeeRow, type CrewSetup, type SysproEmployee } from '../../utils/crews';
+import { errorMessage } from '../../utils/errors';
 
 const router = Router();
 
@@ -209,7 +210,7 @@ router.get('/', async (req: Request, res: Response) => {
       resources: resolvedResources
     });
   } catch (error) {
-    const message = (error as any).message || 'Failed to load resources';
+    const message = errorMessage(error, 'Failed to load resources');
     if (message.includes('Invalid object name')) {
       return res.json({
         count: 0,
@@ -262,7 +263,7 @@ router.get('/definitions', async (req: Request, res: Response) => {
       definitions: items
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to load resource definitions' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to load resource definitions') });
   }
 });
 
@@ -308,7 +309,7 @@ router.put('/definitions/:resourceId', requirePlanner, async (req: Request, res:
     setLocal(req.app.locals, 'resourceDefinitions', definitions);
     res.json({ definition: updated });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to update resource definition' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to update resource definition') });
   }
 });
 
@@ -365,7 +366,7 @@ router.post('/shifts', requirePlanner, (req: Request, res: Response) => {
     setLocal(req.app.locals, 'shiftTemplates', shifts);
     res.status(201).json({ shift: newShift });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to create shift' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to create shift') });
   }
 });
 
@@ -410,7 +411,7 @@ router.put('/shifts/:shiftId', requirePlanner, (req: Request, res: Response) => 
     setLocal(req.app.locals, 'shiftTemplates', shifts);
     res.json({ shift: existing });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to update shift' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to update shift') });
   }
 });
 
@@ -451,7 +452,7 @@ router.delete('/shifts/:shiftId', requirePlanner, (req: Request, res: Response) 
       reassignedResources
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to delete shift' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to delete shift') });
   }
 });
 
@@ -533,9 +534,9 @@ router.get('/employees', async (req: Request, res: Response) => {
       .filter((e: SysproEmployee | null): e is SysproEmployee => !!e)
       .sort((a: SysproEmployee, b: SysproEmployee) => a.name.localeCompare(b.name));
     res.json({ employees });
-  } catch (err: any) {
+  } catch (err) {
     req.log?.warn?.({ err }, 'Could not read BomEmployee');
-    res.json({ employees: [], note: `Could not read SYSPRO employees: ${err?.message || err}` });
+    res.json({ employees: [], note: `Could not read SYSPRO employees: ${errorMessage(err)}` });
   }
 });
 
@@ -573,7 +574,7 @@ router.get('/workcentres/details', async (req: Request, res: Response) => {
       rows
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to load work centre detail rows' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to load work centre detail rows') });
   }
 });
 
@@ -607,7 +608,7 @@ router.post('/alternatives/groups', requirePlanner, (req: Request, res: Response
     setLocal(req.app.locals, 'alternativeGroups', groups);
     res.status(201).json({ group });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message || 'Failed to save alternative group' });
+    res.status(500).json({ error: errorMessage(error, 'Failed to save alternative group') });
   }
 });
 
@@ -644,7 +645,7 @@ router.get('/workcentre/:worcentreId', async (req: Request, res: Response) => {
       resources: resolvedResources
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
@@ -667,7 +668,7 @@ router.get('/workcentres', async (req: Request, res: Response) => {
       workcentres
     });
   } catch (error) {
-    res.status(500).json({ error: (error as any).message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
