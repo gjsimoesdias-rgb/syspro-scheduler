@@ -7,6 +7,7 @@ import SysproDatabaseService from '../../services/SysproDatabaseService';
 import { sysproServiceFor, includeSuggestedJobsFor } from '../sysproServiceFor';
 import { Job, Operation } from '../../types';
 import { setLocal } from '../../utils/setLocal';
+import { normaliseJobFlags, setJobFlag, EMPTY_JOB_FLAGS } from '../../utils/jobFlags';
 import { validateBody } from '../middleware/validateBody';
 import { bulkImportJobsSchema, bulkImportOperationsSchema } from '../validators/jobValidators';
 import { requirePlanner } from '../middleware/requireAuth';
@@ -202,6 +203,25 @@ router.put('/markers', requirePlanner, (req: Request, res: Response) => {
   } catch (err: any) {
     res.status(400).json({ error: err?.message || 'Invalid markers' });
   }
+});
+
+/**
+ * GET /api/jobs/flags — jobs excluded from planning / pinned to their master-plan slots.
+ * PUT /api/jobs/flags/:jobId { excluded?, pinned? } — set or clear them (planner).
+ * Generate and the Auto plan read these (utils/jobFlags.ts).
+ */
+router.get('/flags', (req: Request, res: Response) => {
+  res.json(normaliseJobFlags(req.app.locals.jobFlags || EMPTY_JOB_FLAGS));
+});
+router.put('/flags/:jobId', requirePlanner, (req: Request, res: Response) => {
+  const jobId = String(req.params.jobId || '').trim();
+  if (!jobId) return res.status(400).json({ error: 'jobId is required' });
+  let flags = normaliseJobFlags(req.app.locals.jobFlags || EMPTY_JOB_FLAGS);
+  for (const flag of ['excluded', 'pinned'] as const) {
+    if (typeof req.body?.[flag] === 'boolean') flags = setJobFlag(flags, jobId, flag, req.body[flag]);
+  }
+  setLocal(req.app.locals, 'jobFlags', flags);
+  res.json(flags);
 });
 
 /**

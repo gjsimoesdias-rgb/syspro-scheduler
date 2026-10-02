@@ -28,7 +28,7 @@ import exportService from './services/exportService';
 import { createShortcutManager } from './services/keyboardShortcuts';
 import BulkImportService from './services/bulkImportService';
 import { Schedule, ConstraintViolation, Job, Resource, Operation } from './types';
-import { scheduleService, jobService, versionService, apiClient, pinService, settingsService, inventoryService, type JobFmad, type PinnedOperationDto, apiErrorMessage } from './services/api';
+import { scheduleService, jobService, versionService, apiClient, pinService, settingsService, inventoryService, type JobFmad, type PinnedOperationDto, apiErrorMessage, jobFlagService, type JobFlags } from './services/api';
 import { planJobsFrom, planKeyOf } from './utils/planJobs';
 import { getUserGuideHtml } from './userGuideHtml';
 import ScheduleSetupModal, { ScheduleConfig } from './components/ScheduleSetupModal';
@@ -168,8 +168,28 @@ const App: React.FC = () => {
   const closeScheduleSetup = useUiStore((s) => s.closeScheduleSetup);
   const useAlternatives = useUiStore((s) => s.useAlternatives);
   const setUseAlternatives = useUiStore((s) => s.setUseAlternatives);
-  const [excludedJobIds, setExcludedJobIds] = useState<Set<string>>(new Set());
-  const [pinnedJobIds, setPinnedJobIds] = useState<Set<string>>(new Set());
+  // Pin / Exclude job flags live on the server so they survive reloads and
+  // also apply to the background Auto plan (GET/PUT /api/jobs/flags).
+  const [jobFlags, setJobFlags] = useState<JobFlags>({ excluded: [], pinned: [] });
+  const excludedJobIds = useMemo(() => new Set(jobFlags.excluded), [jobFlags]);
+  const pinnedJobIds = useMemo(() => new Set(jobFlags.pinned), [jobFlags]);
+  useEffect(() => {
+    jobFlagService.get().then(setJobFlags).catch(() => { /* older server: no flags */ });
+  }, []);
+  const setJobFlag = useCallback(async (jobId: string, flag: 'excluded' | 'pinned', on: boolean) => {
+    try {
+      setJobFlags(await jobFlagService.set(jobId, { [flag]: on }));
+      toast.success(flag === 'excluded'
+        ? (on ? `Job ${jobId} excluded — left out of Generate and Auto plan until you include it again` : `Job ${jobId} included in planning again`)
+        : (on ? `Job ${jobId} pinned — keeps its machine and times from the master plan on the next Generate` : `Job ${jobId} unpinned`));
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Could not change the job flag'));
+    }
+  }, []);
+  const toggleJobFlag = useCallback(
+    (jobId: string, flag: 'excluded' | 'pinned') =>
+      setJobFlag(jobId, flag, !(flag === 'excluded' ? excludedJobIds : pinnedJobIds).has(jobId)),
+    [setJobFlag, excludedJobIds, pinnedJobIds]);
 
   // Gen3: Highlighted job in gantt
   const highlightJobId = useScheduleStore((s) => s.highlightJobId);
@@ -272,8 +292,6 @@ const App: React.FC = () => {
     openJobs,
     resources,
     dbStatus,
-    excludedJobIds,
-    pinnedJobIds,
     loadJobsAndResources,
     addVersion,
   });
@@ -1258,7 +1276,7 @@ const App: React.FC = () => {
     setJobContextMenu,
     setExpandedJobs,
     toggleJobExpanded,
-    setPinnedJobIds,
+    toggleJobFlag,
     setSelectedWorkcentre,
     setGanttFocusWorkcentre,
     setContentTab,
@@ -1393,6 +1411,8 @@ const App: React.FC = () => {
     jobLatenessMap,
     lateWhyByJob,
     pinnedOps,
+    pinnedJobIds,
+    excludedJobIds,
     publishByJob,
     fmadByJob,
     dependentsByJob,
@@ -1552,14 +1572,8 @@ const App: React.FC = () => {
           onClearWhatIf={clearWhatIfScenario}
           onOpenConnectionModal={() => setShowConnectionModal(true)}
           onOpenSettingsModal={() => setShowSettingsModal(true)}
-          onIncludeJob={(jid) => {
-            setExcludedJobIds((prev) => { const next = new Set(prev); next.delete(jid); return next; });
-            toast.success(`Job ${jid} included in scheduling`);
-          }}
-          onExcludeJob={(jid) => {
-            setExcludedJobIds((prev) => new Set([...prev, jid]));
-            toast.success(`Job ${jid} excluded from scheduling`);
-          }}
+          onIncludeJob={(jid) => { void setJobFlag(jid, 'excluded', false); }}
+          onExcludeJob={(jid) => { void setJobFlag(jid, 'excluded', true); }}
           onApplyWorkflowFilter={applyWorkflowFilter}
           onOpenAdvancedFilter={() => setShowAdvancedFilter(true)}
           advancedFilterActive={!!advancedFilter || advancedSort.length > 0}
@@ -1835,7 +1849,12 @@ const App: React.FC = () => {
           <button className="ctx-item has-arrow" onClick={() => executeJobContextCommand('load-machines')}>Load Machines</button>
           <button className="ctx-item has-arrow" onClick={() => executeJobContextCommand('material-planning')}>Material Planning</button>
           <button className="ctx-item has-arrow" onClick={() => executeJobContextCommand('possible-errors')}>Possible Errors</button>
-          <button className="ctx-item has-arrow" onClick={() => executeJobContextCommand('pin')}>Pin</button>
+          <button className="ctx-item" onClick={() => executeJobContextCommand('pin')}>
+            {pinnedJobIds.has(jobContextMenu.jobId || '') ? 'Unpin job' : 'Pin job (keep in place)'}
+          </button>
+          <button className="ctx-item" onClick={() => executeJobContextCommand('exclude')}>
+            {excludedJobIds.has(jobContextMenu.jobId || '') ? 'Include in planning' : 'Exclude from planning'}
+          </button>
           <button className="ctx-item has-arrow" onClick={() => executeJobContextCommand('deadline')}>Deadline</button>
           <button className="ctx-item has-arrow" onClick={() => executeJobContextCommand('actions')}>Actions</button>
         </div>

@@ -21,6 +21,9 @@ export interface JobGridRenderContext {
   jobLatenessMap: Map<string, Lateness>;
   lateWhyByJob: Map<string, string>;
   pinnedOps: Set<string>;
+  /** Jobs pinned / excluded as a whole (right-click → Pin job / Exclude from planning). */
+  pinnedJobIds?: Set<string>;
+  excludedJobIds?: Set<string>;
   publishByJob: Map<string, string>;
   /** First material availability per job (FMAD column); undefined while loading. */
   fmadByJob?: Record<string, JobFmad>;
@@ -46,6 +49,8 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
     jobLatenessMap,
     lateWhyByJob,
     pinnedOps,
+    pinnedJobIds,
+    excludedJobIds,
     publishByJob,
     fmadByJob,
     dependentsByJob,
@@ -112,6 +117,12 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
     }
 
     if (column.key === 'lockedOps') {
+      if (excludedJobIds?.has(job.jobId)) {
+        return <span className="grid-flag grid-flag-warn" title="Excluded from planning — right-click → Include in planning">Excluded</span>;
+      }
+      if (pinnedJobIds?.has(job.jobId)) {
+        return <span className="grid-flag" title="Whole job pinned — keeps its master-plan machine and times on Generate"><Lock size={13} className="ui-icon" aria-hidden="true" /> Job</span>;
+      }
       const n = (job.operations || []).filter((o) => pinnedOps.has(`${job.jobId}::${o.opId}`)).length;
       return n ? <span className="grid-flag" title={`${n} operation(s) locked in place`}><Lock size={13} className="ui-icon" aria-hidden="true" /> {n}</span> : <span className="grid-flag">—</span>;
     }

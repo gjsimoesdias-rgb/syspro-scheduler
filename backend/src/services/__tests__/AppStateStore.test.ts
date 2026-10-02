@@ -236,6 +236,7 @@ describe('AppStateStore.hydrateAppLocals', () => {
         'autoSchedule',
         'lastGenerateOptions',
         'jobMarkers',
+        'jobFlags',
       ])
     );
 

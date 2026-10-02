@@ -119,3 +119,25 @@ describe('read-only roles cannot change plans', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('/api/jobs/flags (exclude / pin job)', () => {
+  afterEach(() => { delete (app.locals as any).jobFlags; });
+
+  it('a planner sets and clears flags; they are stored for every run', async () => {
+    const t = token('planner');
+    let res = await request(app).put('/api/jobs/flags/J1').set('Authorization', `Bearer ${t}`).send({ excluded: true });
+    expect(res.status).toBe(200);
+    res = await request(app).put('/api/jobs/flags/J2').set('Authorization', `Bearer ${t}`).send({ pinned: true });
+    expect(res.body).toEqual({ excluded: ['J1'], pinned: ['J2'] });
+    expect((app.locals as any).jobFlags).toEqual({ excluded: ['J1'], pinned: ['J2'] });
+    res = await request(app).put('/api/jobs/flags/J1').set('Authorization', `Bearer ${t}`).send({ excluded: false });
+    expect(res.body).toEqual({ excluded: [], pinned: ['J2'] });
+    res = await request(app).get('/api/jobs/flags').set('Authorization', `Bearer ${token('viewer')}`);
+    expect(res.body).toEqual({ excluded: [], pinned: ['J2'] });
+  });
+
+  it('a viewer cannot change them', async () => {
+    const res = await request(app).put('/api/jobs/flags/J1').set('Authorization', `Bearer ${token('viewer')}`).send({ excluded: true });
+    expect(res.status).toBe(403);
+  });
+});

@@ -21,6 +21,7 @@ import { rankRuleResults, RULE_LABELS, ALL_RULES, type SchedulingRule, type Rule
 import { setLocal } from '../../utils/setLocal';
 import { completeJobFamilies } from '../../utils/jobFamilies';
 import { stripCompletedOperations } from '../../utils/jobFilters';
+import { effectiveJobFlags, pinsForJobs } from '../../utils/jobFlags';
 import { AuditLogService } from '../../services/AuditLogService';
 import { requireAuth, requirePlanner, AuthRequest } from '../middleware/requireAuth';
 import { saveAsLatest, saveIntoWhatIf, getVersion, revertToVersion, VersionError } from '../../services/ScheduleStore';
@@ -291,6 +292,15 @@ export async function generateHandler(req: Request, res: Response) {
       req.log.info({ filteredJobs: jobs.length, totalJobs: sysproJobs.length }, 'Filtered to selected jobs');
     }
 
+    // Jobs the planner excluded (right-click → Exclude) stay out of every run,
+    // even when a selection or a master/sub family would pull them in.
+    const jobFlags = effectiveJobFlags(req.app.locals.jobFlags, req.body || {});
+    if (jobFlags.excluded.size > 0) {
+      const before = jobs.length;
+      jobs = jobs.filter((j) => !jobFlags.excluded.has(String(j.jobId).trim()));
+      if (jobs.length !== before) req.log.info({ excluded: before - jobs.length }, 'Excluded jobs left out of the run');
+    }
+
     req.log.info({ jobs: jobs.length, workcentres: workcentres.length, resources: resources.length }, 'Master data loaded');
 
     // Create maps for fast lookup
@@ -361,16 +371,23 @@ export async function generateHandler(req: Request, res: Response) {
     // keep their exact slot: they are auto-pinned so the engine pre-places
     // them and schedules everything else around them. Manual pins always win.
     const frozenPins = new Map<string, PinnedOperation>();
+    const jobPins = new Map<string, PinnedOperation>();
     const freezeDays = typeof freezeHorizonDays === 'number' && freezeHorizonDays > 0 ? freezeHorizonDays : 0;
-    if (freezeDays > 0) {
+    if (freezeDays > 0 || jobFlags.pinned.size > 0) {
       try {
         const latest = await (await planDbFor(req.app)).query(
           `IF OBJECT_ID('aps.SavedSchedules', 'U') IS NULL SELECT TOP 0 CAST(NULL AS nvarchar(max)) AS ScheduleData; ELSE SELECT TOP 1 ScheduleData FROM aps.SavedSchedules WHERE IsLatest = 1 ORDER BY SavedAt DESC`
         );
         if (latest.recordset?.length) {
           const saved = JSON.parse(latest.recordset[0].ScheduleData);
+          // Pinned jobs (right-click → Pin) keep every op where the master has it.
+          if (jobFlags.pinned.size > 0) {
+            const { pins, notInPlan } = pinsForJobs(saved, jobFlags.pinned);
+            for (const [k, v] of pins) jobPins.set(k, v);
+            req.log.info({ pinnedJobs: jobFlags.pinned.size, pinnedOps: pins.size, notInPlan: notInPlan.length }, 'Job pins applied from the master plan');
+          }
           const fenceEnd = new Date(Date.now() + freezeDays * 24 * 60 * 60 * 1000);
-          for (const js of saved.jobSchedules || []) {
+          for (const js of freezeDays > 0 ? saved.jobSchedules || [] : []) {
             for (const os of js.operationSchedules || []) {
               const start = new Date(os.plannedStartDate);
               const end = new Date(os.plannedEndDate);
@@ -394,12 +411,12 @@ export async function generateHandler(req: Request, res: Response) {
               }
             }
           }
-          req.log.info({ freezeDays, frozenOps: frozenPins.size }, 'Frozen zone applied from latest saved schedule');
+          if (freezeDays > 0) req.log.info({ freezeDays, frozenOps: frozenPins.size }, 'Frozen zone applied from latest saved schedule');
         } else {
-          req.log.info({ freezeDays }, 'Frozen zone requested but no saved schedule exists — nothing to freeze');
+          req.log.info({ freezeDays }, 'Frozen zone / job pins requested but no saved schedule exists — nothing to hold');
         }
       } catch (err) {
-        req.log.warn({ err }, 'Frozen zone requested but latest schedule could not be loaded; continuing without it');
+        req.log.warn({ err }, 'Frozen zone / job pins requested but latest schedule could not be loaded; continuing without them');
       }
     }
 
@@ -437,7 +454,9 @@ export async function generateHandler(req: Request, res: Response) {
       // Pinned operations — serialised as [key, PinnedOperation][] for the worker.
       // Frozen-zone auto-pins are merged first; manual pins override them.
       pinnedOperations: (() => {
+        // Precedence: frozen zone < pinned jobs < manual operation pins.
         const merged = new Map<string, any>(frozenPins);
+        for (const [key, pin] of jobPins) merged.set(key, pin);
         const pins: Record<string, any> = req.app.locals.pinnedOperations || {};
         for (const [key, pin] of Object.entries(pins)) merged.set(key, pin);
         return merged.size ? Array.from(merged.entries()) : undefined;
@@ -614,6 +633,8 @@ router.post('/optimize', requirePlanner, async (req: Request, res: Response) => 
       const { idSet } = completeJobFamilies(jobs, selectedJobIds);
       jobs = jobs.filter((j) => idSet.has(j.jobId));
     }
+    const optimizeExcluded = effectiveJobFlags(req.app.locals.jobFlags, req.body || {}).excluded;
+    if (optimizeExcluded.size > 0) jobs = jobs.filter((j) => !optimizeExcluded.has(String(j.jobId).trim()));
 
     if (jobs.length === 0) {
       return res.status(400).json({ error: 'No jobs to schedule — nothing to optimize' });

@@ -20,8 +20,6 @@ interface Params {
   openJobs: Job[];
   resources: Resource[];
   dbStatus: DbStatus;
-  excludedJobIds: Set<string>;
-  pinnedJobIds: Set<string>;
   loadJobsAndResources: () => Promise<void>;
   addVersion: (schedule: import('../types').Schedule, description: string) => void;
 }
@@ -33,8 +31,6 @@ export function useScheduleGeneration({
   openJobs,
   resources,
   dbStatus,
-  excludedJobIds,
-  pinnedJobIds,
   loadJobsAndResources,
   addVersion,
 }: Params): ScheduleGenerationResult {
@@ -112,8 +108,6 @@ export function useScheduleGeneration({
           dateAnchorMode: effectiveDateMode,
           anchorDate,
           useAlternatives,
-          excludedJobIds: excludedJobIds.size > 0 ? Array.from(excludedJobIds) : undefined,
-          pinnedJobIds: pinnedJobIds.size > 0 ? Array.from(pinnedJobIds) : undefined,
           ...(selectedJobIds && selectedJobIds.length > 0 ? { selectedJobIds } : {}),
           engineType: configOverride?.engineType ?? 'greedy',
           ...(configOverride?.cpSatWeights ? { cpSatWeights: configOverride.cpSatWeights } : {}),

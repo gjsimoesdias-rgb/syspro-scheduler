@@ -29,7 +29,8 @@ export type AppStateKey =
   | 'crewSetup'
   | 'autoSchedule'
   | 'lastGenerateOptions'
-  | 'jobMarkers';
+  | 'jobMarkers'
+  | 'jobFlags';
 
 export class AppStateStore {
   constructor(private db: DatabaseConnection) {}
@@ -123,6 +124,7 @@ export class AppStateStore {
       'crewSetup',
       'autoSchedule',
       'lastGenerateOptions',
+      'jobFlags',
       'jobMarkers',
     ];
     let restored = 0;

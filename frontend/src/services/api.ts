@@ -263,6 +263,14 @@ export interface JobFmad {
 }
 export interface MarkerDef { id: string; name: string; color: string }
 export interface JobMarkers { definitions: MarkerDef[]; assignments: Record<string, string> }
+/** Jobs excluded from planning / pinned to their master-plan slots (server-side, apply to every run). */
+export interface JobFlags { excluded: string[]; pinned: string[] }
+export const jobFlagService = {
+  get: async (): Promise<JobFlags> => (await apiClient.get('/jobs/flags')).data,
+  set: async (jobId: string, patch: { excluded?: boolean; pinned?: boolean }): Promise<JobFlags> =>
+    (await apiClient.put(`/jobs/flags/${encodeURIComponent(jobId)}`, patch)).data,
+};
+
 export const markerService = {
   get: async (): Promise<JobMarkers> => (await apiClient.get('/jobs/markers')).data,
   save: async (m: JobMarkers): Promise<JobMarkers> => (await apiClient.put('/jobs/markers', m)).data,

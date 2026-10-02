@@ -51,7 +51,8 @@ export interface ManualSchedulingContext {
   setJobContextMenu: React.Dispatch<React.SetStateAction<JobContextMenuState>>;
   setExpandedJobs: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   toggleJobExpanded: (jobId: string) => void;
-  setPinnedJobIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  /** Flip a job's Pin / Exclude flag on the server (applies to every run). */
+  toggleJobFlag: (jobId: string, flag: 'excluded' | 'pinned') => Promise<void>;
   setSelectedWorkcentre: React.Dispatch<React.SetStateAction<string[]>>;
   setGanttFocusWorkcentre: React.Dispatch<React.SetStateAction<string | string[] | null>>;
   setContentTab: (v: ContentTab) => void;
@@ -87,7 +88,7 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
     setJobContextMenu,
     setExpandedJobs,
     toggleJobExpanded,
-    setPinnedJobIds,
+    toggleJobFlag,
     setSelectedWorkcentre,
     setGanttFocusWorkcentre,
     setContentTab,
@@ -830,12 +831,10 @@ export function useManualScheduling(ctx: ManualSchedulingContext) {
         break;
       }
       case 'pin':
-        setPinnedJobIds(prev => {
-          const next = new Set(prev);
-          if (next.has(jobId)) { next.delete(jobId); toast.success(`Job ${jobId} unpinned`); }
-          else { next.add(jobId); toast.success(`Job ${jobId} pinned — will not be moved by autoschedule`); }
-          return next;
-        });
+        void toggleJobFlag(jobId, 'pinned');
+        break;
+      case 'exclude':
+        void toggleJobFlag(jobId, 'excluded');
         break;
       case 'deadline':
         setHighlightJobId(jobId);
