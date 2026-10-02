@@ -161,10 +161,12 @@ const SchemaExplorer: React.FC<SchemaExplorerProps> = ({ open, onClose }) => {
     for (const rel of db.relationships) {
       const from = `${rel.fromSchema}.${rel.fromTable}`;
       const to = `${rel.toSchema}.${rel.toTable}`;
-      if (!m.has(from)) m.set(from, new Set());
-      if (!m.has(to)) m.set(to, new Set());
-      m.get(from)!.add(rel.fromColumn);
-      m.get(to)!.add(rel.toColumn);
+      const fromCols = m.get(from) ?? new Set<string>();
+      const toCols = m.get(to) ?? new Set<string>();
+      fromCols.add(rel.fromColumn);
+      toCols.add(rel.toColumn);
+      m.set(from, fromCols);
+      m.set(to, toCols);
     }
     return m;
   }, [db]);

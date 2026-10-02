@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import { BarChart2, Target, BookOpen, Factory, Settings2, CalendarCheck, type LucideIcon } from 'lucide-react';
 import { useUiStore, type ContentTab } from '../stores/uiStore';
 import { useScheduleStore } from '../stores/scheduleStore';
-import type { Resource, Job, ConstraintViolation } from '../types';
+import type { Resource, Job, ConstraintViolation, Schedule } from '../types';
 import SettingsPanel from './SettingsPanel';
 
 // Lazy tab content
@@ -78,7 +78,7 @@ export interface ContentTabPanelProps {
   materialPlan: Array<Record<string, unknown>>;
   selectedViolation: ConstraintViolation | null;
   loading: boolean;
-  previousScheduleForCompare: any | null;
+  previousScheduleForCompare: Schedule | null;
 
   /** Drives MachineGanttBoard lane focus after a scheduling action or job click. */
   ganttFocusWorkcentre?: string | string[] | null;

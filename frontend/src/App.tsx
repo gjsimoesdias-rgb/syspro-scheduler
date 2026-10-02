@@ -52,6 +52,7 @@ import './App.css';
 import './styles/aps-overrides.css';
 import './styles/lynq.css';
 import { errorStatus } from './utils/errors';
+import { cssVars } from './utils/cssVars';
 
 
 const App: React.FC = () => {
@@ -1823,7 +1824,7 @@ const App: React.FC = () => {
               <button
                 key={d.id}
                 className={`ctx-marker-swatch${markerAssignments[jobContextMenu.jobId || ''] === d.id ? ' is-on' : ''}`}
-                style={{ ['--mk' as string]: d.color } as React.CSSProperties}
+                style={cssVars({ '--mk': d.color })}
                 title={d.name}
                 aria-label={`Marker ${d.name}`}
                 onClick={() => {

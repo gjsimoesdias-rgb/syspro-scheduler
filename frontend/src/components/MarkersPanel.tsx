@@ -11,6 +11,7 @@ import { useMarkerStore, MARKER_COLOURS } from '../stores/markerStore';
 import { apiErrorMessage } from '../services/api';
 import './ShiftManagementTab.css';
 import { confirmDialog } from './DialogHost';
+import { cssVars } from '../utils/cssVars';
 
 const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'marker';
 
@@ -70,7 +71,7 @@ const MarkersPanel: React.FC = () => {
                 onChange={(e) => void update(d.id, { color: e.target.value })} /></td>
               <td><input className="crews-input" defaultValue={d.name} aria-label="Marker name"
                 onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== d.name) void update(d.id, { name: v }); }} /></td>
-              <td><span className="marker-chip" style={{ ['--mk' as any]: d.color }}>{usage.get(d.id) || 0}</span></td>
+              <td><span className="marker-chip" style={cssVars({ '--mk': d.color })}>{usage.get(d.id) || 0}</span></td>
               <td><button className="btn btn-sm" onClick={() => remove(d.id)} title="Remove marker"><Trash2 size={13} className="ui-icon" aria-hidden="true" /> Remove</button></td>
             </tr>
           ))}

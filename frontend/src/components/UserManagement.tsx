@@ -67,7 +67,7 @@ const UserManagement: React.FC = () => {
     if (!editUser && !form.password) { setError('Password is required for new users'); return; }
     setSaving(true); setError('');
     try {
-      const body: any = { ...form };
+      const body: Partial<typeof form> = { ...form };
       if (editUser && !body.password) delete body.password;
       await apiJson(editUser ? 'PUT' : 'POST', editUser ? `/users/${editUser.id}` : '/users', body);
       setShowForm(false);

@@ -11,6 +11,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Clock } from 'lucide-react';
 import CruxLogo from './CruxLogo';
 import './ShopFloorView.css';
+import { errorMessage } from '../utils/errors';
 
 interface ShopOp {
   jobId: string;
@@ -32,7 +33,7 @@ interface ShopFloorData {
 
 type OpState = 'now' | 'next' | 'done' | 'later';
 
-const API_BASE = (window as any).__APS_CONFIG__?.apiUrl ?? '/api';
+const API_BASE = (window as Window & { __APS_CONFIG__?: { apiUrl?: string } }).__APS_CONFIG__?.apiUrl ?? '/api';
 
 /**
  * The screen link (Settings → Shop-floor screen) carries ?key=…. Remember it
@@ -100,7 +101,7 @@ const ShopFloorView: React.FC = () => {
         return r.json();
       })
       .then((d: ShopFloorData) => { setData(d); setLoadedAt(new Date()); setLoading(false); })
-      .catch((e: any) => { setError(e.message); setLoading(false); });
+      .catch((e: unknown) => { setError(errorMessage(e)); setLoading(false); });
   }, [key]);
 
   useEffect(() => {

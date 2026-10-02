@@ -92,7 +92,7 @@ export default function SalesOrderPegging({ jobSchedules, jobs }: Props) {
           onChange={(e) => setFilter(e.target.value)} aria-label="Filter order lines" />
         <label><input type="checkbox" checked={problemsOnly} onChange={(e) => setProblemsOnly(e.target.checked)} /> Problems only</label>
         <label>Sort
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={{ marginLeft: 4 }}>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} style={{ marginLeft: 4 }}>
             <option value="status">Status, then ship date</option>
             <option value="ship">Ship date</option>
           </select>
@@ -129,7 +129,7 @@ export default function SalesOrderPegging({ jobSchedules, jobs }: Props) {
                   <div className="so-pegs">
                     {l.pegs.map((p, i) => (
                       <span key={i} className={`so-peg ${p.source}`} title={p.source === 'job' ? `Job ${p.jobId}${p.direct ? ' — raised for this order' : ''}; ready ${fmtDate(p.availableAt)}` : 'Stock on hand'}>
-                        {p.source === 'stock' ? 'Stock' : `Job ${shortJob(p.jobId!)}`}{p.direct ? ' ★' : ''} {fmtQty(p.qty)}
+                        {p.source === 'stock' ? 'Stock' : `Job ${shortJob(p.jobId ?? '')}`}{p.direct ? ' ★' : ''} {fmtQty(p.qty)}
                       </span>
                     ))}
                     {l.shortQty > 0 && <span className="so-peg missing">Short {fmtQty(l.shortQty)}</span>}

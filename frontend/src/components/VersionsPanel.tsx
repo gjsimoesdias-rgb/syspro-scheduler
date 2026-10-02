@@ -7,6 +7,7 @@ import { convertScheduleDates } from '../utils/scheduleDates';
 import './VersionsPanel.css';
 import AutoPlanCard from './AutoPlanCard';
 import { confirmDialog, promptDialog } from './DialogHost';
+import { errorStatus } from '../utils/errors';
 
 /**
  * Plan versions — LYNQ-style Master + what-if model, backed by /api/versions.
@@ -61,7 +62,7 @@ const VersionsPanel: React.FC = () => {
       setLoadError(null);
       versionService.publishStatus().then(setPublish).catch(() => setPublish(null));
     } catch (err) {
-      const status = (err as any)?.response?.status;
+      const status = errorStatus(err);
       setLoadError(status === 404
         ? 'The server running on port 3000 is an older build without plan versions. Stop it and run START_SCHEDULER.cmd again.'
         : apiErrorMessage(err, 'Could not load versions'));
@@ -230,9 +231,10 @@ const VersionsPanel: React.FC = () => {
           Working in what-if <strong>{activeVersion.name}</strong>. Generate and board edits go into it; the master is unchanged.
           <span className="vp-banner-actions">
             <button className="btn btn-sm" onClick={() => run('master', openMaster)}>Back to master</button>
-            {canPlan && byId.get(activeVersion.versionId) && (
-              <button className="btn btn-sm btn-primary" onClick={() => commit(byId.get(activeVersion.versionId)!)}>Commit to master</button>
-            )}
+            {canPlan && (() => {
+              const v = byId.get(activeVersion.versionId);
+              return v ? <button className="btn btn-sm btn-primary" onClick={() => commit(v)}>Commit to master</button> : null;
+            })()}
           </span>
         </div>
       )}

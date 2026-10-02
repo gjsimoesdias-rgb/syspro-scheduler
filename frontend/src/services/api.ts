@@ -199,6 +199,9 @@ export interface ResourceDefinitionDto {
   quantity: number; shiftId: string; activated: boolean; loadingResourcePct: number; lineGroupId?: string;
 }
 
+/** A work centre (line) as /api/resources/workcentres returns it. */
+export interface WorkcentreRow { worcentreId?: string; workcentreId?: string; id?: string; name?: string; description?: string }
+
 export const scheduleService = {
   generate: async (startDate: Date, endDate: Date): Promise<Schedule> => {
     const response = await apiClient.post('/schedule/generate', {
@@ -380,7 +383,7 @@ export const resourceService = {
     };
   },
 
-  getWorkcentres: async () => {
+  getWorkcentres: async (): Promise<WorkcentreRow[]> => {
     const response = await apiClient.get('/resources/workcentres');
     return response.data.workcentres;
   },
@@ -821,7 +824,7 @@ export const settingsService = {
   },
   /** Turn planning of MRP suggested jobs on/off (company admin). */
   setIncludeMrpSuggestedJobs: async (on: boolean): Promise<void> => {
-    const current: any = (await apiClient.get('/settings/company')).data || {};
+    const current: CompanySettingsDto = (await apiClient.get('/settings/company')).data || {};
     const next = { ...current, fcs: { ...(current.fcs || {}), schedulingRules: { ...(current.fcs?.schedulingRules || {}), includeMrpSuggestedJobs: on } } };
     await apiClient.put('/settings/company', next);
   },

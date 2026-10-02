@@ -96,7 +96,7 @@ export const downloadScheduleReport = async (schedule: Schedule): Promise<void> 
   });
 
   // --- Job schedule table ---
-  const jobY = (doc as any).lastAutoTable?.finalY ?? 50;
+  const jobY = (doc as typeof doc & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 50;
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Job Schedule', 14, jobY + 8);
@@ -126,7 +126,7 @@ export const downloadScheduleReport = async (schedule: Schedule): Promise<void> 
 
   // --- Constraint violations table (if any) ---
   if (schedule.constraintViolations.length > 0) {
-    const cvY = (doc as any).lastAutoTable?.finalY ?? 100;
+    const cvY = (doc as typeof doc & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 100;
     // Add a new page if we're near the bottom
     if (cvY > 170) doc.addPage();
     const cvStartY = cvY > 170 ? 16 : cvY + 8;

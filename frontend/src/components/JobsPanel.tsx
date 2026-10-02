@@ -217,7 +217,8 @@ const JobsPanel: React.FC<JobsPanelProps> = ({
     else if (e.key === 'ArrowLeft' && expanded === true) { e.preventDefault(); toggleJobExpanded(jobId); }
     else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
       const r = row.getBoundingClientRect();
-      openJobContextMenu({ preventDefault: () => e.preventDefault(), clientX: r.left + 40, clientY: r.bottom } as any, jobId);
+      // Keyboard: a stand-in for the mouse event the menu positions itself from.
+      openJobContextMenu({ preventDefault: () => e.preventDefault(), clientX: r.left + 40, clientY: r.bottom } as unknown as React.MouseEvent, jobId);
     }
   };
   return (

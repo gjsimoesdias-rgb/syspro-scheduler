@@ -4,7 +4,7 @@ export interface PlanJob { jobId: string; itemCode?: string; quantity: number; s
 
 const iso = (v: unknown): string | null => {
   if (!v) return null;
-  const d = new Date(v as any);
+  const d = new Date(v as string | number);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 

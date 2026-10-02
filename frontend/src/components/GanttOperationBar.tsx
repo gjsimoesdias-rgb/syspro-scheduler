@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { Lock, Unlock } from 'lucide-react';
 import type { GanttSettingsState } from './GanttSettings';
 import { useMarkerStore } from '../stores/markerStore';
+import { cssVars } from '../utils/cssVars';
 
 export interface GanttOperationBarProps {
   // Keys / identifiers
@@ -196,7 +197,7 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
         {itemDesc && <> - {itemDesc}</>}
       </div>
       {marker && (
-        <div className="gtt-marker"><span className="marker-chip" style={{ ['--mk' as any]: marker.color }}>{marker.name}</span></div>
+        <div className="gtt-marker"><span className="marker-chip" style={cssVars({ '--mk': marker.color })}>{marker.name}</span></div>
       )}
       <div className="gtt-sub">
         {resourceId && resourceId !== workcentreId ? `${workcentreId} · ${resourceId}` : workcentreId} · Op {sequence || '?'}
@@ -220,7 +221,7 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
       {dueDate && (
         <div className={`gtt-line ${isLate ? 'gtt-late' : 'gtt-ok'}`}>
           <span>Due: <b>{format(dueDate, 'dd/MM, HH:mm')}</b></span>
-          <span><b>{isLate ? `${fmtSpan(lateMin!)} late` : `${fmtSpan(lateMin!)} slack`}</b></span>
+          <span><b>{isLate ? `${fmtSpan(lateMin ?? 0)} late` : `${fmtSpan(lateMin ?? 0)} slack`}</b></span>
         </div>
       )}
       {wait && (
@@ -314,7 +315,7 @@ const GanttOperationBar: React.FC<GanttOperationBarProps> = ({
             )}
 
             {segmentIndex === 0 && marker && (
-              <span className="op-marker-flag" style={{ ['--mk' as any]: marker.color }} title={`Marker: ${marker.name}`} aria-label={`Marker ${marker.name}`} />
+              <span className="op-marker-flag" style={cssVars({ '--mk': marker.color })} title={`Marker: ${marker.name}`} aria-label={`Marker ${marker.name}`} />
             )}
 
             {segmentIndex === 0 && depRole && (

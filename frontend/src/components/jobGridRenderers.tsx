@@ -10,6 +10,7 @@ import { useMarkerStore } from '../stores/markerStore';
 import type { JobFmad } from '../services/api';
 import { fmadText } from '../utils/fmad';
 import type { JobScheduleStatus, Lateness, ScheduleShortfall } from '../utils/scheduleDiagnostics';
+import { cssVars } from '../utils/cssVars';
 
 export interface JobGridRenderContext {
   allOperationColumns: JobColumnDef[];
@@ -69,12 +70,12 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
     if (column.key === 'validForScheduling') {
       const reason = !job.operations?.length
         ? 'No operations in SYSPRO'
-        : String((job as any).HoldFlag ?? '').toUpperCase() === 'Y' || job.status === 'OnHold'
+        : String(job.HoldFlag ?? '').toUpperCase() === 'Y' || job.status === 'OnHold'
         ? 'Job is on hold'
         : job.operations.every((o) => o.status === 'Complete')
         ? 'All operations complete'
         : null;
-      if (!reason && (job as any).isSuggested) {
+      if (!reason && job.isSuggested) {
         return <span className="grid-flag grid-flag-info" title="SYSPRO MRP suggested job — scheduled as planned work">✓ MRP</span>;
       }
       return reason
@@ -99,7 +100,7 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
       const id = markerAssignments[job.jobId];
       const def = id ? markerDefs.find((d) => d.id === id) : undefined;
       return def
-        ? <span className="marker-chip" style={{ ['--mk' as any]: def.color }} title={`Marker: ${def.name} (right-click the job to change)`}>{def.name}</span>
+        ? <span className="marker-chip" style={cssVars({ '--mk': def.color })} title={`Marker: ${def.name} (right-click the job to change)`}>{def.name}</span>
         : <span className="grid-flag">—</span>;
     }
 
@@ -128,8 +129,8 @@ export function useJobGridRenderers(ctx: JobGridRenderContext) {
     }
 
     if (column.key === 'publishState') {
-      if ((job as any).isSuggested) {
-        return <span className="grid-flag grid-flag-info" title={`SYSPRO MRP suggested job ${(job as any).suggestedJob || ''} — planned only; create the job in SYSPRO to send dates`}>MRP suggestion</span>;
+      if (job.isSuggested) {
+        return <span className="grid-flag grid-flag-info" title={`SYSPRO MRP suggested job ${String(job.suggestedJob || '')} — planned only; create the job in SYSPRO to send dates`}>MRP suggestion</span>;
       }
       const st = publishByJob.get(String(job.jobId).trim());
       const cls = st === 'Published' ? 'grid-flag-ok' : st === 'Error' ? 'grid-flag-bad' : st === 'Pending' ? 'grid-flag-warn' : '';

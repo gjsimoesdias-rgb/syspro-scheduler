@@ -118,7 +118,7 @@ export default function ResourceLeveling(props: ResourceLevelingProps) {
       <div className="leveling-controls">
         <div className="control-group">
           <label>Optimization Mode:</label>
-          <select value={levelMode} onChange={e => setLevelMode(e.target.value as any)}>
+          <select value={levelMode} onChange={e => setLevelMode(e.target.value as typeof levelMode)}>
             <option value="balance-load">Balance Load</option>
             <option value="minimize-cost">Minimize Cost</option>
             <option value="minimize-makespan">Minimize Makespan</option>

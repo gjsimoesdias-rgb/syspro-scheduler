@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { resourceService, CalendarException } from '../services/api';
 import { confirmDialog } from './DialogHost';
 import { errorMessage } from '../utils/errors';
+import type { WorkcentreRow } from '../services/api';
 
 type Kind = 'closed' | 'short' | 'extra';
 
@@ -46,7 +47,7 @@ const CalendarExceptionsPanel: React.FC<{ onChanged?: () => void }> = ({ onChang
   useEffect(() => {
     load();
     resourceService.getWorkcentres()
-      .then((rows: any[]) => setWorkcentres((rows || []).map((w) => ({
+      .then((rows: WorkcentreRow[]) => setWorkcentres((rows || []).map((w) => ({
         id: String(w.worcentreId ?? w.workcentreId ?? w.id),
         name: String(w.name ?? w.worcentreId ?? w.id),
       }))))

@@ -14,6 +14,7 @@ import {
   type CrewSetup, type CrewPool, type SysproEmployee,
 } from '../services/api';
 import './ShiftManagementTab.css';
+import type { WorkcentreRow } from '../services/api';
 
 const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'crew';
 const operatorsOf = (p: CrewPool) => (p.employees?.length ? p.employees.length : p.headcount);
@@ -46,10 +47,10 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
       .then((r) => { setEmployees(r.employees); setEmployeeNote(r.note); })
       .catch((err) => setEmployeeNote(apiErrorMessage(err, 'Could not read SYSPRO employees')));
     resourceService.getDefinitions()
-      .then((r) => setShiftTemplates((r.shifts || []).map((t: any) => ({ shiftId: String(t.shiftId), name: String(t.name), startTime: t.startTime, endTime: t.endTime }))))
+      .then((r) => setShiftTemplates((r.shifts || []).map((t) => ({ shiftId: String(t.shiftId), name: String(t.name), startTime: t.startTime, endTime: t.endTime }))))
       .catch(() => setShiftTemplates([]));
     resourceService.getWorkcentres()
-      .then((rows: any[]) => setWcNames(Object.fromEntries((rows || []).map((w) => [
+      .then((rows: WorkcentreRow[]) => setWcNames(Object.fromEntries((rows || []).map((w) => [
         String(w.worcentreId ?? w.workcentreId ?? w.id), String(w.name ?? w.description ?? ''),
       ]))))
       .catch(() => setWcNames({}));
@@ -246,15 +247,15 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
           <table className="shifts-table">
             <thead><tr><th>Employee</th><th>Name</th><th>SYSPRO work centre</th><th>Shift</th><th>Crew</th></tr></thead>
             <tbody>
-              {shownEmployees.map((e) => (
+              {shownEmployees.map((e) => { const sh = e.shiftId ? shiftFor(e.shiftId) : undefined; return (
                 <tr key={e.code} className={e.active ? '' : 'crews-inactive'}>
                   <td>{e.code}</td>
                   <td>{e.name}{!e.active && <span className="crews-hint"> (inactive)</span>}</td>
                   <td>{e.workCentre || '—'}</td>
                   <td>
                     {e.shiftId ? (
-                      shiftFor(e.shiftId)
-                        ? <span title="Counts toward the crew only while this CRUX shift is working">{e.shiftId} → {shiftFor(e.shiftId)!.name}{shiftFor(e.shiftId)!.startTime ? ` (${shiftFor(e.shiftId)!.startTime}–${shiftFor(e.shiftId)!.endTime})` : ''}</span>
+                      sh
+                        ? <span title="Counts toward the crew only while this CRUX shift is working">{e.shiftId} → {sh.name}{sh.startTime ? ` (${sh.startTime}–${sh.endTime})` : ''}</span>
                         : <span className="crews-hint" title="No CRUX shift with this code or name (Manage → Shifts) — counts all the time">{e.shiftId} (no CRUX shift)</span>
                     ) : '—'}
                   </td>
@@ -265,7 +266,7 @@ const CrewsPanel: React.FC<{ workcentreIds: string[] }> = ({ workcentreIds }) =>
                     </select>
                   </td>
                 </tr>
-              ))}
+              ); })}
             </tbody>
           </table>
         </>

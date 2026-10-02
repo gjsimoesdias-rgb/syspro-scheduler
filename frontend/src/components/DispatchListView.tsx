@@ -55,8 +55,9 @@ const DispatchListView: React.FC<Props> = ({ schedule, resources, jobs }) => {
           const dayStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
           if (dayStr !== dayFilter) continue;
         }
-        if (!map.has(os.resourceId)) map.set(os.resourceId, []);
-        map.get(os.resourceId)!.push({
+        const list = map.get(os.resourceId) ?? [];
+        map.set(os.resourceId, list);
+        list.push({
           ...os,
           jobId: js.jobId,
           itemCode: job?.itemCode || '—',

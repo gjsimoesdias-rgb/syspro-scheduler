@@ -20,7 +20,7 @@ export interface MachineRow {
 
 const DAY = 86_400_000;
 const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
-const ms = (v: unknown) => { const t = v ? new Date(v as any).getTime() : NaN; return Number.isFinite(t) ? t : NaN; };
+const ms = (v: unknown) => { const t = v ? new Date(v as string | number).getTime() : NaN; return Number.isFinite(t) ? t : NaN; };
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const r1 = (n: number) => Math.round(n * 10) / 10;
 

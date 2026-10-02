@@ -50,7 +50,7 @@ const ChangeoverMatrix: React.FC = () => {
         apiClient.get('/schedule/class-changeover'),
       ]);
       const items: FinishedGood[] = (pcRes.data?.classes || [])
-        .map((c: any) => String(c || '').toUpperCase().trim())
+        .map((c: unknown) => String(c || '').toUpperCase().trim())
         .filter(Boolean)
         .map((code: string) => ({ stockCode: code, description: '' }));
       const m = new Map<string, number>();
@@ -107,8 +107,7 @@ const ChangeoverMatrix: React.FC = () => {
 
   const cellValue = (from: string, to: string): number => {
     const k = keyOf(from, to);
-    if (edits.has(k)) return edits.get(k)!;
-    return saved.get(k) ?? 0;
+    return edits.get(k) ?? saved.get(k) ?? 0;
   };
 
   const setCell = (from: string, to: string, raw: string) => {
@@ -182,7 +181,7 @@ const ChangeoverMatrix: React.FC = () => {
         for (const c of colItems) {
           if (r.stockCode === c.stockCode) continue;
           const k = keyOf(r.stockCode, c.stockCode);
-          const current = next.has(k) ? next.get(k)! : saved.get(k) ?? 0;
+          const current = next.get(k) ?? saved.get(k) ?? 0;
           if (current === 0) {
             const base = saved.get(k) ?? 0;
             if (v === base) next.delete(k);

@@ -262,7 +262,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
     setCompanySettings(prev => prev ? fn(prev) : prev);
   };
 
-  const setGantt = (key: keyof GanttSettingsState, value: any) => {
+  const setGantt = <K extends keyof GanttSettingsState>(key: K, value: GanttSettingsState[K]) => {
     const next = { ...ganttPrefs, [key]: value };
     onGanttPrefsChange(next);
     if (userSettings) {
@@ -426,7 +426,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
 
   const renderRoutingRules = () => {
     const r = companySettings?.fcs?.schedulingRules;
-    const setR = (key: string, value: any) => {
+    const setR = (key: string, value: unknown) => {
       if (!canEditCompany) return;
       setCS(s => ({ ...s, fcs: { ...s.fcs, schedulingRules: { ...s.fcs.schedulingRules, [key]: value } } }));
     };
@@ -621,7 +621,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
         </GroupBox>
         <GroupBox title="Gantt Board Preferences">
           <Row label="Default zoom">
-            <select value={ganttPrefs.defaultZoom} onChange={e => setGantt('defaultZoom', e.target.value)}>
+            <select value={ganttPrefs.defaultZoom} onChange={e => setGantt('defaultZoom', e.target.value as GanttSettingsState['defaultZoom'])}>
               <option value="week">Week</option>
               <option value="day">Day</option>
               <option value="hour">Hour</option>
@@ -629,7 +629,7 @@ const SettingsPanel: React.FC<Props> = ({ ganttPrefs, onGanttPrefsChange }) => {
             </select>
           </Row>
           <Row label="Default colour mode">
-            <select value={ganttPrefs.colorMode} onChange={e => setGantt('colorMode', e.target.value as any)}>
+            <select value={ganttPrefs.colorMode} onChange={e => setGantt('colorMode', e.target.value as GanttSettingsState['colorMode'])}>
               <option value="workcentre">Workcentre</option>
               <option value="lateness">Lateness</option>
               <option value="status">Status</option>

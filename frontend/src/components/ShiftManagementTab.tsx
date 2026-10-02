@@ -73,9 +73,10 @@ const ShiftManagementTab: React.FC<ShiftManagementTabProps> = ({ onShiftsChanged
     try {
       setLoading(true);
       const response = await resourceService.getDefinitions();
-      const loadedShifts = (response.shifts || []).map((s: any) => ({
+      const loadedShifts = (response.shifts || []).map((s) => ({
         ...s,
-        diversions: s.diversions || []
+        // The server stores the diversion type as text; the editor's type list covers it.
+        diversions: (s.diversions || []) as ShiftDiversion[]
       }));
       setShifts(loadedShifts);
     } catch (error) {

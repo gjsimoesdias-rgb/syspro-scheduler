@@ -7,7 +7,7 @@ interface ScheduleVersion {
   versionId: string;
   timestamp: Date;
   description: string;
-  metrics: any;
+  metrics: Schedule['metrics'];
   jobsCount: number;
   isCurrent: boolean;
 }

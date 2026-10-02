@@ -23,7 +23,7 @@ export function buildScheduleFromSysproJobs(jobs: Job[]): Schedule | null {
   const combineSysproDateTime = (dateValue: unknown, timeValue?: unknown): Date | null => {
     if (!dateValue) return null;
 
-    const combined = new Date(dateValue as any);
+    const combined = new Date(dateValue as string | number);
     if (Number.isNaN(combined.getTime())) return null;
 
     if (timeValue === undefined || timeValue === null || String(timeValue).trim() === '') {

@@ -26,9 +26,11 @@ export default function ResourceTree({ resources, schedule, selectedWorkcentre, 
   const lines = useMemo(() => {
     const byLine = new Map<string, Resource[]>();
     for (const r of resources) {
-      const wc = String((r as any).worcentreId ?? (r as any).workcentreId ?? '').trim();
+      const wc = String(r.worcentreId ?? (r as Resource & { workcentreId?: string }).workcentreId ?? '').trim();
       if (!wc) continue;
-      (byLine.get(wc) ?? byLine.set(wc, []).get(wc)!).push(r);
+      const list = byLine.get(wc) ?? [];
+      list.push(r);
+      byLine.set(wc, list);
     }
     return Array.from(byLine.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [resources]);
@@ -85,7 +87,7 @@ export default function ResourceTree({ resources, schedule, selectedWorkcentre, 
                 <ul role="group" className="rt-children">
                   {machines.map((m) => (
                     <li key={m.resourceId} role="treeitem" className="rt-row rt-machine">
-                      <span className="rt-machine-name" title={(m as any).resourceName || m.resourceId}>{m.resourceId}</span>
+                      <span className="rt-machine-name" title={String((m as Resource & { resourceName?: string }).resourceName || m.resourceId)}>{m.resourceId}</span>
                       <span className="rt-count" title="Planned operations">{opCounts.machine.get(m.resourceId) ?? 0}</span>
                     </li>
                   ))}

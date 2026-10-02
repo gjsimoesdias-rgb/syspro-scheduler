@@ -15,6 +15,7 @@ import { useUiStore, GANTT_PERIOD_DAYS } from '../stores/uiStore';
 import './MachineGanttBoard.css';
 import { BarChart3, List, LocateFixed, Lock, Unlock, PanelLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 import { confirmDialog, promptDialog } from './DialogHost';
+import { cssVars } from '../utils/cssVars';
 
 /** A calendar's first shift as the board reads it (every field may be missing). */
 type DiversionLike = Partial<NonNullable<Shift['diversions']>[number]>;
@@ -1329,7 +1330,7 @@ const MachineGanttBoard: React.FC<MachineGanttBoardProps> = ({
               <button
                 key={`legend-${wc}`}
                 className={`gantt-line-chip${active ? ' active' : ''}`}
-                style={{ ['--chip' as string]: color } as React.CSSProperties}
+                style={cssVars({ '--chip': color })}
                 onClick={() => setSelectedWorkcentre((prev) => (prev === wcId ? null : wcId))}
                 title={`${wcId} — ${util}% loaded${active ? ' (highlighted)' : ''}`}
               >

@@ -83,7 +83,7 @@ const jobToOps = (job: Job) =>
       workcentreId: op.workcentreId,
       setupMinutes: Math.max(0, op.setupTime ?? 0),
       runMinutes: Math.max(1, op.duration ?? 60),
-      description: (op as any).description || `Op ${op.sequence}`,
+      description: String(op.description || `Op ${op.sequence}`),
     }));
 
 const OrderPromisePanel: React.FC<Props> = ({ resources, jobs }) => {
