@@ -10,6 +10,7 @@ import { Trash2 } from 'lucide-react';
 import { useMarkerStore, MARKER_COLOURS } from '../stores/markerStore';
 import { apiErrorMessage } from '../services/api';
 import './ShiftManagementTab.css';
+import { confirmDialog } from './DialogHost';
 
 const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'marker';
 
@@ -48,9 +49,9 @@ const MarkersPanel: React.FC = () => {
   const update = (id: string, patch: { name?: string; color?: string }) =>
     persist(definitions.map((d) => (d.id === id ? { ...d, ...patch } : d)));
 
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
     const n = usage.get(id) || 0;
-    if (n && !window.confirm(`Remove this marker? It is set on ${n} job(s).`)) return;
+    if (n && !(await confirmDialog({ title: 'Remove marker', message: `Remove this marker? It is set on ${n} job(s).`, confirmLabel: 'Remove', danger: true }))) return;
     void persist(definitions.filter((d) => d.id !== id), 'Marker removed');
   };
 

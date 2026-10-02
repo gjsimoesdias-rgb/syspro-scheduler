@@ -14,6 +14,7 @@ import { useScheduleStore } from '../stores/scheduleStore';
 import { useUiStore, GANTT_PERIOD_DAYS } from '../stores/uiStore';
 import './MachineGanttBoard.css';
 import { BarChart3, List, LocateFixed, Lock, Unlock, PanelLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
+import { confirmDialog, promptDialog } from './DialogHost';
 
 /** Reload locks from the server into the store (after a bulk lock/unlock). */
 const refreshPins = async () => {
@@ -30,7 +31,7 @@ const timeFenceLock = async () => {
     toast.error('Locks apply to the master plan — go back to the master (Versions tab) first.');
     return;
   }
-  const answer = window.prompt('Time-fence lock: lock every operation that starts within the next N days (at its current machine and time).', '2');
+  const answer = await promptDialog({ title: 'Time-fence lock', message: 'Lock every operation that starts within the next N days, at its current machine and time. Days:', defaultValue: '2', confirmLabel: 'Lock' });
   if (answer === null) return;
   const days = Number(answer);
   if (!Number.isFinite(days) || days <= 0) { toast.error('Enter a number of days'); return; }
@@ -43,7 +44,7 @@ const timeFenceLock = async () => {
 };
 
 const clearLocks = async () => {
-  if (!window.confirm('Remove ALL locks? Every operation becomes free to move on the next generate.')) return;
+  if (!(await confirmDialog({ title: 'Remove all locks', message: 'Remove ALL locks? Every operation becomes free to move on the next generate.', confirmLabel: 'Remove all', danger: true }))) return;
   try {
     const r = await pinService.removeAll();
     await refreshPins();

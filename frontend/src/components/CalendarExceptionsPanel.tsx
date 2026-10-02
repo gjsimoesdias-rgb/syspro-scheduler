@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { resourceService, CalendarException } from '../services/api';
+import { confirmDialog } from './DialogHost';
 
 type Kind = 'closed' | 'short' | 'extra';
 
@@ -79,7 +80,7 @@ const CalendarExceptionsPanel: React.FC<{ onChanged?: () => void }> = ({ onChang
   };
 
   const remove = async (e: CalendarException) => {
-    if (!window.confirm(`Remove "${e.name}" on ${formatDate(e.date)}?`)) return;
+    if (!(await confirmDialog({ title: 'Remove exception', message: `Remove "${e.name}" on ${formatDate(e.date)}?`, confirmLabel: 'Remove', danger: true }))) return;
     try {
       await resourceService.deleteCalendarException(e.id);
       await load();

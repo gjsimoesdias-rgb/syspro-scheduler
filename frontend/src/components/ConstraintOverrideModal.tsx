@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ConstraintViolation } from '../types';
 import './ConstraintOverrideModal.css';
 import { AlertTriangle } from 'lucide-react';
+import { alertDialog } from './DialogHost';
 
 interface ConstraintOverrideModalProps {
   violation: ConstraintViolation | null;
@@ -24,7 +25,7 @@ const ConstraintOverrideModal: React.FC<ConstraintOverrideModalProps> = ({
 
   const handleSubmit = async () => {
     if (!overrideReason.trim() || !approverName.trim()) {
-      alert('Please fill in all fields');
+      await alertDialog({ title: 'Missing details', message: 'Please fill in your name and the reason for the override.' });
       return;
     }
 

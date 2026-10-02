@@ -8,6 +8,7 @@ import exportService from '../services/exportService';
 import { convertScheduleDates } from '../utils/scheduleDates';
 import { DbStatus } from './useJobsData';
 import type { ScheduleConfig } from '../components/ScheduleSetupModal';
+import { confirmDialog } from '../components/DialogHost';
 
 export interface ScheduleGenerationResult {
   loading: boolean;
@@ -159,10 +160,12 @@ export function useScheduleGeneration({
     }
     const jobCount = schedule.jobSchedules.filter((j) => j.operationSchedules?.length).length;
     const opCount = schedule.jobSchedules.reduce((n, j) => n + (j.operationSchedules?.length || 0), 0);
-    if (!window.confirm(
-      `Send this schedule to SYSPRO?\n\n${jobCount} jobs / ${opCount} operations will get new scheduled ` +
-      'dates and machines in SYSPRO. Due dates are not changed.\n\nThe schedule on screen is saved as the master plan first.'
-    )) {
+    if (!await confirmDialog({
+      title: 'Send to SYSPRO',
+      message: `${jobCount} jobs / ${opCount} operations will get new scheduled ` +
+        'dates and machines in SYSPRO. Due dates are not changed.\n\nThe schedule on screen is saved as the master plan first.',
+      confirmLabel: 'Send',
+    })) {
       return;
     }
     try {

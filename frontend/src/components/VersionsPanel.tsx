@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { convertScheduleDates } from '../utils/scheduleDates';
 import './VersionsPanel.css';
 import AutoPlanCard from './AutoPlanCard';
+import { confirmDialog, promptDialog } from './DialogHost';
 
 /**
  * Plan versions — LYNQ-style Master + what-if model, backed by /api/versions.
@@ -104,9 +105,9 @@ const VersionsPanel: React.FC = () => {
     toast.success(`What-if "${v.name}" opened — Generate and board edits now go into it`);
   });
 
-  const newWhatIf = (from?: VersionSummary) => {
+  const newWhatIf = async (from?: VersionSummary) => {
     const suggested = from ? `${from.name} (copy)` : `What-if ${new Date().toLocaleDateString()}`;
-    const name = window.prompt(from ? `New what-if copied from "${from.name}". Name:` : 'New what-if copied from the master plan. Name:', suggested);
+    const name = await promptDialog({ title: 'New what-if', message: from ? `Copy "${from.name}" into a new what-if. Name:` : 'Copy the master plan into a new what-if. Name:', defaultValue: suggested, confirmLabel: 'Create' });
     if (!name?.trim()) return;
     run(from?.versionId || 'new', async () => {
       const v = await versionService.createWhatIf(name.trim(), from?.versionId);
@@ -115,8 +116,8 @@ const VersionsPanel: React.FC = () => {
     });
   };
 
-  const commit = (v: VersionSummary) => {
-    if (!window.confirm(`Make "${v.name}" the master plan?\n\nThe current master is kept in History. Nothing is sent to SYSPRO until you use Send to SYSPRO.`)) return;
+  const commit = async (v: VersionSummary) => {
+    if (!(await confirmDialog({ title: 'Make master plan', message: `Make "${v.name}" the master plan?\n\nThe current master is kept in History. Nothing is sent to SYSPRO until you use Send to SYSPRO.`, confirmLabel: 'Make master' }))) return;
     run(v.versionId, async () => {
       await versionService.commit(v.versionId);
       await openMaster();
@@ -125,8 +126,8 @@ const VersionsPanel: React.FC = () => {
     });
   };
 
-  const revert = (v: VersionSummary) => {
-    if (!window.confirm(`Revert the master plan to "${v.name}" (${when(v.savedAt)})?\n\nThe current master is kept in History. Nothing is sent to SYSPRO until you use Send to SYSPRO.`)) return;
+  const revert = async (v: VersionSummary) => {
+    if (!(await confirmDialog({ title: 'Revert master plan', message: `Revert the master plan to "${v.name}" (${when(v.savedAt)})?\n\nThe current master is kept in History. Nothing is sent to SYSPRO until you use Send to SYSPRO.`, confirmLabel: 'Revert' }))) return;
     run(v.versionId, async () => {
       await versionService.revert(v.versionId);
       await openMaster();
@@ -135,8 +136,8 @@ const VersionsPanel: React.FC = () => {
     });
   };
 
-  const rename = (v: VersionSummary) => {
-    const name = window.prompt('Rename version', v.name);
+  const rename = async (v: VersionSummary) => {
+    const name = await promptDialog({ title: 'Rename version', message: 'New name:', defaultValue: v.name, confirmLabel: 'Rename' });
     if (!name?.trim() || name.trim() === v.name) return;
     run(v.versionId, async () => {
       await versionService.rename(v.versionId, name.trim());
@@ -145,8 +146,8 @@ const VersionsPanel: React.FC = () => {
     });
   };
 
-  const remove = (v: VersionSummary) => {
-    if (!window.confirm(`Delete "${v.name}"? This cannot be undone.`)) return;
+  const remove = async (v: VersionSummary) => {
+    if (!(await confirmDialog({ title: 'Delete version', message: `Delete "${v.name}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
     run(v.versionId, async () => {
       await versionService.remove(v.versionId);
       if (activeVersion?.versionId === v.versionId) await openMaster();
@@ -155,8 +156,8 @@ const VersionsPanel: React.FC = () => {
     });
   };
 
-  const purge = () => {
-    if (!window.confirm(`Delete history versions older than ${purgeDays} days?\n\nThe master, all what-ifs, the newest 20 history versions and the last plan sent to SYSPRO are always kept.`)) return;
+  const purge = async () => {
+    if (!(await confirmDialog({ title: 'Delete old history', message: `Delete history versions older than ${purgeDays} days?\n\nThe master, all what-ifs, the newest 20 history versions and the last plan sent to SYSPRO are always kept.`, confirmLabel: 'Delete', danger: true }))) return;
     run('purge', async () => {
       const n = await versionService.purge(purgeDays, 20);
       await load();
@@ -244,8 +245,8 @@ const VersionsPanel: React.FC = () => {
           {publish.counts.Error > 0 && <span className="vp-pub vp-pub-error">{publish.counts.Error} error</span>}
           <span className="vp-desc">Send to SYSPRO writes only pending and error jobs.</span>
           {canPlan && publish.counts.Published > 0 && (
-            <button className="btn btn-sm" disabled={!!busy} onClick={() => {
-              if (!window.confirm('Mark every job for re-sending? The next Send to SYSPRO will write all scheduled jobs again.')) return;
+            <button className="btn btn-sm" disabled={!!busy} onClick={async () => {
+              if (!(await confirmDialog({ title: 'Re-send all jobs', message: 'Mark every job for re-sending? The next Send to SYSPRO will write all scheduled jobs again.', confirmLabel: 'Mark all' }))) return;
               run('resend', async () => {
                 await versionService.resetPublish(publish.jobs.map((j) => j.jobId));
                 await load();

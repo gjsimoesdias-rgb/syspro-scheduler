@@ -15,6 +15,7 @@ import {
 } from '../stores/uiStore';
 import { useScheduleStore } from '../stores/scheduleStore';
 import { toWeekValue, mondayFromWeekValue, sundayOf } from '../utils/weekWindow';
+import { confirmDialog } from './DialogHost';
 
 // ── Prop types ─────────────────────────────────────────────────────────────
 
@@ -221,8 +222,8 @@ const AppRibbon: React.FC<AppRibbonProps> = ({
             <button
               className="btn btn-sm"
               style={{ color: '#dc2626' }}
-              onClick={() => {
-                if (schedule && window.confirm('Clear the current schedule? This cannot be undone.')) {
+              onClick={async () => {
+                if (schedule && await confirmDialog({ title: 'Clear schedule', message: 'Clear the current schedule from the board? This cannot be undone.', confirmLabel: 'Clear', danger: true })) {
                   setSchedule(null);
                   setWhatIfSchedule(null);
                 }

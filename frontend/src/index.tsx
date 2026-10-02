@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import ShopFloorView from './components/ShopFloorView';
+import DialogHost from './components/DialogHost';
 import { DarkModeProvider } from './context/DarkModeContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 // Design tokens load first so component CSS that references --bg-* / --text-*
@@ -18,6 +19,7 @@ root.render(
     <ErrorBoundary>
       <DarkModeProvider>
         {isShopFloor ? <ShopFloorView /> : <App />}
+        <DialogHost />
       </DarkModeProvider>
     </ErrorBoundary>
   </React.StrictMode>

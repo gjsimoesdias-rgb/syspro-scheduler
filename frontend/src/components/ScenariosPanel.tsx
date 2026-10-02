@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import './ScenariosPanel.css';
 import { apiClient, apiErrorMessage } from '../services/api';
+import { confirmDialog } from './DialogHost';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -113,7 +114,7 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
   };
 
   const handlePromote = async (scenarioId: string, name: string) => {
-    if (!window.confirm(`Promote "${name}" to the live schedule? This will replace the current live schedule.`)) return;
+    if (!(await confirmDialog({ title: 'Promote scenario', message: `Promote "${name}" to the live schedule? This will replace the current live schedule.`, confirmLabel: 'Promote' }))) return;
     setPromoting(scenarioId);
     try {
       await apiClient.post(`/scenarios/${encodeURIComponent(scenarioId)}/promote`);
@@ -127,7 +128,7 @@ const ScenariosPanel: React.FC<ScenariosPanelProps> = ({ currentScheduleId }) =>
   };
 
   const handleDelete = async (scenarioId: string, name: string) => {
-    if (!window.confirm(`Delete scenario "${name}"?`)) return;
+    if (!(await confirmDialog({ title: 'Delete scenario', message: `Delete scenario "${name}"?`, confirmLabel: 'Delete', danger: true }))) return;
     setDeleting(scenarioId);
     try {
       await apiClient.delete(`/scenarios/${encodeURIComponent(scenarioId)}`);

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { resourceService } from '../services/api';
 import CalendarExceptionsPanel from './CalendarExceptionsPanel';
 import './ShiftManagementTab.css';
+import { confirmDialog } from './DialogHost';
 
 type DiversionType = 'Production' | 'Overtime' | 'Lunch' | 'Break' | 'Non Productive';
 
@@ -214,7 +215,7 @@ const ShiftManagementTab: React.FC<ShiftManagementTabProps> = ({ onShiftsChanged
       return;
     }
 
-    if (!window.confirm(`Delete shift "${shift.name}"? Machines using it will be reset to Default.`)) {
+    if (!(await confirmDialog({ title: 'Delete shift', message: `Delete shift "${shift.name}"? Machines using it will be reset to Default.`, confirmLabel: 'Delete', danger: true }))) {
       return;
     }
 
