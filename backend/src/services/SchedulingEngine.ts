@@ -4,6 +4,7 @@
  */
 
 import { localDayKey, exceptionForDay, exceptionWindowMinutes } from '../utils/calendarExceptions';
+import { dayWindowMinutes } from '../utils/shiftWindows';
 import type { CrewLookup } from '../utils/crews';
 import { CrewLoad } from './crewLoad';
 import { v4 as uuidv4 } from 'uuid';
@@ -188,6 +189,29 @@ export function overlapIndex(slots: OperationSlot[]): (start: Date, end: Date) =
 }
 
 /**
+ * Is a resource with `capacity` parallel units full anywhere in [start, end)?
+ * Counting every slot that touches the window over-counted: two back-to-back
+ * jobs on a 2-unit machine looked like 2 in parallel and blocked a third that
+ * would fit. For capacity > 1 use the peak number running at the same time.
+ */
+export function capacityFull(slots: OperationSlot[], start: Date, end: Date, capacity: number): boolean {
+  if (capacity <= 1 || slots.length < capacity) return slots.length >= capacity;
+  const s = start.getTime(), e = end.getTime();
+  const events: Array<[number, number]> = [];
+  for (const slot of slots) {
+    events.push([Math.max(s, slot.capacityStart.getTime()), 1]);
+    events.push([Math.min(e, slot.capacityEnd.getTime()), -1]);
+  }
+  events.sort((a, b) => a[0] - b[0] || a[1] - b[1]); // ends before starts at the same instant
+  let running = 0;
+  for (const [, delta] of events) {
+    running += delta;
+    if (running >= capacity) return true;
+  }
+  return false;
+}
+
+/**
  * Campaign grouping for setup-once-per-group: keep the rule's order, but pull
  * each later job for the same item up behind the first one when its due date
  * is within `windowDays` of that first job's due date. Jobs without an item
@@ -256,12 +280,6 @@ export class SchedulingEngine {
    */
   private overtimeBudget: Map<string, number> = new Map();
 
-  private timeToMinutes(value?: string): number {
-    if (value === '24:00') return 1440;
-    const [hours, minutes] = String(value || '00:00').split(':').map((part) => Number(part) || 0);
-    return Math.max(0, Math.min(1440, hours * 60 + minutes));
-  }
-
   /**
    * Windows per (calendar, local day), memoised: the slot search asks for the
    * same day thousands of times and rebuilding it was the engine's top cost.
@@ -283,63 +301,14 @@ export class SchedulingEngine {
   }
 
   private computeProductiveWindowsForDay(calendar: any, date: Date): Array<{ start: Date; end: Date; overtime?: boolean }> {
+    // Shared with CtpService (utils/shiftWindows) so CTP always mirrors the engine.
     const day = new Date(date);
     day.setHours(0, 0, 0, 0);
-
-    const weekday = day.getDay();
-    const workingDays = Array.isArray(calendar?.workingDays) && calendar.workingDays.length
-      ? calendar.workingDays
-      : [1, 2, 3, 4, 5];
-
-    // Holidays, short days and extra working days override the weekly pattern.
-    const exception = exceptionForDay(calendar, day);
-    if (exception) {
-      const forced = exceptionWindowMinutes(exception);
-      if (forced) {
-        return forced.map(({ start, end }) => {
-          const s = new Date(day); s.setMinutes(start, 0, 0);
-          const e = new Date(day); e.setMinutes(end, 0, 0);
-          return { start: s, end: e };
-        });
-      }
-    } else if (!workingDays.includes(weekday)) {
-      return [];
-    }
-
-    const shifts = Array.isArray(calendar?.shifts) && calendar.shifts.length
-      ? calendar.shifts
-      : [{ startTime: '08:00', endTime: '16:00', diversions: [] }];
-
-    const windows: Array<{ start: Date; end: Date; overtime?: boolean }> = [];
-
-    for (const shift of shifts) {
-      const diversions = Array.isArray((shift as any)?.diversions) ? (shift as any).diversions : [];
-      if (diversions.length) {
-        for (const diversion of diversions) {
-          if (!diversion?.schedulable) continue;
-          const startMinutes = this.timeToMinutes(diversion.startTime);
-          const endMinutes = this.timeToMinutes(diversion.endTime);
-          if (endMinutes <= startMinutes) continue;
-          const start = new Date(day);
-          start.setMinutes(startMinutes, 0, 0);
-          const end = new Date(day);
-          end.setMinutes(endMinutes, 0, 0);
-          windows.push({ start, end, overtime: /overtime/i.test(String(diversion.type || '')) });
-        }
-      } else {
-        const startMinutes = this.timeToMinutes((shift as any)?.startTime || '08:00');
-        const endMinutes = this.timeToMinutes((shift as any)?.endTime || '16:00');
-        if (endMinutes > startMinutes) {
-          const start = new Date(day);
-          start.setMinutes(startMinutes, 0, 0);
-          const end = new Date(day);
-          end.setMinutes(endMinutes, 0, 0);
-          windows.push({ start, end });
-        }
-      }
-    }
-
-    return windows.sort((a, b) => a.start.getTime() - b.start.getTime());
+    return dayWindowMinutes(calendar, day).map(({ start, end, overtime }) => {
+      const s = new Date(day); s.setMinutes(start, 0, 0);
+      const e = new Date(day); e.setMinutes(end, 0, 0);
+      return overtime ? { start: s, end: e, overtime } : { start: s, end: e };
+    });
   }
 
   private fitsProductiveWindow(start: Date, end: Date, calendar: any): boolean {
@@ -959,11 +928,25 @@ export class SchedulingEngine {
             const requiredEndMs = previousSlot.moveEnd.getTime() + overlapFraction! * ownRunMs
               + waitMinutes * 60000;
             let startMs = earliestStart.getTime();
-            for (let attempt = 0; attempt < 5 && operationSlot && operationSlot.runEnd.getTime() < requiredEndMs; attempt++) {
+            for (let attempt = 0; attempt < 20 && operationSlot && operationSlot.runEnd.getTime() < requiredEndMs; attempt++) {
               startMs += requiredEndMs - operationSlot.runEnd.getTime();
               operationSlot = this.findBestOperationSlot(
                 operation, new Date(startMs), job, context, isFlowLine ? lockedLineGroupId : null
               );
+            }
+            // Still finishing before the previous op's last batch arrives: keep
+            // the slot (better than unscheduling) but say so.
+            if (operationSlot && operationSlot.runEnd.getTime() < requiredEndMs) {
+              const shortMin = Math.round((requiredEndMs - operationSlot.runEnd.getTime()) / 60000);
+              this.constraints.push({
+                violationId: uuidv4(),
+                type: 'OverlapViolation',
+                severity: 'Warning',
+                affectedJobId: job.jobId,
+                affectedOperationId: operation.opId,
+                description: `Operation ${operation.opId} finishes ${shortMin} min before the last transfer batch from the previous operation can reach it (overlap rule not fully met)`,
+                suggestedAction: 'Lower the overlap % for this routing, or move the operation later on the board',
+              });
             }
           }
         }
@@ -1599,8 +1582,8 @@ export class SchedulingEngine {
       const overlappingResource = resourceSlots(candidateStart, candidateEnd);
       const overlappingWorkcentre = workcentreSlots(candidateStart, candidateEnd);
 
-      const resourceBlocked = overlappingResource.length >= resourceCapacity;
-      const workcentreBlocked = overlappingWorkcentre.length >= workcentreCapacity;
+      const resourceBlocked = capacityFull(overlappingResource, candidateStart, candidateEnd, resourceCapacity);
+      const workcentreBlocked = capacityFull(overlappingWorkcentre, candidateStart, candidateEnd, workcentreCapacity);
       // Crew: enough free operators in the line's pool for the whole booking?
       const crewNext = this.crewLoad?.nextFreeAt(operation.workcentreId, candidateStart, candidateEnd) ?? null;
       lastConflictWasCrew = !!crewNext && !resourceBlocked && !workcentreBlocked;
@@ -1847,8 +1830,8 @@ export class SchedulingEngine {
       const overlappingResource = resourceSlots(candidateStart, candidateEnd);
       const overlappingWorkcentre = workcentreSlots(candidateStart, candidateEnd);
 
-      const resourceBlocked = overlappingResource.length >= resourceCapacity;
-      const workcentreBlocked = overlappingWorkcentre.length >= workcentreCapacity;
+      const resourceBlocked = capacityFull(overlappingResource, candidateStart, candidateEnd, resourceCapacity);
+      const workcentreBlocked = capacityFull(overlappingWorkcentre, candidateStart, candidateEnd, workcentreCapacity);
 
       if (!resourceBlocked && !workcentreBlocked) {
         return null;

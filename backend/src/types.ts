@@ -225,7 +225,8 @@ export interface ConstraintViolation {
     | 'SkillMismatch'
     | 'LineGroupViolation'
     | 'BatchViolation'
-    | 'MasterJobPrecedence';
+    | 'MasterJobPrecedence'
+    | 'OverlapViolation';
   severity: 'Critical' | 'Warning' | 'Info';
   affectedJobId?: string;
   affectedOperationId?: string;

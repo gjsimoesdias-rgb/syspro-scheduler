@@ -33,7 +33,7 @@
  * placement breakdown the planner can inspect.
  */
 
-import { exceptionForDay, exceptionWindowMinutes } from '../utils/calendarExceptions';
+import { dayWindowMinutes } from '../utils/shiftWindows';
 
 export interface CtpOperationInput {
   workcentreId: string;
@@ -104,15 +104,6 @@ const MAX_SEARCH_DAYS = 366;
 /** How far ahead to probe for the longest productive window of a resource. */
 const WINDOW_PROBE_DAYS = 14;
 
-/** Parse "HH:MM" to minutes since midnight; NaN when malformed. "24:00" → 1440. */
-function hhmmToMinutes(v: string | undefined): number {
-  const trimmed = String(v || '').trim();
-  if (trimmed === '24:00') return 1440;
-  const m = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
-  if (!m) return Number.NaN;
-  return Math.max(0, Math.min(1440, Number(m[1]) * 60 + Number(m[2])));
-}
-
 /**
  * Productive windows for the day containing `dayStart` (local midnight epoch
  * ms). Mirrors SchedulingEngine.getProductiveWindowsForDay: Mon–Fri default,
@@ -120,42 +111,10 @@ function hhmmToMinutes(v: string | undefined): number {
  * Returns [] on non-working days.
  */
 export function windowsForDay(res: CtpResourceInfo, dayStart: number): BusyInterval[] {
-  const cal = res.calendar;
-  const weekday = new Date(dayStart).getDay();
-  const workingDays = Array.isArray(cal?.workingDays) && cal!.workingDays!.length > 0
-    ? cal!.workingDays!
-    : [1, 2, 3, 4, 5];
-  const exception = exceptionForDay(cal, new Date(dayStart));
-  if (exception) {
-    const forced = exceptionWindowMinutes(exception);
-    if (forced) return forced.map(({ start, end }) => ({ start: dayStart + start * 60000, end: dayStart + end * 60000 }));
-  } else if (!workingDays.includes(weekday)) return [];
-
-  const shifts = Array.isArray(cal?.shifts) && cal!.shifts!.length > 0
-    ? cal!.shifts!
-    : [{ startTime: '08:00', endTime: '16:00', diversions: [] as ShiftDiversion[] }];
-
-  const windows: BusyInterval[] = [];
-  for (const shift of shifts) {
-    const diversions = Array.isArray(shift.diversions) ? shift.diversions : [];
-    if (diversions.length) {
-      // Only schedulable (Production/Overtime) diversions are workable time.
-      for (const d of diversions) {
-        if (!d?.schedulable) continue;
-        const startMin = hhmmToMinutes(d.startTime);
-        const endMin = hhmmToMinutes(d.endTime);
-        if (Number.isNaN(startMin) || Number.isNaN(endMin) || endMin <= startMin) continue;
-        windows.push({ start: dayStart + startMin * 60000, end: dayStart + endMin * 60000 });
-      }
-    } else {
-      const startMin = hhmmToMinutes(shift.startTime || '08:00');
-      const endMin = hhmmToMinutes(shift.endTime || '16:00');
-      if (!Number.isNaN(startMin) && !Number.isNaN(endMin) && endMin > startMin) {
-        windows.push({ start: dayStart + startMin * 60000, end: dayStart + endMin * 60000 });
-      }
-    }
-  }
-  return windows.sort((a, b) => a.start - b.start);
+  // Same implementation as the engine (utils/shiftWindows) — night shifts,
+  // calendar exceptions and defaults can never drift apart.
+  return dayWindowMinutes(res.calendar, new Date(dayStart))
+    .map(({ start, end }) => ({ start: dayStart + start * 60000, end: dayStart + end * 60000 }));
 }
 
 /** Local midnight for the day containing t. */

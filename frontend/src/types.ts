@@ -182,7 +182,9 @@ export interface ConstraintViolation {
     | 'SetupConflict'
     | 'SkillMismatch'
     | 'LineGroupViolation'
-    | 'BatchViolation';
+    | 'BatchViolation'
+    | 'MasterJobPrecedence'
+    | 'OverlapViolation';
   severity: 'Critical' | 'Warning' | 'Info';
   affectedJobId?: string;
   affectedOperationId?: string;
