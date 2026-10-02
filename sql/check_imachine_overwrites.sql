@@ -2,15 +2,19 @@
    IMachine overwrite check — READ-ONLY. Changes nothing.
 
    Before commit c8d9c82 (2026-10-02), Send to SYSPRO wrote the scheduled
-   machine into WipJobAllLab.IMachine as well as ScheduledMachine. IMachine is
-   the job's routing machine, and the scheduler reads {ScheduledMachine,
-   IMachine} as the machines an operation may use — so after a send, those
-   operations could only ever run on the machine they were last scheduled on.
+   machine into WipJobAllLab.IMachine as well as ScheduledMachine. The
+   scheduler reads {ScheduledMachine, IMachine} as the machines an operation
+   may use, so the overwrite only lost something where IMachine held a
+   DIFFERENT machine from the routing (an alternative): that alternative is
+   no longer offered for the operation.
 
    This lists open-job operations where that probably happened: the job was
    written by a scheduler (WipMaster.ScheduleFlag = 'U'), IMachine equals
    ScheduledMachine, and the stock code's routing (BomOperations) names a
-   different machine for that operation.
+   different, non-blank machine for that operation. Where the routing machine
+   is blank (HFARM, 2026-10-02: all 23 ops on the 14 scheduler-written jobs),
+   nothing was lost — ScheduledMachine already restricts the op to the same
+   machine, and that is what keeps e.g. a mill op on NMILL.
 
    Run in SSMS against the SYSPRO company DB (F5). Share the grids with Claude
    if anything shows up; a repair (section 4) is only a commented-out draft.
